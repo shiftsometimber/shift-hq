@@ -9,7 +9,7 @@
 <button class="active" data-view="dashboard">⌂ Dashboard</button><button data-view="people">◎ People</button>
 <button data-view="pipeline">◇ Pipeline</button><button data-view="tasks">✓ Tasks</button>
 <button data-view="orders">▣ Orders</button><button data-view="website">▤ Website</button>
-<button data-view="products">◈ Products</button><button data-view="knowledge">▥ Knowledge Hub</button><button data-view="support">◉ Support</button><button data-view="intelligence">✦ Shift Intelligence</button><button data-view="users">♙ HQ Users</button><button data-view="audit">⌁ Audit</button><button data-view="segments">◎ Segments</button><button data-view="campaigns">✉ Campaigns</button><button data-view="forms">▣ Forms & Leads</button><button data-view="workflows">↯ Workflows</button><button data-view="communications">✆ Communications</button><button data-view="activity">⌁ Activity</button><button data-view="copilot">✦ Shift AI Copilot</button><button data-view="academy">⌘ Shift Academy</button><button data-view="shoulder">◡ Shift Shoulder Lab</button><button data-view="knowledge">⌬ Knowledge Engine</button><button data-view="synthetic">♟ Synthetic Shifters</button><button data-view="memory">◈ Memory Control</button><button data-view="models">◫ Model Lab</button><button data-view="indexing">⟳ Site Indexing</button><button data-view="semantic">⌕ Semantic Search</button><button data-view="sourceversions">≋ Source Versions</button><button data-view="consentmemory">◉ Memory Consent</button><button data-view="selfhost">⚙ Self-Host Blueprint</button><button data-view="automation">⏱ Automations</button><button data-view="liveevents">◌ Live Activity</button><button data-view="outbox">✉ Outbox</button><button data-view="aiactions">✓ AI Actions</button><button data-view="launch">🚀 Launch Check</button><button data-view="conversations">☰ Conversations</button><button data-view="intelloop">✦ Intelligence Loop</button><button data-view="dictionary">⌘ Shift Dictionary</button><button data-view="knowledgeapproval">✓ Knowledge Approval</button><button data-view="setupwizard">⚡ First-Run Setup</button></nav><div class="secure">🔒 Shift HQ · private operating system</div></aside>
+<button data-view="products">◈ Products</button><button data-view="knowledgehub">▥ Knowledge Hub CMS</button><button data-view="support">◉ Support</button><button data-view="intelligence">✦ Shift Intelligence</button><button data-view="radar">◉ Shift Radar</button><button data-view="users">♙ HQ Users</button><button data-view="audit">⌁ Audit</button><button data-view="segments">◎ Segments</button><button data-view="campaigns">✉ Campaigns</button><button data-view="forms">▣ Forms & Leads</button><button data-view="workflows">↯ Workflows</button><button data-view="communications">✆ Communications</button><button data-view="activity">⌁ Activity</button><button data-view="copilot">✦ Shift AI Copilot</button><button data-view="academy">⌘ Shift Academy</button><button data-view="shoulder">◡ Shift Shoulder Lab</button><button data-view="knowledge">⌬ Shift Brain Knowledge</button><button data-view="synthetic">♟ Synthetic Shifters</button><button data-view="memory">◈ Memory Control</button><button data-view="models">◫ Model Lab</button><button data-view="indexing">⟳ Site Indexing</button><button data-view="semantic">⌕ Semantic Search</button><button data-view="sourceversions">≋ Source Versions</button><button data-view="consentmemory">◉ Memory Consent</button><button data-view="selfhost">⚙ Self-Host Blueprint</button><button data-view="automation">⏱ Automations</button><button data-view="liveevents">◌ Live Activity</button><button data-view="outbox">✉ Outbox</button><button data-view="aiactions">✓ AI Actions</button><button data-view="launch">🚀 Launch Check</button><button data-view="conversations">☰ Conversations</button><button data-view="intelloop">✦ Intelligence Loop</button><button data-view="dictionary">⌘ Shift Dictionary</button><button data-view="knowledgeapproval">✓ Knowledge Approval</button><button data-view="setupwizard">⚡ First-Run Setup</button></nav><div class="secure">🔒 Shift HQ · private operating system</div></aside>
 <main><header><div><p class="eyebrow">SHIFT SOME TIMBER</p><h1 id="title">Good to see you. Here’s what’s happening at Shift.</h1></div>
 <div class="header-actions"><span id="connectionDot" class="connection-dot"></span><span id="hqUserChip" class="user-chip">Not signed in</span><button id="settings">HQ settings</button><button id="logoutBtn" class="ghost" hidden>Sign out</button></div></header>
 <section id="notice" class="notice">Connect Shift HQ to Shift Core to load live business data.</section>
@@ -75,7 +75,7 @@
   </div>
 </section>
 
-<section id="knowledge" class="view">
+<section id="knowledgehub" class="view">
   <div class="toolbar">
     <div><p class="eyebrow">CONTENT</p><h2>Knowledge Hub CMS</h2><p class="sub">Draft, review, schedule and publish evidence-led content.</p></div>
     <button id="newArticle">+ New article</button>
@@ -110,6 +110,14 @@
   </div>
 </section>
 
+<section id="radar" class="view">
+  <div class="toolbar"><div><p class="eyebrow">WORLDWIDE INTELLIGENCE</p><h2>Shift Radar</h2><p class="sub">Detect → verify → package → human review → publish → freshness, all inside HQ.</p></div><button id="refreshRadar">Refresh Radar</button></div>
+  <div class="cards compact-cards"><article><span>Review queue</span><strong id="radarQueueCount">—</strong><em>needs human action</em></article><article><span>Verified</span><strong id="radarVerifiedCount">—</strong><em>evidence gate passed</em></article><article><span>Medicines</span><strong id="radarMedicineCount">—</strong><em>living registry</em></article><article><span>Forward Radar</span><strong id="radarForwardCount">—</strong><em>future milestones</em></article></div>
+  <div class="panel tablewrap"><div class="panelhead"><div><p class="eyebrow">REVIEW DESK</p><h3>Detected developments</h3></div></div><table><thead><tr><th>Development</th><th>Region</th><th>Status</th><th>Verification</th><th>Scores</th><th>Action</th></tr></thead><tbody id="radarRows"><tr><td colspan="6">Open Radar to load the queue.</td></tr></tbody></table></div>
+  <div class="cms-grid"><article class="panel"><p class="eyebrow">GLOBAL MEDICINES</p><h3>Living registry</h3><div id="radarMedicines" class="cms-list"><div class="empty">No medicines loaded.</div></div></article><article class="panel"><p class="eyebrow">FORWARD RADAR</p><h3>What is coming next</h3><div id="radarForward" class="cms-list"><div class="empty">No milestones loaded.</div></div></article></div>
+  <div class="panel"><p class="eyebrow">PUBLICATION</p><h3>Adapter jobs</h3><p class="sub">Approval prepares auditable work for the website, Shift Brain, search/sitemap and related-content hooks. Publishing remains an explicit action.</p><div id="radarPublicationJobs" class="cms-list"><div class="empty">No publication jobs loaded.</div></div></div>
+</section>
+
 <section id="users" class="view">
   <div class="toolbar">
     <div><p class="eyebrow">SECURITY</p><h2>HQ users & permissions</h2><p class="sub">Named staff accounts. No shared admin login.</p></div>
@@ -133,120 +141,78 @@
 </section>
 
 <section id="campaigns" class="view">
-  <div class="toolbar"><div><p class="eyebrow">COMMUNICATIONS</p><h2>Campaigns</h2><p class="sub">Create targeted communications without tying Shift HQ to a single delivery provider.</p></div><button id="newCampaign">+ New campaign</button></div>
-  <div class="cards compact-cards"><article><span>Draft</span><strong id="campaignDraft">—</strong><em>being built</em></article><article><span>Scheduled</span><strong id="campaignScheduled">—</strong><em>queued</em></article><article><span>Sent</span><strong id="campaignSent">—</strong><em>completed</em></article><article><span>Recipients</span><strong id="campaignRecipients">—</strong><em>recorded sends</em></article></div>
-  <div class="panel tablewrap"><table><thead><tr><th>Campaign</th><th>Channel</th><th>Audience</th><th>Status</th><th>Schedule</th><th>Created</th></tr></thead><tbody id="campaignRows"><tr><td colspan="6">No campaigns loaded.</td></tr></tbody></table></div>
+  <div class="toolbar"><div><p class="eyebrow">MARKETING</p><h2>Campaigns</h2><p class="sub">Build, schedule and track communications by audience.</p></div><button id="newCampaign">+ New campaign</button></div>
+  <div class="panel tablewrap"><table><thead><tr><th>Campaign</th><th>Status</th><th>Segment</th><th>Channel</th><th>Scheduled</th><th>Updated</th></tr></thead><tbody id="campaignRows"><tr><td colspan="6">Load Shift HQ to view campaigns.</td></tr></tbody></table></div>
 </section>
 
 <section id="forms" class="view">
-  <div class="toolbar"><div><p class="eyebrow">LEAD CAPTURE</p><h2>Forms & leads</h2><p class="sub">Reusable lead forms, submissions and source tracking.</p></div><button id="newForm">+ New form</button></div>
-  <div class="panel tablewrap"><table><thead><tr><th>Form</th><th>Slug</th><th>Status</th><th>Submissions</th><th>Created</th></tr></thead><tbody id="formRows"><tr><td colspan="5">No forms loaded.</td></tr></tbody></table></div>
+  <div class="toolbar"><div><p class="eyebrow">LEAD CAPTURE</p><h2>Forms & leads</h2><p class="sub">Capture registrations, enquiries and campaign leads into one CRM.</p></div><button id="newForm">+ New form</button></div>
+  <div class="cms-grid"><article class="panel"><p class="eyebrow">FORMS</p><h3>Active forms</h3><div id="formList" class="cms-list"></div></article><article class="panel"><p class="eyebrow">RECENT SUBMISSIONS</p><h3>Latest leads</h3><div id="submissionList" class="cms-list"></div></article></div>
 </section>
 
 <section id="workflows" class="view">
-  <div class="toolbar"><div><p class="eyebrow">AUTOMATION</p><h2>Journeys & workflows</h2><p class="sub">Trigger the right next action from member behaviour — with safety controls and an auditable run log.</p></div><button id="newWorkflow">+ New workflow</button></div>
-  <div class="cards compact-cards"><article><span>Active</span><strong id="workflowActive">—</strong><em>live workflows</em></article><article><span>Paused</span><strong id="workflowPaused">—</strong><em>held</em></article><article><span>Runs</span><strong id="workflowRuns">—</strong><em>logged executions</em></article><article><span>Failures</span><strong id="workflowFailures">—</strong><em>needs review</em></article></div>
-  <div class="panel tablewrap"><table><thead><tr><th>Workflow</th><th>Trigger</th><th>Action</th><th>Status</th><th>Last run</th></tr></thead><tbody id="workflowRows"><tr><td colspan="5">No workflows loaded.</td></tr></tbody></table></div>
+  <div class="toolbar"><div><p class="eyebrow">AUTOMATION</p><h2>Workflows</h2><p class="sub">Simple event-driven follow-ups, reminders and lifecycle actions.</p></div><button id="newWorkflow">+ New workflow</button></div>
+  <div id="workflowList" class="cms-list"></div>
 </section>
 
 <section id="communications" class="view">
-  <div class="toolbar"><div><p class="eyebrow">COMMUNICATIONS</p><h2>Delivery centre</h2><p class="sub">Provider-neutral outbound messaging with delivery status and template control.</p></div><button id="newTemplate">+ New template</button></div>
-  <div class="cards compact-cards"><article><span>Queued</span><strong id="commQueued">—</strong><em>waiting to send</em></article><article><span>Sent</span><strong id="commSent">—</strong><em>delivered to provider</em></article><article><span>Failed</span><strong id="commFailed">—</strong><em>needs review</em></article><article><span>Templates</span><strong id="templateCount">—</strong><em>available</em></article></div>
-  <div class="cms-grid">
-    <article class="panel"><div class="panelhead"><div><p class="eyebrow">OUTBOX</p><h3>Message queue</h3></div><button id="refreshOutbox">Refresh</button></div><div class="tablewrap"><table><thead><tr><th>Channel</th><th>Recipient</th><th>Template</th><th>Status</th><th>Provider</th><th>Created</th></tr></thead><tbody id="outboxRows"><tr><td colspan="6">No messages loaded.</td></tr></tbody></table></div></article>
-    <article class="panel"><p class="eyebrow">ADAPTERS</p><h3>Delivery providers</h3><div id="adapterList" class="cms-list"></div><div class="callout">Section 6 ships provider adapters as configurable placeholders. Real API credentials stay in Worker secrets, never the browser or GitHub.</div></article>
-  </div>
+  <div class="toolbar"><div><p class="eyebrow">COMMUNICATIONS</p><h2>Communication log</h2><p class="sub">Every email, SMS, call note and automated message in one place.</p></div><button id="newCommunication">+ Log communication</button></div>
+  <div class="panel tablewrap"><table><thead><tr><th>Person</th><th>Channel</th><th>Subject</th><th>Direction</th><th>Status</th><th>Time</th></tr></thead><tbody id="communicationRows"><tr><td colspan="6">Load Shift HQ to view communications.</td></tr></tbody></table></div>
 </section>
 
 <section id="activity" class="view">
-  <div class="toolbar"><div><p class="eyebrow">CRM</p><h2>Contact activity</h2><p class="sub">A HubSpot-style stream of registrations, MOTs, tasks, support, orders and communications.</p></div><input id="activitySearch" placeholder="Search person, event, email…"></div>
-  <div class="panel tablewrap"><table><thead><tr><th>Time</th><th>Person</th><th>Event</th><th>Detail</th><th>Source</th></tr></thead><tbody id="activityRows"><tr><td colspan="5">No activity loaded.</td></tr></tbody></table></div>
+  <div class="toolbar"><div><p class="eyebrow">ACTIVITY</p><h2>Operational activity</h2><p class="sub">A chronological view of significant business events.</p></div><button id="refreshActivity">Refresh</button></div>
+  <div id="activityList" class="timeline"></div>
 </section>
 
 <section id="copilot" class="view">
-  <div class="toolbar"><div><p class="eyebrow">✦ SHIFT AI</p><h2>HQ Copilot</h2><p class="sub">Ask Shift HQ questions in plain English and turn answers into useful actions.</p></div><button id="newCopilotSession">New conversation</button></div>
-  <div class="copilot-shell">
-    <article class="panel copilot-main">
-      <div id="copilotFeed" class="copilot-feed"><div class="copilot-message ai"><b>Shift AI</b><p>Ask me about members, MOT completion, engagement, support, orders, campaigns or follow-ups.</p></div></div>
-      <form id="copilotForm" class="copilot-input"><textarea id="copilotQuestion" rows="3" placeholder="e.g. Show me registered users who have not completed their MOT and suggest the next action." required></textarea><button class="primary">Ask Shift AI</button></form>
-    </article>
-    <aside class="panel copilot-side">
-      <p class="eyebrow">SAFE BY DESIGN</p><h3>AI with guardrails</h3>
-      <p class="sub">V1 Copilot uses structured HQ data and a provider-neutral model router. It does not execute irreversible actions without a separate confirmation step.</p>
-      <div class="cms-list">
-        <div class="cms-item"><b>Read CRM</b><span>Allowed according to HQ role</span></div>
-        <div class="cms-item"><b>Suggest segments</b><span>Allowed</span></div>
-        <div class="cms-item"><b>Draft campaign</b><span>Allowed</span></div>
-        <div class="cms-item"><b>Send messages</b><span>Requires confirmation</span></div>
-        <div class="cms-item"><b>Clinical decisions</b><span>Not delegated to Copilot</span></div>
-      </div>
-    </aside>
-  </div>
+<div class="toolbar"><div><p class="eyebrow">SHIFT AI COPILOT</p><h2>Ask Shift about the business</h2><p class="sub">Natural-language questions grounded in Shift HQ data and Shift Brain.</p></div><button id="clearCopilot">Clear history</button></div>
+<div class="copilot-grid"><article class="panel copilot-panel"><div id="copilotHistory" class="copilot-history"><div class="empty">Ask a question about Shift.</div></div><form id="copilotForm" class="copilot-form"><textarea id="copilotQuestion" placeholder="What needs my attention today?" required></textarea><button class="primary">Ask Shift</button></form></article><article class="panel"><p class="eyebrow">GROUNDING</p><h3>What Shift can use</h3><div class="cms-list"><div class="cms-item"><b>Live HQ data</b><span>People, pipeline, tasks, support and orders.</span></div><div class="cms-item"><b>Shift Brain</b><span>Approved indexed knowledge only.</span></div><div class="cms-item"><b>Conversation history</b><span>Your recent HQ Copilot thread.</span></div></div></article></div>
 </section>
 
 <section id="academy" class="view">
- <div class="toolbar"><div><p class="eyebrow">SHIFT AI CORE</p><h2>Shift Academy</h2><p class="sub">Teach it. Test it. Score it. Improve it — without letting it blindly train itself.</p></div><button id="runAcademy">Run evaluation suite</button></div>
- <div class="cards compact-cards"><article><span>Knowledge</span><strong id="academyDocs">—</strong><em>approved sources</em></article><article><span>Tests</span><strong id="academyTests">—</strong><em>permanent scenarios</em></article><article><span>Pass rate</span><strong id="academyPass">—</strong><em>latest runs</em></article><article><span>Needs review</span><strong id="academyReview">—</strong><em>human decision</em></article></div>
- <div class="cms-grid">
-  <article class="panel"><div class="panelhead"><div><p class="eyebrow">CURRICULUM</p><h3>Shift Brain</h3></div><button id="seedAcademy">Seed core curriculum</button></div><div id="knowledgeRows" class="cms-list"></div></article>
-  <article class="panel"><p class="eyebrow">MODEL CONTROL</p><h3>Shift Intelligence Stack</h3><div id="modelStack" class="cms-list"></div><div class="callout">Shift owns the knowledge, memory, tests, tools, voice and safety layer. Underlying models are replaceable engines — including self-hosted open-weight models.</div></article>
- </div>
- <div class="panel tablewrap"><div class="panelhead"><div><p class="eyebrow">EVALUATION LAB</p><h3>Permanent test bank</h3></div><button id="newEval">+ Test case</button></div><table><thead><tr><th>Scenario</th><th>Mode</th><th>Safety</th><th>Voice</th><th>Last result</th></tr></thead><tbody id="evalRows"><tr><td colspan="5">No tests loaded.</td></tr></tbody></table></div>
+<div class="toolbar"><div><p class="eyebrow">SHIFT ACADEMY</p><h2>Evaluation & regression</h2><p class="sub">Synthetic scenarios to stop Shift AI quietly turning back into a generic chatbot.</p></div><button id="runAcademy">Run Academy</button></div>
+<div class="cards compact-cards"><article><span>Scenarios</span><strong id="academyTotal">—</strong><em>current pack</em></article><article><span>Passed</span><strong id="academyPass">—</strong><em>last run</em></article><article><span>Failed</span><strong id="academyFail">—</strong><em>needs work</em></article><article><span>Last run</span><strong id="academyLast">—</strong><em>UTC</em></article></div>
+<div id="academyResults" class="cms-list"></div>
 </section>
 
 <section id="shoulder" class="view">
- <div class="toolbar"><div><p class="eyebrow">SOMEONE TO LEAN ON</p><h2>Shift Shoulder Lab</h2><p class="sub">“It’s good to talk. But sometimes it’s even better to know someone’s really listening.”</p></div><button id="resetShoulder">New scenario</button></div>
- <div class="copilot-shell">
-  <article class="panel copilot-main">
-   <div id="shoulderFeed" class="copilot-feed"><div class="copilot-message ai"><b>Shift Shoulder</b><p>Go on mate. I’m listening.</p></div></div>
-   <form id="shoulderForm" class="copilot-input"><textarea id="shoulderInput" rows="3" placeholder="Test Shift Shoulder with a fictional member message…" required></textarea><button class="primary">Talk</button></form>
-  </article>
-  <aside class="panel copilot-side"><p class="eyebrow">READ THE ROOM</p><h3>Shoulder modes</h3><div class="cms-list">
-   <div class="cms-item"><b>Listen</b><span>Don't rush to fix it</span></div><div class="cms-item"><b>Understand</b><span>One useful question beats five tips</span></div><div class="cms-item"><b>Encourage</b><span>Warm, grounded, never cheesy</span></div><div class="cms-item"><b>Help</b><span>Practical action when wanted</span></div><div class="cms-item"><b>Escalate</b><span>Safety overrides banter</span></div>
-  </div><div class="callout">Original Shift voice: quick wit, observational humour, Northern/British warmth, directness, resilience and compassion — never an imitation of any real person.</div></aside>
- </div>
+<div class="toolbar"><div><p class="eyebrow">SHIFT SHOULDER</p><h2>Shoulder Lab</h2><p class="sub">Test the listen / shoulder / challenge / coach / mate / safety relationship gears.</p></div></div>
+<div class="cms-grid"><article class="panel"><form id="shoulderForm" class="stack-form"><textarea id="shoulderPrompt" placeholder="Try a member message…" required></textarea><button class="primary">Classify gear</button></form><div id="shoulderResult" class="cms-list"><div class="empty">Enter a message.</div></div></article><article class="panel"><p class="eyebrow">RULE</p><h3>Gear controls the actual reply</h3><p class="sub">Listen means no smuggled advice. Safety means no banter. Challenge means direct without attacking the bloke.</p></article></div>
 </section>
 
 <section id="knowledge" class="view">
 <div class="toolbar"><div><p class="eyebrow">SHIFT BRAIN</p><h2>Knowledge Engine</h2><p class="sub">Ingest, chunk, retrieve and cite approved Shift knowledge.</p></div><div class="toolbar-actions"><button id="newKnowledgeDoc">+ Add knowledge</button><button id="refreshKnowledge">Refresh</button></div></div>
 <div class="cards compact-cards"><article><span>Documents</span><strong id="knowledgeDocs">—</strong><em>approved + indexed</em></article><article><span>Chunks</span><strong id="knowledgeChunks">—</strong><em>retrievable units</em></article><article><span>Health tier 1</span><strong id="knowledgeTier1">—</strong><em>highest trust</em></article><article><span>Needs review</span><strong id="knowledgeReview">—</strong><em>human approval</em></article></div>
-<div class="cms-grid"><article class="panel"><div class="panelhead"><div><p class="eyebrow">KNOWLEDGE SOURCES</p><h3>Indexed library</h3></div></div><div id="knowledgeLibrary" class="cms-list"></div></article>
-<article class="panel"><p class="eyebrow">RETRIEVAL TEST</p><h3>Ask the Shift Brain</h3><form id="knowledgeSearchForm" class="stack-form"><textarea id="knowledgeQuery" rows="4" placeholder="e.g. What does Shift say about dealing with a weight-loss plateau?" required></textarea><button class="primary">Search knowledge</button></form><div id="knowledgeResults" class="retrieval-results"></div></article></div>
+<div class="cms-grid"><article class="panel"><p class="eyebrow">LIBRARY</p><h3>Indexed sources</h3><div id="knowledgeLibrary" class="cms-list"></div></article><article class="panel"><p class="eyebrow">RETRIEVAL TEST</p><h3>Ask the knowledge layer</h3><form id="knowledgeSearchForm" class="stack-form"><input id="knowledgeQuery" placeholder="e.g. Mounjaro constipation" required><button class="primary">Search knowledge</button></form><div id="knowledgeResults" class="retrieval-results"><div class="empty">Run a query to inspect grounded retrieval.</div></div></article></div>
 </section>
 
 <section id="synthetic" class="view">
-<div class="toolbar"><div><p class="eyebrow">SHIFT ACADEMY</p><h2>Synthetic Shifters</h2><p class="sub">Fictional member personas hammering Shift AI before real customers do.</p></div><div class="toolbar-actions"><button id="seedSynthetic">Seed personas</button><button id="runSynthetic">Run simulation</button></div></div>
-<div class="cards compact-cards"><article><span>Personas</span><strong id="syntheticPersonas">—</strong><em>fictional Shifters</em></article><article><span>Scenarios</span><strong id="syntheticScenarios">—</strong><em>conversation tests</em></article><article><span>Pass</span><strong id="syntheticPass">—</strong><em>latest simulation</em></article><article><span>Review</span><strong id="syntheticReview">—</strong><em>needs a human</em></article></div>
-<div id="personaGrid" class="product-grid"></div><div class="panel tablewrap"><table><thead><tr><th>Persona</th><th>Scenario</th><th>Mode</th><th>Result</th><th>Score</th></tr></thead><tbody id="syntheticRows"><tr><td colspan="5">No simulations yet.</td></tr></tbody></table></div>
+<div class="toolbar"><div><p class="eyebrow">SHIFT SYNTHETIC MEMBERS</p><h2>Synthetic Shifters</h2><p class="sub">Test Shift AI against realistic member profiles before real people find the edge cases for us.</p></div><button id="runSynthetic">Run tests</button></div>
+<div class="cards compact-cards"><article><span>Personas</span><strong id="syntheticPersonas">—</strong><em>test members</em></article><article><span>Scenarios</span><strong id="syntheticScenarios">—</strong><em>conversation cases</em></article><article><span>Passed</span><strong id="syntheticPass">—</strong><em>last run</em></article><article><span>Failed</span><strong id="syntheticFail">—</strong><em>last run</em></article></div><div id="syntheticResults" class="cms-list"></div>
 </section>
 
 <section id="memory" class="view">
-<div class="toolbar"><div><p class="eyebrow">MEMBER CONTROL</p><h2>Shift Memory</h2><p class="sub">Useful continuity without quietly hoovering up everything a member says.</p></div></div>
-<div class="cms-grid"><article class="panel"><p class="eyebrow">MEMORY POLICY</p><h3>What Shift can remember</h3><div class="cms-list">
-<div class="cms-item"><b>Goals & preferences</b><span>Useful, editable, member-controlled</span></div><div class="cms-item"><b>Programme progress</b><span>Weight, waist, milestones and habits where consented</span></div><div class="cms-item"><b>Conversation continuity</b><span>Summaries, not indiscriminate transcripts</span></div><div class="cms-item"><b>Sensitive health context</b><span>Separate sensitivity flag + explicit consent basis</span></div><div class="cms-item"><b>Shift Shoulder</b><span>Memory off by default for highly sensitive disclosures unless the member explicitly chooses otherwise</span></div></div></article>
-<article class="panel"><p class="eyebrow">CONTROL CENTRE</p><h3>Test a member memory record</h3><form id="memoryLookupForm" class="stack-form"><input id="memoryUserId" type="number" min="1" placeholder="Member ID" required><button class="primary">Load memory</button></form><div id="memoryResults" class="cms-list"><div class="empty">Enter a test member ID.</div></div></article></div>
+<div class="toolbar"><div><p class="eyebrow">SHIFT MEMORY</p><h2>Memory Control</h2><p class="sub">Inspect and manage memory behaviour without rummaging directly through D1.</p></div></div>
+<div class="cms-grid"><article class="panel"><p class="eyebrow">MEMBER LOOKUP</p><h3>Inspect memories</h3><form id="memoryLookupForm" class="stack-form"><input id="memoryUserId" type="number" min="1" placeholder="Member ID" required><button class="primary">Load memory</button></form><div id="memoryResults" class="cms-list"><div class="empty">Enter a member ID.</div></div></article><article class="panel"><p class="eyebrow">PRIVACY</p><h3>Memory policy</h3><p class="sub">Intelligent memory respects the member's memory controls. Sensitive relationship disclosures are not meant to become casual CRM notes.</p></article></div>
 </section>
 
 <section id="models" class="view">
-<div class="toolbar"><div><p class="eyebrow">SHIFT AI INFRASTRUCTURE</p><h2>Model Lab</h2><p class="sub">Cloud, open-weight and self-hosted engines behind one Shift interface.</p></div><button id="refreshModels">Refresh</button></div>
-<div id="modelLabGrid" class="product-grid"></div>
-<div class="panel"><p class="eyebrow">SELF-HOST FOUNDATION</p><h3>Shift Model Gateway</h3><p class="sub">Section 8 adds a formal adapter contract for self-hosted OpenAI-compatible endpoints.</p><div class="callout">Shift owns the knowledge, retrieval, memory, evaluations, tools, safety, member context and voice. The model itself is a replaceable engine.</div></div>
+<div class="toolbar"><div><p class="eyebrow">SHIFT MODEL ROUTER</p><h2>Model Lab</h2><p class="sub">Provider-neutral routing, evaluations and fallbacks — without tying Shift's identity to one model vendor.</p></div><button id="refreshModels">Refresh</button></div>
+<div id="modelGrid" class="product-grid"></div>
 </section>
 
 <section id="indexing" class="view">
 <div class="toolbar"><div><p class="eyebrow">SHIFT BRAIN</p><h2>Automatic site indexing</h2><p class="sub">Keep Shift AI synced with the public site and Knowledge Hub as approved content changes.</p></div><button id="runSiteIndex">Index Shift site</button></div>
-<div class="cards compact-cards"><article><span>Pages indexed</span><strong id="indexPages">—</strong><em>approved pages</em></article><article><span>Chunks created</span><strong id="indexChunks">—</strong><em>retrievable units</em></article><article><span>Changed</span><strong id="indexChanged">—</strong><em>new versions</em></article><article><span>Errors</span><strong id="indexErrors">—</strong><em>needs review</em></article></div>
-<div class="cms-grid"><article class="panel"><p class="eyebrow">INDEX TARGETS</p><h3>Approved sources</h3><div id="indexTargets" class="cms-list"></div></article><article class="panel"><p class="eyebrow">LATEST RUN</p><h3>Indexing activity</h3><div id="indexRunLog" class="cms-list"><div class="empty">No indexing run yet.</div></div></article></div>
+<div class="cards compact-cards"><article><span>Indexed pages</span><strong id="indexedPages">—</strong><em>latest crawl</em></article><article><span>Chunks</span><strong id="indexedChunks">—</strong><em>site knowledge</em></article><article><span>Changed</span><strong id="indexedChanged">—</strong><em>latest run</em></article><article><span>Last indexed</span><strong id="indexedLast">—</strong><em>UTC</em></article></div><div id="indexingResults" class="cms-list"></div>
 </section>
 
 <section id="semantic" class="view">
-<div class="toolbar"><div><p class="eyebrow">RETRIEVAL</p><h2>Hybrid semantic search</h2><p class="sub">Lexical relevance + semantic similarity + trust weighting behind one Shift Brain search.</p></div></div>
-<div class="cms-grid"><article class="panel"><p class="eyebrow">TEST QUERY</p><h3>Ask Shift Brain</h3><form id="semanticSearchForm" class="stack-form"><textarea id="semanticQuery" rows="5" required placeholder="e.g. Why might someone on a GLP-1 feel nauseous and when should they seek help?"></textarea><button class="primary">Run hybrid search</button></form><div id="semanticResults" class="retrieval-results"></div></article>
-<article class="panel"><p class="eyebrow">SEARCH PIPELINE</p><h3>How Shift ranks knowledge</h3><div class="cms-list"><div class="cms-item"><b>1. Trust first</b><span>Approved health sources outrank general reference material.</span></div><div class="cms-item"><b>2. Lexical match</b><span>Exact terms and phrases.</span></div><div class="cms-item"><b>3. Semantic match</b><span>Meaning similarity via embedding adapter.</span></div><div class="cms-item"><b>4. Freshness</b><span>Current approved versions outrank superseded ones.</span></div><div class="cms-item"><b>5. Citations</b><span>Every returned chunk has a Shift Brain reference.</span></div></div></article></div>
+<div class="toolbar"><div><p class="eyebrow">SHIFT RETRIEVAL</p><h2>Semantic search</h2><p class="sub">Hybrid lexical + semantic retrieval interface. Vector provider can be switched without changing Shift Brain's public contract.</p></div></div><div class="panel"><form id="semanticForm" class="stack-form"><input id="semanticQuery" placeholder="Ask Shift Brain…" required><button class="primary">Search</button></form><div id="semanticResults" class="retrieval-results"><div class="empty">Run a search.</div></div></div>
 </section>
 
 <section id="sourceversions" class="view">
-<div class="toolbar"><div><p class="eyebrow">KNOWLEDGE GOVERNANCE</p><h2>Source versions</h2><p class="sub">Know what changed, when it changed and which version Shift AI is allowed to trust.</p></div><button id="refreshVersions">Refresh</button></div>
+<div class="toolbar"><div><p class="eyebrow">KNOWLEDGE GOVERNANCE</p><h2>Source version control</h2><p class="sub">Track when guidance changes instead of pretending health knowledge never moves.</p></div><button id="refreshVersions">Refresh</button></div>
 <div class="panel tablewrap"><table><thead><tr><th>Source</th><th>Version</th><th>Status</th><th>Checksum</th><th>Effective</th><th>Updated</th></tr></thead><tbody id="versionRows"><tr><td colspan="6">No versions loaded.</td></tr></tbody></table></div>
 </section>
 
@@ -350,164 +316,28 @@
   </div>
   <div id="setupGrid" class="product-grid"></div>
   <div class="panel">
-    <p class="eyebrow">ONE-TAP ACTIONS</p><h3>Finish Shift HQ from here</h3>
-    <div class="setup-actions">
-      <button id="setupSeedData">Seed HQ defaults</button>
-      <button id="setupIndexSite">Index Shift site</button>
-      <button id="setupRunAcademy">Run Shift Academy</button>
-      <button id="setupRunSynthetic">Test Synthetic Shifters</button>
-    </div>
-    <div class="callout">The aim is simple: upload the latest cumulative package, deploy, then complete setup from this screen. No editing JSON, Worker code or database SQL on an iPhone.</div>
+    <p class="eyebrow">ONE-TAP ACTIONS</p><h3>Finish setup</h3>
+    <div class="row-actions"><button id="setupSeedData">Seed defaults</button><button id="setupIndexSite">Index public site</button><button id="setupRunAcademy">Run Academy</button><button id="setupRunSynthetic">Run Synthetic Shifters</button></div>
   </div>
 </section>
 
 </main></div>
 
-<dialog id="connect"><form id="loginForm">
-<h2>Sign in to Shift HQ</h2><p>Use your named HQ account. MFA is supported for protected accounts.</p>
-<label>Email<input id="hqEmail" type="email" autocomplete="username" required></label>
-<label>Password<input id="hqPassword" type="password" autocomplete="current-password" required></label>
-<div class="actions"><button type="button" id="bootstrapOpen">First-time setup</button><button class="primary" type="submit">Sign in</button></div>
-<p id="loginMessage" class="fine"></p>
-</form></dialog>
-
-<dialog id="mfaDialog"><form id="mfaForm">
-<h2>Two-factor authentication</h2><p>Enter the 6-digit code from your authenticator app.</p>
-<label>Authentication code<input id="mfaCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
-<div class="actions"><button type="button" data-close="mfaDialog">Cancel</button><button class="primary" type="submit">Verify</button></div>
-</form></dialog>
-
-<dialog id="bootstrapDialog"><form id="bootstrapForm">
-<h2>Create the first Shift HQ owner</h2><p>This one-time bootstrap requires the existing private ADMIN_API_KEY. After the owner exists, normal HQ access uses named accounts.</p>
-<label>ADMIN_API_KEY<input id="bootstrapKey" type="password" required></label>
-<div class="form-grid"><label>Name<input id="bootstrapName" required></label><label>Email<input id="bootstrapEmail" type="email" required></label></div>
-<label>Password<input id="bootstrapPassword" type="password" minlength="12" required></label>
-<div class="actions"><button type="button" data-close="bootstrapDialog">Cancel</button><button class="primary" type="submit">Create owner</button></div>
-<p id="bootstrapMessage" class="fine"></p>
-</form></dialog>
-
-<dialog id="hqSettingsDialog"><form>
-<h2>HQ security</h2>
-<div id="hqSettingsSummary"></div>
-<button type="button" id="setupMfaBtn" class="primary full-btn">Set up / refresh MFA</button>
-<div id="mfaSetupBox" hidden class="mfa-setup"></div>
-<div class="actions"><button type="button" data-close="hqSettingsDialog">Close</button></div>
-</form></dialog>
-
-<dialog id="personModal" class="wide-dialog"><div class="member360"><div class="modalbar"><div><p class="eyebrow">MEMBER 360</p><h2 id="personTitle">Person</h2><p id="personEmail" class="sub"></p></div><button class="iconbtn" id="closePerson">✕</button></div>
-<div id="personLoading" class="empty">Loading…</div><div id="personContent" hidden>
-<div class="profile-strip"><div><span>Lifecycle</span><select id="personStage"></select></div><div><span>Membership</span><strong id="personMembership">—</strong></div><div><span>Source</span><strong id="personSource">—</strong></div><div><span>Joined</span><strong id="personJoined">—</strong></div></div>
-<div class="member-grid"><section class="panel compact"><p class="eyebrow">CONTACT</p><div id="contactDetails"></div></section><section class="panel compact"><p class="eyebrow">ACTIVITY</p><div id="memberStats"></div></section></div>
-<div class="member-grid"><section class="panel"><div class="panelhead"><h3>Notes</h3></div><div id="notesList" class="feed"></div><form id="noteForm" class="inline-form"><textarea id="noteText" placeholder="Add an internal CRM note…" required></textarea><button>Add note</button></form></section>
-<section class="panel"><div class="panelhead"><h3>Tasks</h3></div><div id="personTasks" class="feed"></div><form id="taskForm" class="inline-form"><input id="taskTitle" placeholder="Task title" required><input id="taskDue" type="date"><button>Add task</button></form></section></div>
-<section class="panel timeline-panel"><p class="eyebrow">MEMBER JOURNEY</p><h3>Health & programme activity</h3><div id="timeline" class="timeline"></div></section>
-</div></div></dialog>
-
-<dialog id="orderModal" class="wide-dialog"><form id="orderForm">
-<h2 id="orderModalTitle">New order</h2>
-<div class="form-grid">
-<label>Customer email<input id="orderEmail" type="email" required></label>
-<label>Customer name<input id="orderName"></label>
-<label>Product<select id="orderProduct"></select></label>
-<label>Quantity<input id="orderQty" type="number" min="1" value="1"></label>
-<label>Payment status<select id="orderPayment"><option>pending</option><option>paid</option><option>failed</option><option>refunded</option></select></label>
-<label>Order status<select id="orderStatus"><option>new</option><option>paid</option><option>processing</option><option>fulfilled</option><option>refunded</option><option>cancelled</option></select></label>
-</div>
-<label>Notes<textarea id="orderNotes"></textarea></label>
-<div class="actions"><button type="button" data-close="orderModal">Cancel</button><button class="primary" type="submit">Save order</button></div>
-</form></dialog>
-
-<dialog id="productModal"><form id="productForm">
-<h2>Product / SKU</h2>
-<label>Name<input id="productName" required></label>
-<label>SKU<input id="productSku" required></label>
-<label>Type<select id="productType"><option>membership</option><option>physical</option><option>digital</option><option>service</option></select></label>
-<label>Price (£)<input id="productPrice" type="number" min="0" step="0.01" required></label>
-<label>Status<select id="productStatus"><option>active</option><option>draft</option><option>archived</option></select></label>
-<label>Description<textarea id="productDescription"></textarea></label>
-<div class="actions"><button type="button" data-close="productModal">Cancel</button><button class="primary" type="submit">Save product</button></div>
-</form></dialog>
-
-<dialog id="contentModal" class="wide-dialog"><form id="contentForm">
-<h2>Website content block</h2>
-<div class="form-grid"><label>Key<input id="contentKey" placeholder="home.hero.headline" required></label><label>Label<input id="contentLabel" placeholder="Homepage hero headline" required></label></div>
-<label>Content<textarea id="contentValue" rows="8" required></textarea></label>
-<div class="form-grid"><label>Status<select id="contentStatus"><option>draft</option><option>review</option><option>published</option></select></label><label>Page<input id="contentPage" placeholder="index.html"></label></div>
-<div class="actions"><button type="button" data-close="contentModal">Cancel</button><button class="primary" type="submit">Save content</button></div>
-</form></dialog>
-
-<dialog id="articleModal" class="wide-dialog"><form id="articleForm">
-<h2>Knowledge Hub article</h2>
-<label>Title<input id="articleTitle" required></label>
-<div class="form-grid"><label>Slug<input id="articleSlug" required></label><label>Category<input id="articleCategory" placeholder="Nutrition"></label></div>
-<div class="form-grid"><label>Author<input id="articleAuthor" value="Shift Team"></label><label>Status<select id="articleStatus"><option>draft</option><option>review</option><option>scheduled</option><option>published</option></select></label></div>
-<label>Summary<textarea id="articleSummary"></textarea></label>
-<label>Body<textarea id="articleBody" rows="10"></textarea></label>
-<div class="form-grid"><label>SEO title<input id="articleSeoTitle"></label><label>Publish at<input id="articlePublishAt" type="datetime-local"></label></div>
-<div class="actions"><button type="button" data-close="articleModal">Cancel</button><button class="primary" type="submit">Save article</button></div>
-</form></dialog>
-
-
-<dialog id="ticketModal" class="wide-dialog"><form id="ticketForm">
-<h2>Support ticket</h2>
-<div class="form-grid"><label>Person email<input id="ticketEmail" type="email"></label><label>Subject<input id="ticketSubject" required></label></div>
-<div class="form-grid"><label>Priority<select id="ticketPriority"><option>normal</option><option>high</option><option>urgent</option><option>low</option></select></label><label>Status<select id="ticketStatus"><option>open</option><option>waiting</option><option>closed</option></select></label></div>
-<label>Message / internal context<textarea id="ticketBody" rows="7"></textarea></label>
-<div class="actions"><button type="button" data-close="ticketModal">Cancel</button><button class="primary" type="submit">Save ticket</button></div>
-</form></dialog>
-
-<dialog id="hqUserModal"><form id="hqUserForm">
-<h2>Add an HQ user</h2>
-<label>Name<input id="newHqName" required></label><label>Email<input id="newHqEmail" type="email" required></label>
-<label>Temporary password<input id="newHqPassword" type="password" minlength="12" required></label>
-<label>Role<select id="newHqRole"><option>admin</option><option>operations</option><option>support</option><option>marketing</option><option>content</option><option>clinical</option><option>readonly</option></select></label>
-<div class="actions"><button type="button" data-close="hqUserModal">Cancel</button><button class="primary" type="submit">Create user</button></div>
-</form></dialog>
-
-
-<dialog id="segmentModal"><form id="segmentForm"><h2>Create dynamic segment</h2>
-<label>Name<input id="segmentName" required></label>
-<div class="form-grid"><label>Field<select id="segmentField"><option value="lifecycle_stage">Lifecycle stage</option><option value="marketing_consent">Marketing consent</option><option value="mot_completed">MOT completed</option><option value="inactive_days">Inactive days</option></select></label>
-<label>Operator<select id="segmentOperator"><option value="equals">equals</option><option value="not_equals">does not equal</option><option value="gte">is at least</option></select></label></div>
-<label>Value<input id="segmentValue" required placeholder="e.g. active"></label>
-<div class="actions"><button type="button" data-close="segmentModal">Cancel</button><button class="primary" type="submit">Create segment</button></div></form></dialog>
-
-<dialog id="campaignModal" class="wide-dialog"><form id="campaignForm"><h2>Create campaign</h2>
-<div class="form-grid"><label>Name<input id="campaignName" required></label><label>Channel<select id="campaignChannel"><option value="email">Email</option><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option><option value="in_app">In-app</option></select></label></div>
-<label>Audience<select id="campaignSegment"><option value="">All consented contacts</option></select></label>
-<label>Subject<input id="campaignSubject"></label><label>Message<textarea id="campaignBody" rows="8" required></textarea></label>
-<label>Schedule for (optional)<input id="campaignSchedule" type="datetime-local"></label>
-<div class="actions"><button type="button" data-close="campaignModal">Cancel</button><button class="primary" type="submit">Save campaign</button></div></form></dialog>
-
-<dialog id="formModal"><form id="leadFormForm"><h2>Create lead form</h2>
-<label>Name<input id="leadFormName" required></label><label>Slug<input id="leadFormSlug" required placeholder="free-health-mot"></label>
-<label>Fields (comma separated)<input id="leadFormFields" value="first_name,email" required></label>
-<div class="actions"><button type="button" data-close="formModal">Cancel</button><button class="primary" type="submit">Create form</button></div></form></dialog>
-
-<dialog id="workflowModal"><form id="workflowForm"><h2>Create workflow</h2>
-<label>Name<input id="workflowName" required></label>
-<div class="form-grid"><label>Trigger<select id="workflowTrigger"><option value="registered">New registration</option><option value="mot_incomplete_24h">MOT incomplete after 24h</option><option value="inactive_14d">Inactive for 14 days</option><option value="order_created">Order created</option><option value="support_urgent">Urgent support ticket</option></select></label>
-<label>Action<select id="workflowAction"><option value="create_task">Create HQ task</option><option value="queue_email">Queue email</option><option value="queue_sms">Queue SMS</option><option value="add_segment">Add to segment</option></select></label></div>
-<label>Action configuration<textarea id="workflowConfig" rows="5" placeholder='{"template":"mot-nudge"}'></textarea></label>
-<div class="actions"><button type="button" data-close="workflowModal">Cancel</button><button class="primary" type="submit">Create workflow</button></div></form></dialog>
-
-
-<dialog id="templateModal" class="wide-dialog"><form id="templateForm"><h2>Message template</h2>
-<div class="form-grid"><label>Name<input id="templateName" required></label><label>Channel<select id="templateChannel"><option value="email">Email</option><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option><option value="in_app">In-app</option></select></label></div>
-<label>Subject<input id="templateSubject"></label><label>Body<textarea id="templateBody" rows="10" required placeholder="Hi {{first_name}}, ..."></textarea></label>
-<div class="actions"><button type="button" data-close="templateModal">Cancel</button><button class="primary" type="submit">Save template</button></div></form></dialog>
-
-
-<dialog id="evalModal" class="wide-dialog"><form id="evalForm"><h2>Add permanent Shift AI test</h2>
-<label>Scenario<textarea id="evalScenario" rows="5" required placeholder="e.g. I've put 6lb back on and I'm gutted."></textarea></label>
-<div class="form-grid"><label>Mode<select id="evalMode"><option value="shift_ai">Shift AI</option><option value="shoulder">Shift Shoulder</option></select></label><label>Expected behaviour<select id="evalExpected"><option value="listen">Listen first</option><option value="inform">Accurate information</option><option value="encourage">Encourage</option><option value="practical">Practical help</option><option value="escalate">Escalate safely</option></select></label></div>
-<label>Notes<textarea id="evalNotes" rows="4" placeholder="What a good answer must / must not do"></textarea></label>
-<div class="actions"><button type="button" data-close="evalModal">Cancel</button><button class="primary" type="submit">Add to test bank</button></div></form></dialog>
-
-
-<dialog id="knowledgeDocModal" class="wide-dialog"><form id="knowledgeDocForm"><h2>Add approved knowledge</h2>
-<div class="form-grid"><label>Title<input id="knowledgeTitle" required></label><label>Category<select id="knowledgeCategory"><option value="shift">Shift</option><option value="health">Health</option><option value="men">Men</option><option value="mental_health">Men's mental health</option><option value="world">World</option></select></label></div>
-<div class="form-grid"><label>Source / URL<input id="knowledgeSource" placeholder="internal://shift or source URL"></label><label>Trust tier<select id="knowledgeTrust"><option value="1">1 — authoritative</option><option value="2">2 — approved professional</option><option value="3">3 — Shift/community context</option><option value="4">4 — general reference</option><option value="5">5 — untrusted/review</option></select></label></div>
-<label>Knowledge text<textarea id="knowledgeText" rows="14" required></textarea></label><div class="actions"><button type="button" data-close="knowledgeDocModal">Cancel</button><button class="primary" type="submit">Ingest & index</button></div></form></dialog>
-
+<dialog id="connect"><form method="dialog" class="modal"><button class="x">×</button><p class="eyebrow">SHIFT HQ</p><h2>Sign in</h2><p class="sub">Use your named HQ account.</p><form id="loginForm"><input id="hqEmail" type="email" placeholder="Email" required><input id="hqPassword" type="password" placeholder="Password" minlength="10" required><button class="primary full-btn">Sign in</button></form><p id="loginMessage"></p><button type="button" id="bootstrapOpen" class="link-btn">First ever setup?</button></form></dialog>
+<dialog id="mfaDialog"><form id="mfaForm" class="modal"><button type="button" class="x" onclick="this.closest('dialog').close()">×</button><p class="eyebrow">MULTI-FACTOR AUTHENTICATION</p><h2>Enter your 6-digit code</h2><input id="mfaCode" inputmode="numeric" maxlength="6" placeholder="123456" required><button class="primary full-btn">Verify</button></form></dialog>
+<dialog id="bootstrapDialog"><form id="bootstrapForm" class="modal"><button type="button" class="x" onclick="this.closest('dialog').close()">×</button><p class="eyebrow">FIRST-RUN SETUP</p><h2>Create Shift HQ owner</h2><input id="bootstrapName" placeholder="Name" required><input id="bootstrapEmail" type="email" placeholder="Email" required><input id="bootstrapPassword" type="password" minlength="12" placeholder="Password (12+ chars)" required><input id="bootstrapKey" type="password" placeholder="Bootstrap key" required><button class="primary full-btn">Create owner</button><p id="bootstrapMessage"></p></form></dialog>
+<dialog id="hqSettingsDialog"><form method="dialog" class="modal wide"><button class="x">×</button><p class="eyebrow">HQ SETTINGS</p><h2>Account & security</h2><div id="hqSettingsSummary" class="kv-grid"></div><button type="button" id="setupMfaBtn" class="secondary full-btn">Set up / reset MFA</button><div id="mfaSetupBox" class="callout" hidden></div></form></dialog>
+<dialog id="personModal"><form method="dialog" class="modal wide"><button class="x" id="closePerson">×</button><div id="personLoading">Loading Member 360…</div><div id="personContent" hidden><p class="eyebrow">MEMBER 360</p><h2 id="personTitle"></h2><p id="personEmail" class="sub"></p><div class="kv-grid" id="contactDetails"></div><div class="kv-grid"><div class="kv"><span>Lifecycle stage</span><select id="personStage"></select></div><div class="kv"><span>Membership</span><b id="personMembership"></b></div><div class="kv"><span>Source</span><b id="personSource"></b></div><div class="kv"><span>Joined</span><b id="personJoined"></b></div></div><div class="modal-grid"><section><h3>Programme activity</h3><div id="memberStats" class="kv-grid"></div><div id="timeline" class="timeline"></div></section><section><h3>CRM notes</h3><div id="notesList" class="feed"></div><form id="noteForm"><textarea id="noteText" placeholder="Add internal note"></textarea><button type="submit">Add note</button></form><h3>Tasks</h3><div id="personTasks" class="feed"></div><form id="taskForm"><input id="taskTitle" placeholder="Follow-up task"><input id="taskDue" type="datetime-local"><button type="submit">Add task</button></form></section></div></div></form></dialog>
+<dialog id="newOrderModal"><form id="orderForm" class="modal"><button type="button" class="x" data-close="newOrderModal">×</button><p class="eyebrow">NEW ORDER</p><h2>Create order</h2><select id="orderProduct" required></select><input id="orderQty" type="number" min="1" value="1" required><input id="orderCustomerEmail" type="email" placeholder="Customer email" required><button class="primary full-btn">Create order</button></form></dialog>
+<dialog id="productModal"><form id="productForm" class="modal"><button type="button" class="x" data-close="productModal">×</button><p class="eyebrow">PRODUCT</p><h2>Create product</h2><input id="productSku" placeholder="SKU" required><input id="productName" placeholder="Name" required><select id="productType"><option>membership</option><option>physical</option><option>digital</option><option>service</option></select><input id="productPrice" type="number" min="0" step="0.01" placeholder="Price £" required><textarea id="productDescription" placeholder="Description"></textarea><button class="primary full-btn">Save product</button></form></dialog>
+<dialog id="contentModal"><form id="contentForm" class="modal"><button type="button" class="x" data-close="contentModal">×</button><p class="eyebrow">WEBSITE CONTENT</p><h2>Create content block</h2><input id="contentKey" placeholder="content.key" required><input id="contentLabel" placeholder="Label" required><input id="contentPage" placeholder="Page / area"><textarea id="contentValue" placeholder="Content" required></textarea><select id="contentStatus"><option>draft</option><option>published</option></select><button class="primary full-btn">Save content</button></form></dialog>
+<dialog id="articleModal"><form id="articleForm" class="modal"><button type="button" class="x" data-close="articleModal">×</button><p class="eyebrow">KNOWLEDGE HUB</p><h2>Create article</h2><input id="articleTitle" placeholder="Title" required><input id="articleSlug" placeholder="slug" required><input id="articleCategory" placeholder="Category"><input id="articleAuthor" placeholder="Author"><textarea id="articleExcerpt" placeholder="Excerpt"></textarea><textarea id="articleBody" placeholder="Article body" required></textarea><select id="articleStatus"><option>draft</option><option>review</option><option>published</option></select><button class="primary full-btn">Save article</button></form></dialog>
+<dialog id="newTicketModal"><form id="ticketForm" class="modal"><button type="button" class="x" data-close="newTicketModal">×</button><p class="eyebrow">SUPPORT</p><h2>Create ticket</h2><input id="ticketEmail" type="email" placeholder="Member email"><input id="ticketSubject" placeholder="Subject" required><textarea id="ticketMessage" placeholder="Details"></textarea><select id="ticketPriority"><option>normal</option><option>high</option><option>urgent</option></select><button class="primary full-btn">Create ticket</button></form></dialog>
+<dialog id="hqUserModal"><form id="hqUserForm" class="modal"><button type="button" class="x" data-close="hqUserModal">×</button><p class="eyebrow">HQ USER</p><h2>Add user</h2><input id="newHqName" placeholder="Name" required><input id="newHqEmail" type="email" placeholder="Email" required><select id="newHqRole"><option>readonly</option><option>support</option><option>operations</option><option>marketing</option><option>content</option><option>clinical</option><option>admin</option></select><input id="newHqPassword" type="password" minlength="12" placeholder="Temporary password" required><button class="primary full-btn">Create HQ user</button></form></dialog>
+<dialog id="segmentModal"><form id="segmentForm" class="modal"><button type="button" class="x" data-close="segmentModal">×</button><p class="eyebrow">SEGMENT</p><h2>Create dynamic segment</h2><input id="segmentName" placeholder="Name" required><select id="segmentField"><option value="lifecycle_stage">Lifecycle stage</option><option value="membership_status">Membership status</option><option value="source">Source</option></select><input id="segmentValue" placeholder="Equals…" required><button class="primary full-btn">Create segment</button></form></dialog>
+<dialog id="campaignModal"><form id="campaignForm" class="modal"><button type="button" class="x" data-close="campaignModal">×</button><p class="eyebrow">CAMPAIGN</p><h2>Create campaign</h2><input id="campaignName" placeholder="Name" required><select id="campaignSegment"></select><select id="campaignChannel"><option>email</option><option>sms</option><option>push</option></select><textarea id="campaignMessage" placeholder="Message"></textarea><input id="campaignSchedule" type="datetime-local"><button class="primary full-btn">Save campaign</button></form></dialog>
+<dialog id="formModal"><form id="formForm" class="modal"><button type="button" class="x" data-close="formModal">×</button><p class="eyebrow">FORM</p><h2>Create form</h2><input id="formName" placeholder="Name" required><input id="formSlug" placeholder="slug" required><input id="formSource" placeholder="Source / campaign"><button class="primary full-btn">Create form</button></form></dialog>
+<dialog id="workflowModal"><form id="workflowForm" class="modal"><button type="button" class="x" data-close="workflowModal">×</button><p class="eyebrow">WORKFLOW</p><h2>Create workflow</h2><input id="workflowName" placeholder="Name" required><select id="workflowTrigger"><option>registration</option><option>assessment_complete</option><option>order_created</option><option>support_ticket</option></select><textarea id="workflowAction" placeholder='{"action":"create_task","title":"Follow up"}' required></textarea><button class="primary full-btn">Create workflow</button></form></dialog>
+<dialog id="communicationModal"><form id="communicationForm" class="modal"><button type="button" class="x" data-close="communicationModal">×</button><p class="eyebrow">COMMUNICATION</p><h2>Log communication</h2><input id="communicationEmail" type="email" placeholder="Member email"><select id="communicationChannel"><option>email</option><option>sms</option><option>phone</option><option>internal_note</option></select><input id="communicationSubject" placeholder="Subject"><textarea id="communicationBody" placeholder="Details" required></textarea><button class="primary full-btn">Log communication</button></form></dialog>
+<dialog id="knowledgeDocModal"><form id="knowledgeDocForm" class="modal"><button type="button" class="x" data-close="knowledgeDocModal">×</button><p class="eyebrow">SHIFT BRAIN</p><h2>Add approved knowledge</h2><input id="knowledgeTitle" placeholder="Title" required><input id="knowledgeCategory" placeholder="Category" required><input id="knowledgeSource" placeholder="Source URL / reference" required><select id="knowledgeTrust"><option value="1">Tier 1 — regulator / primary</option><option value="2">Tier 2 — strong evidence</option><option value="3">Tier 3 — secondary</option><option value="4">Tier 4 — editorial</option></select><textarea id="knowledgeText" placeholder="Approved source text / summary" required></textarea><button class="primary full-btn">Index knowledge</button></form></dialog>
 <script src="hq.js?v=11"></script></body></html>
