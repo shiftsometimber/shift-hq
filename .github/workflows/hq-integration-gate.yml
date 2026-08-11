@@ -1,0 +1,28 @@
+name: Shift HQ Integration Gate
+on:
+  pull_request:
+    paths:
+      - 'hq.js'
+      - 'hq-v111.js'
+      - 'index.html'
+      - '.github/workflows/hq-integration-gate.yml'
+jobs:
+  hq-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check HQ runtimes
+        run: |
+          node --check hq.js
+          node --check hq-v111.js
+      - name: Protect V1.11 runtime and Radar shell wiring
+        run: |
+          test "$(git hash-object hq-v111.js)" = "bdecd2e4fcc49cf4e6a8bdf39f99aedfe83d24c4"
+          grep -q "installRadarView" hq.js
+          grep -q "rationaliseKnowledgeNavigation" hq.js
+          grep -q "/v1/hq/radar/queue" hq.js
+          grep -q "/v1/hq/radar/publication-jobs" hq.js
+          test ! -f radar.html
