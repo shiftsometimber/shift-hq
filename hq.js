@@ -16,6 +16,11 @@
       return data;
     }
 
+    function ensureKnowledgeStyles(){
+      if(document.querySelector('link[data-g3-006]'))return;
+      const link=document.createElement('link');link.rel='stylesheet';link.href='hq-knowledge-editorial.css?v=1';link.dataset.g3006='true';document.head.appendChild(link);
+    }
+
     function rationaliseKnowledgeNavigation() {
       const knowledgeButtons = $$('nav button[data-view="knowledge"]');
       const knowledgeSections = $$('section#knowledge');
@@ -31,12 +36,52 @@
       if (knowledgeButtons[1]) knowledgeButtons[1].textContent='⌬ Shift Brain Knowledge';
     }
 
+    function installKnowledgeEditorialPresentation(){
+      ensureKnowledgeStyles();
+      const section=$('#knowledgehub');if(!section)return;
+      const toolbar=section.querySelector('.toolbar');
+      if(toolbar){
+        const sub=toolbar.querySelector('.sub');if(sub)sub.textContent='Draft, review and publish evidence-led content with a named editorial decision retained against every approved article.';
+        const add=toolbar.querySelector('#newArticle');if(add)add.textContent='+ New draft';
+        if(!section.querySelector('.knowledge-editorial-intro')){
+          toolbar.insertAdjacentHTML('afterend',`<div class="knowledge-editorial-intro"><div><p class="eyebrow">EDITORIAL STANDARD</p><h3>Useful first. Reviewed before it goes live.</h3><p>Every Knowledge Hub article keeps its editorial state, reviewer identity, review time and note. Publishing is deliberately unavailable until that approval is retained.</p></div><div class="knowledge-editorial-proof"><strong>Draft → Review → Publish</strong><span>No anonymous approval. No disappearing review trail. No bypassing the existing CMS.</span></div></div>`);
+        }
+      }
+      const head=section.querySelector('thead tr');if(head)head.innerHTML='<th>Article</th><th>Status</th><th>Topic</th><th>Owner</th><th>Editorial review</th><th>Actions</th><th>Updated</th>';
+    }
+
+    function knowledgeActions(a){
+      const review=a.review||null,state=review?.decision||'unreviewed';
+      if(a.status==='published')return `<div class="editorial-actions">${badge('published')}</div>`;
+      if(state==='approved')return `<div class="editorial-actions"><button class="publish" data-knowledge-publish="${a.id}">Publish</button><button class="changes" data-knowledge-review="${a.id}" data-decision="changes_requested">Request changes</button></div>`;
+      return `<div class="editorial-actions"><button class="approve" data-knowledge-review="${a.id}" data-decision="approved">Approve</button><button class="changes" data-knowledge-review="${a.id}" data-decision="changes_requested">Request changes</button></div>`;
+    }
+
+    function reviewCell(a){
+      const r=a.review;if(!r)return '<span class="editorial-empty">Not reviewed yet</span>';
+      return `<div class="editorial-review"><strong>${esc(r.decision==='approved'?'Approved':'Changes requested')} · ${esc(r.reviewer_name||'Named reviewer')}</strong><small>${esc(fmt(r.reviewed_at))}${r.notes?' · '+esc(r.notes):''}</small></div>`;
+    }
+
+    async function reviewHubArticle(id,decision){
+      const note=prompt(decision==='approved'?'Approval note (recommended):':'What needs changing?')||'';
+      if(decision==='changes_requested'&&!note.trim())return;
+      try{await radarCall(`/v1/hq/articles/${id}/review`,{method:'POST',body:JSON.stringify({decision,notes:note})});await loadHubArticles()}catch(e){alert(e.message)}
+    }
+
+    async function publishHubArticle(id){
+      if(!confirm('Publish this reviewed Knowledge Hub article now?'))return;
+      try{await radarCall(`/v1/hq/articles/${id}/publish`,{method:'POST',body:'{}'});await loadHubArticles()}catch(e){alert(e.message)}
+    }
+
     async function loadHubArticles(){
+      installKnowledgeEditorialPresentation();
       const rows=$('#articleRows'); if(!rows) return;
       try {
         const j=await radarCall('/v1/hq/articles'), articles=j.articles||[];
-        rows.innerHTML=articles.length?articles.map(a=>`<tr><td><b>${esc(a.title)}</b><br><small>/${esc(a.slug)}</small></td><td>${badge(a.status)}</td><td>${esc(a.category||'—')}</td><td>${esc(a.author||'—')}</td><td>${esc(fmt(a.publish_at))}</td><td>${esc(fmt(a.updated_at))}</td></tr>`).join(''):'<tr><td colspan="6">No Knowledge Hub articles yet.</td></tr>';
-      } catch(e) { rows.innerHTML=`<tr><td colspan="6">${esc(e.message)}</td></tr>`; }
+        rows.innerHTML=articles.length?articles.map(a=>`<tr data-editorial-state="${esc(a.review?.decision||'unreviewed')}"><td><b>${esc(a.title)}</b><br><small>/${esc(a.slug)}</small></td><td>${badge(a.status)}</td><td>${esc(a.category||'—')}</td><td>${esc(a.author||'—')}</td><td>${reviewCell(a)}</td><td>${knowledgeActions(a)}</td><td>${esc(fmt(a.updated_at))}</td></tr>`).join(''):'<tr><td colspan="7">No Knowledge Hub articles yet.</td></tr>';
+        $$('[data-knowledge-review]').forEach(b=>b.onclick=()=>reviewHubArticle(b.dataset.knowledgeReview,b.dataset.decision));
+        $$('[data-knowledge-publish]').forEach(b=>b.onclick=()=>publishHubArticle(b.dataset.knowledgePublish));
+      } catch(e) { rows.innerHTML=`<tr><td colspan="7">${esc(e.message)}</td></tr>`; }
     }
 
     function installRadarView() {
@@ -86,6 +131,7 @@
     }
 
     rationaliseKnowledgeNavigation();
+    installKnowledgeEditorialPresentation();
     installRadarView();
   };
   legacy.onerror = () => console.error('Shift HQ V1.11 runtime failed to load');
