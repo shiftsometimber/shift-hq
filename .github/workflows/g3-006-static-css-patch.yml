@@ -1,0 +1,38 @@
+name: G3-006 Static CSS Patch
+on:
+  push:
+    branches: ['commissioning/g3-006-live-trigger-hqjs']
+    paths:
+      - '.github/workflows/g3-006-static-css-patch.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: commissioning/g3-006-live-trigger-hqjs
+      - name: Load governed Knowledge responsive CSS before runtime
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          marker='<link rel="stylesheet" href="hq-knowledge-editorial.css?v=2" data-g3-006="true">'
+          if marker in s:
+              raise SystemExit(0)
+          old='<meta name="theme-color" content="#253128"><title>Shift HQ</title><link rel="stylesheet" href="hq.css?v=11">'
+          new=old+marker
+          if old not in s:
+              raise SystemExit('HQ stylesheet head marker missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Commit bounded static stylesheet load
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'G3-006: load responsive Knowledge CSS before runtime'
+          git push origin HEAD:commissioning/g3-006-live-trigger-hqjs
