@@ -3,12 +3,14 @@ on:
   pull_request:
     paths:
       - 'g3-006-hq-live-presentation.mjs'
+      - 'hq.js'
       - 'hq-knowledge-editorial.css'
       - '.github/workflows/g3-006-hq-live-presentation.yml'
   push:
     branches: ['main']
     paths:
       - 'g3-006-hq-live-presentation.mjs'
+      - 'hq.js'
       - 'hq-knowledge-editorial.css'
       - '.github/workflows/g3-006-hq-live-presentation.yml'
   workflow_dispatch:
