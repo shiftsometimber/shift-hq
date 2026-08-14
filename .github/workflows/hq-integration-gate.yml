@@ -4,6 +4,8 @@ on:
     paths:
       - 'hq.js'
       - 'hq-v111.js'
+      - 'hq.css'
+      - 'hq-knowledge-editorial.css'
       - 'index.html'
       - '.github/workflows/hq-integration-gate.yml'
 jobs:
@@ -26,3 +28,14 @@ jobs:
           grep -q "/v1/hq/radar/queue" hq.js
           grep -q "/v1/hq/radar/publication-jobs" hq.js
           test ! -f radar.html
+      - name: G3-006 Knowledge editorial presentation contract
+        run: |
+          grep -q "knowledge-editorial-intro" hq.js
+          grep -q "reviewer_name" hq.js
+          grep -q "data-knowledge-review" hq.js
+          grep -q "/v1/hq/articles/.*/publish" hq.js
+          grep -q "hq-knowledge-editorial.css?v=1" hq.js
+          grep -q "#253128" hq-knowledge-editorial.css
+          grep -q "#f7f3e8" hq-knowledge-editorial.css
+          grep -q "@media(max-width:900px)" hq-knowledge-editorial.css
+          grep -q "prefers-reduced-motion" hq-knowledge-editorial.css
