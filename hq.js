@@ -18,7 +18,7 @@
 
     function ensureKnowledgeStyles(){
       if(document.querySelector('link[data-g3-006]'))return;
-      const link=document.createElement('link');link.rel='stylesheet';link.href='hq-knowledge-editorial.css?v=1';link.dataset.g3006='true';document.head.appendChild(link);
+      const link=document.createElement('link');link.rel='stylesheet';link.href='hq-knowledge-editorial.css?v=2';link.dataset.g3006='true';document.head.appendChild(link);
     }
 
     function rationaliseKnowledgeNavigation() {
