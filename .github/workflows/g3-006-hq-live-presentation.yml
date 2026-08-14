@@ -1,0 +1,40 @@
+name: G3-006 HQ Live Presentation
+on:
+  pull_request:
+    paths:
+      - 'g3-006-hq-live-presentation.mjs'
+      - 'hq-knowledge-editorial.css'
+      - '.github/workflows/g3-006-hq-live-presentation.yml'
+  push:
+    branches: ['main']
+    paths:
+      - 'g3-006-hq-live-presentation.mjs'
+      - 'hq-knowledge-editorial.css'
+      - '.github/workflows/g3-006-hq-live-presentation.yml'
+  workflow_dispatch:
+jobs:
+  live-presentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Install Chromium
+        run: |
+          npm install --no-save --ignore-scripts playwright
+          npx playwright install --with-deps chromium
+      - name: Prove deployed governed Knowledge desk
+        env:
+          SHIFT_HQ_BASE: https://hq.shiftsometimber.co.uk
+          G3_006_HQ_EVIDENCE_DIR: g3-006-hq-live-evidence
+        run: node g3-006-hq-live-presentation.mjs
+      - name: Upload live HQ evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g3-006-hq-live-evidence
+          path: g3-006-hq-live-evidence
+          if-no-files-found: warn
+          retention-days: 30
