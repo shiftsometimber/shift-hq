@@ -4,7 +4,7 @@
   legacy.onload = () => {
     const $ = s => document.querySelector(s);
     const $$ = s => [...document.querySelectorAll(s)];
-    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const API = 'https://api.shiftsometimber.co.uk';
     const fmt = d => { if (!d) return '—'; try { return new Date(d).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'}); } catch { return d; } };
     const badge = v => `<span class="badge">${esc(String(v || '—').replaceAll('_',' '))}</span>`;
