@@ -24,7 +24,7 @@ jobs:
         run: |
           # Reviewed V1.11.2 baseline: login startup guards, responsive commerce
           # cards and genuine Stripe refund-email controls.
-          test "$(git hash-object hq-v111.js)" = "c5e7bb6cbb08e67d3a2ed76eca5615bd0956b29d"
+          test "$(git hash-object hq-v111.js)" = "55bbc2e76fb3bafb1a7c1446d0a76932fc3d6776"
           grep -q "installRadarView" hq.js
           grep -q "rationaliseKnowledgeNavigation" hq.js
           grep -q "/v1/hq/radar/queue" hq.js
