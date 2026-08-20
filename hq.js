@@ -1,6 +1,6 @@
 (() => {
   const legacy = document.createElement('script');
-  legacy.src = 'hq-v111.js?v=11.1';
+  legacy.src = 'hq-v111.js?v=11.2';
   legacy.onload = () => {
     const $ = s => document.querySelector(s);
     const $$ = s => [...document.querySelectorAll(s)];
