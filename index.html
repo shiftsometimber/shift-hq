@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 14154)
+Total output lines: 513
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -36,11 +39,11 @@
 <section id="orders" class="view">
   <div class="toolbar">
     <div><p class="eyebrow">COMMERCE</p><h2>Orders</h2><p class="sub">Track every order from payment through fulfilment.</p></div>
-    <div class="toolbar-actions"><select id="orderFilter"><option value="all">All orders</option><option value="new">New</option><option value="paid">Paid</option><option value="processing">Processing</option><option value="fulfilled">Fulfilled</option><option value="refunded">Refunded</option><option value="cancelled">Cancelled</option></select><button id="newOrder">+ New order</button></div>
+    <div class="toolbar-actions"><select id="orderEnvironment"><option value="live">Live commerce</option><option value="test">Test orders</option><option value="all">All environments</option><option value="manual">Manual orders</option></select><select id="orderFilter"><option value="all">All statuses</option><option value="new">New</option><option value="paid">Paid</option><option value="processing">Processing</option><option value="dispatched">Dispatched</option><option value="fulfilled">Fulfilled</option><option value="refunded">Refunded</option><option value="cancelled">Cancelled</option></select><button id="newOrder">+ New order</button></div>
   </div>
   <div class="cards compact-cards">
-    <article><span>Orders</span><strong id="orderCount">—</strong><em>all time</em></article>
-    <article><span>Paid revenue</span><strong id="orderRevenue">—</strong><em>gross</em></article>
+    <article><span>Orders</span><strong id="orderCount">—</strong><em id="orderCountLabel">live commerce</em></article>
+    <article><span>Paid revenue</span><strong id="orderRevenue">—</strong><em id="orderRevenueLabel">live gross</em></article>
     <article><span>Open</span><strong id="orderOpen">—</strong><em>needs action</em></article>
     <article><span>Refunded</span><strong id="orderRefunded">—</strong><em>order count</em></article>
   </div>
@@ -209,55 +212,7 @@
 
 <section id="knowledge" class="view">
 <div class="toolbar"><div><p class="eyebrow">SHIFT BRAIN</p><h2>Knowledge Engine</h2><p class="sub">Ingest, chunk, retrieve and cite approved Shift knowledge.</p></div><div class="toolbar-actions"><button id="newKnowledgeDoc">+ Add knowledge</button><button id="refreshKnowledge">Refresh</button></div></div>
-<div class="cards compact-cards"><article><span>Documents</span><strong id="knowledgeDocs">—</strong><em>approved + indexed</em></article><article><span>Chunks</span><strong id="knowledgeChunks">—</strong><em>retrievable units</em></article><article><span>Health tier 1</span><strong id="knowledgeTier1">—</strong><em>highest trust</em></article><article><span>Needs review</span><strong id="knowledgeReview">—</strong><em>human approval</em></article></div>
-<div class="cms-grid"><article class="panel"><div class="panelhead"><div><p class="eyebrow">KNOWLEDGE SOURCES</p><h3>Indexed library</h3></div></div><div id="knowledgeLibrary" class="cms-list"></div></article>
-<article class="panel"><p class="eyebrow">RETRIEVAL TEST</p><h3>Ask the Shift Brain</h3><form id="knowledgeSearchForm" class="stack-form"><textarea id="knowledgeQuery" rows="4" placeholder="e.g. What does Shift say about dealing with a weight-loss plateau?" required></textarea><button class="primary">Search knowledge</button></form><div id="knowledgeResults" class="retrieval-results"></div></article></div>
-</section>
-
-<section id="synthetic" class="view">
-<div class="toolbar"><div><p class="eyebrow">SHIFT ACADEMY</p><h2>Synthetic Shifters</h2><p class="sub">Fictional member personas hammering Shift AI before real customers do.</p></div><div class="toolbar-actions"><button id="seedSynthetic">Seed personas</button><button id="runSynthetic">Run simulation</button></div></div>
-<div class="cards compact-cards"><article><span>Personas</span><strong id="syntheticPersonas">—</strong><em>fictional Shifters</em></article><article><span>Scenarios</span><strong id="syntheticScenarios">—</strong><em>conversation tests</em></article><article><span>Pass</span><strong id="syntheticPass">—</strong><em>latest simulation</em></article><article><span>Review</span><strong id="syntheticReview">—</strong><em>needs a human</em></article></div>
-<div id="personaGrid" class="product-grid"></div><div class="panel tablewrap"><table><thead><tr><th>Persona</th><th>Scenario</th><th>Mode</th><th>Result</th><th>Score</th></tr></thead><tbody id="syntheticRows"><tr><td colspan="5">No simulations yet.</td></tr></tbody></table></div>
-</section>
-
-<section id="memory" class="view">
-<div class="toolbar"><div><p class="eyebrow">MEMBER CONTROL</p><h2>Shift Memory</h2><p class="sub">Useful continuity without quietly hoovering up everything a member says.</p></div></div>
-<div class="cms-grid"><article class="panel"><p class="eyebrow">MEMORY POLICY</p><h3>What Shift can remember</h3><div class="cms-list">
-<div class="cms-item"><b>Goals & preferences</b><span>Useful, editable, member-controlled</span></div><div class="cms-item"><b>Programme progress</b><span>Weight, waist, milestones and habits where consented</span></div><div class="cms-item"><b>Conversation continuity</b><span>Summaries, not indiscriminate transcripts</span></div><div class="cms-item"><b>Sensitive health context</b><span>Separate sensitivity flag + explicit consent basis</span></div><div class="cms-item"><b>Shift Shoulder</b><span>Memory off by default for highly sensitive disclosures unless the member explicitly chooses otherwise</span></div></div></article>
-<article class="panel"><p class="eyebrow">CONTROL CENTRE</p><h3>Test a member memory record</h3><form id="memoryLookupForm" class="stack-form"><input id="memoryUserId" type="number" min="1" placeholder="Member ID" required><button class="primary">Load memory</button></form><div id="memoryResults" class="cms-list"><div class="empty">Enter a test member ID.</div></div></article></div>
-</section>
-
-<section id="models" class="view">
-<div class="toolbar"><div><p class="eyebrow">SHIFT AI INFRASTRUCTURE</p><h2>Model Lab</h2><p class="sub">Cloud, open-weight and self-hosted engines behind one Shift interface.</p></div><button id="refreshModels">Refresh</button></div>
-<div id="modelLabGrid" class="product-grid"></div>
-<div class="panel"><p class="eyebrow">SELF-HOST FOUNDATION</p><h3>Shift Model Gateway</h3><p class="sub">Section 8 adds a formal adapter contract for self-hosted OpenAI-compatible endpoints.</p><div class="callout">Shift owns the knowledge, retrieval, memory, evaluations, tools, safety, member context and voice. The model itself is a replaceable engine.</div></div>
-</section>
-
-<section id="indexing" class="view">
-<div class="toolbar"><div><p class="eyebrow">SHIFT BRAIN</p><h2>Automatic site indexing</h2><p class="sub">Keep Shift AI synced with the public site and Knowledge Hub as approved content changes.</p></div><button id="runSiteIndex">Index Shift site</button></div>
-<div class="cards compact-cards"><article><span>Pages indexed</span><strong id="indexPages">—</strong><em>approved pages</em></article><article><span>Chunks created</span><strong id="indexChunks">—</strong><em>retrievable units</em></article><article><span>Changed</span><strong id="indexChanged">—</strong><em>new versions</em></article><article><span>Errors</span><strong id="indexErrors">—</strong><em>needs review</em></article></div>
-<div class="cms-grid"><article class="panel"><p class="eyebrow">INDEX TARGETS</p><h3>Approved sources</h3><div id="indexTargets" class="cms-list"></div></article><article class="panel"><p class="eyebrow">LATEST RUN</p><h3>Indexing activity</h3><div id="indexRunLog" class="cms-list"><div class="empty">No indexing run yet.</div></div></article></div>
-</section>
-
-<section id="semantic" class="view">
-<div class="toolbar"><div><p class="eyebrow">RETRIEVAL</p><h2>Hybrid semantic search</h2><p class="sub">Lexical relevance + semantic similarity + trust weighting behind one Shift Brain search.</p></div></div>
-<div class="cms-grid"><article class="panel"><p class="eyebrow">TEST QUERY</p><h3>Ask Shift Brain</h3><form id="semanticSearchForm" class="stack-form"><textarea id="semanticQuery" rows="5" required placeholder="e.g. Why might someone on a GLP-1 feel nauseous and when should they seek help?"></textarea><button class="primary">Run hybrid search</button></form><div id="semanticResults" class="retrieval-results"></div></article>
-<article class="panel"><p class="eyebrow">SEARCH PIPELINE</p><h3>How Shift ranks knowledge</h3><div class="cms-list"><div class="cms-item"><b>1. Trust first</b><span>Approved health sources outrank general reference material.</span></div><div class="cms-item"><b>2. Lexical match</b><span>Exact terms and phrases.</span></div><div class="cms-item"><b>3. Semantic match</b><span>Meaning similarity via embedding adapter.</span></div><div class="cms-item"><b>4. Freshness</b><span>Current approved versions outrank superseded ones.</span></div><div class="cms-item"><b>5. Citations</b><span>Every returned chunk has a Shift Brain reference.</span></div></div></article></div>
-</section>
-
-<section id="sourceversions" class="view">
-<div class="toolbar"><div><p class="eyebrow">KNOWLEDGE GOVERNANCE</p><h2>Source versions</h2><p class="sub">Know what changed, when it changed and which version Shift AI is allowed to trust.</p></div><button id="refreshVersions">Refresh</button></div>
-<div class="panel tablewrap"><table><thead><tr><th>Source</th><th>Version</th><th>Status</th><th>Checksum</th><th>Effective</th><th>Updated</th></tr></thead><tbody id="versionRows"><tr><td colspan="6">No versions loaded.</td></tr></tbody></table></div>
-</section>
-
-<section id="consentmemory" class="view">
-<div class="toolbar"><div><p class="eyebrow">PRIVACY</p><h2>Memory consent controls</h2><p class="sub">Shift remembers because the member chose it — not because the AI fancied keeping it.</p></div></div>
-<div class="cms-grid"><article class="panel"><p class="eyebrow">MEMORY MODES</p><h3>Member choices</h3><div class="cms-list"><div class="cms-item"><b>Off</b><span>No conversational memory beyond the current session.</span></div><div class="cms-item"><b>Useful</b><span>Goals, preferences and progress summaries only.</span></div><div class="cms-item"><b>Personal</b><span>Broader continuity, excluding highly sensitive Shoulder disclosures unless separately opted in.</span></div><div class="cms-item"><b>Shoulder memory</b><span>Separate opt-in with its own delete control.</span></div></div></article>
-<article class="panel"><p class="eyebrow">TEST MEMBER</p><h3>Inspect consent state</h3><form id="memoryConsentForm" class="stack-form"><input id="memoryConsentUserId" type="number" min="1" placeholder="Member ID" required><button class="primary">Load consent</button></form><div id="memoryConsentResult" class="cms-list"><div class="empty">Enter a member ID.</div></div></article></div>
-</section>
-
-<section id="selfhost" class="view">
-<div class="toolbar"><div><p class="eyebrow">SHIFT AI INFRASTRUCTURE</p><h2>Self-host blueprint</h2><p class="sub">A practical path to running more of Shift AI on infrastructure we control.</p></div><button id="refreshSelfHost">Refresh status</button></div>
+<div class="cards compact-cards"><article><span>Documents</span><strong id="knowledgeDocs">—</strong><em>approved + indexed</em></article><article><…2154 tokens truncated… running more of Shift AI on infrastructure we control.</p></div><button id="refreshSelfHost">Refresh status</button></div>
 <div id="selfHostGrid" class="product-grid"></div>
 <div class="panel"><p class="eyebrow">DEPLOYMENT TIERS</p><h3>Roadmap to greater independence</h3><div class="cms-list"><div class="cms-item"><b>Tier A — Shift-owned orchestration</b><span>Brain, memory, retrieval, evaluations, tools, safety and voice.</span></div><div class="cms-item"><b>Tier B — Self-host routine inference</b><span>Open-weight model behind Shift Model Gateway.</span></div><div class="cms-item"><b>Tier C — Specialist Shift models</b><span>Adapted models for Shift tone and domain tasks.</span></div><div class="cms-item"><b>Tier D — Redundant model estate</b><span>Multiple compatible engines to avoid supplier lock-in.</span></div></div></div>
 </section>
