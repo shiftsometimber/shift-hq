@@ -130,9 +130,95 @@
       try { await radarCall(`/v1/hq/radar/events/${id}/${action}`,{method:'POST',body:JSON.stringify({note})}); await loadRadar(); } catch(e) { alert(e.message); }
     }
 
+    function installEvidenceDeskView(){
+      if($('#evidencedesk'))return;
+      const css=document.createElement('link');css.rel='stylesheet';css.href='hq-evidence-desk.css?v=1';css.dataset.evidenceDesk='true';document.head.appendChild(css);
+      const nav=$('aside nav'),knowledge=nav?.querySelector('button[data-view="knowledgehub"]')||nav?.querySelector('button[data-view="knowledge"]');
+      const button=document.createElement('button');button.dataset.view='evidencedesk';button.textContent='⌁ Evidence Desk';
+      if(knowledge?.nextSibling)nav.insertBefore(button,knowledge.nextSibling);else nav?.appendChild(button);
+      const section=document.createElement('section');section.id='evidencedesk';section.className='view';
+      section.innerHTML=`
+        <div class="toolbar evidence-toolbar"><div><p class="eyebrow">SHIFT EVIDENCE INBOX · READ ONLY</p><h2>Keep the website true when the evidence moves.</h2><p class="sub">Source → structured fact → Shift claim → exact page → recorded package. This screen reports the machine truth; it cannot grant a review or publish.</p></div><div class="toolbar-actions"><button id="evidenceRefresh">Refresh</button></div></div>
+        <div class="evidence-environment"><strong>Environment: non-production / staging</strong><span>Nothing shown here is live medical-safety copy.</span></div>
+        <div id="evidenceControl" class="evidence-control">Loading control state…</div>
+        <div class="evidence-operation-grid" aria-label="Evidence Desk operational state">
+          <article><span>Source monitoring</span><strong id="evidenceMonitoringState">Loading</strong><em id="evidenceMonitoringDetail">Awaiting control response</em></article>
+          <article><span>Automatic drafting</span><strong id="evidenceDraftingState">Loading</strong><em id="evidenceDraftingDetail">Awaiting control response</em></article>
+          <article><span>Website destination</span><strong id="evidenceWebsiteState">Loading</strong><em>Approval-driven only</em></article>
+          <article><span>Newsletter destination</span><strong id="evidenceNewsletterState">Loading</strong><em>Separate destination approval</em></article>
+          <article><span>Social destinations</span><strong id="evidenceSocialState">Loading</strong><em>Separate destination approval</em></article>
+          <article><span>Production authority</span><strong id="evidenceAuthorityState">Loading</strong><em>Never implied by staging</em></article>
+        </div>
+        <div class="cards compact-cards evidence-cards"><article><span>Allowlisted sources</span><strong id="evidenceSourceCount">—</strong><em id="evidenceSourceActive">— active</em></article><article><span>Mapped claims</span><strong id="evidenceClaimCount">—</strong><em>claim-to-page spine</em></article><article><span>Open changes</span><strong id="evidenceEventCount">—</strong><em>need mapping or a decision</em></article><article><span>Decision packages</span><strong id="evidencePackageCount">—</strong><em id="evidenceNoPublish">— no-publish decisions</em></article></div>
+        <div class="panel evidence-principle"><div><p class="eyebrow">OPERATING STANDARD</p><h3>One worthwhile action. Publishing nothing is allowed.</h3><p>“Editorial accepted” appears only after a retained editorial acceptance. Specialist review and publication authority are independent gates; neither is inferred from a draft, a model or a staging preview.</p></div><div class="evidence-lock-stack"><span>Specialist review: package-specific</span><span>Publication: disabled unless every gate passes</span><span>Newsletter: separate approval</span><span>Social: separate approval</span></div></div>
+        <div class="panel tablewrap"><div class="panelhead"><div><p class="eyebrow">EVIDENCE INBOX</p><h3>Persisted packages awaiting governed review</h3></div></div><table><thead><tr><th>Package</th><th>Lane</th><th>Mapping &amp; copy</th><th>Editorial</th><th>Specialist review</th><th>Publication</th></tr></thead><tbody id="evidencePackageRows"><tr><td colspan="6">Open Evidence Inbox to load packages.</td></tr></tbody></table></div>
+        <div class="panel tablewrap"><div class="panelhead"><div><p class="eyebrow">CHANGE RECORD</p><h3>Material source changes and claim impact</h3></div></div><table><thead><tr><th>Source change</th><th>Materiality</th><th>Affected claims/pages</th><th>Lane</th><th>State</th><th>Action</th></tr></thead><tbody id="evidenceEventRows"><tr><td colspan="6">No changes loaded.</td></tr></tbody></table></div>
+        <div class="cms-grid"><article class="panel"><p class="eyebrow">SOURCE REGISTRY</p><h3>Approved source families</h3><div id="evidenceSources" class="cms-list"><div class="empty">No sources loaded.</div></div></article><article class="panel"><p class="eyebrow">CLAIM MAP</p><h3>Claims with exact page dependencies</h3><div id="evidenceClaims" class="cms-list"><div class="empty">No mapped claims yet.</div></div></article></div>`;
+      const users=$('#users');users?.parentNode?.insertBefore(section,users);
+      button.onclick=()=>{$$('.view').forEach(x=>x.classList.toggle('active',x.id==='evidencedesk'));$$('nav button[data-view]').forEach(x=>x.classList.toggle('active',x===button));const title=$('#title');if(title)title.textContent='The governed record when evidence moves.';loadEvidenceDesk()};
+      $('#evidenceRefresh').onclick=loadEvidenceDesk;
+    }
+
+    function evidenceOperational(overview){
+      const base=overview.control||{},operation=overview.operational||overview.operationalControl||{},locks=overview.locks||{};
+      const known=(key,fallback)=>Object.prototype.hasOwnProperty.call(operation,key)?Number(operation[key])===1:fallback;
+      return{
+        monitoring:known('monitoring_enabled',Number(base.ingestion_enabled)===1),
+        drafting:known('drafting_enabled',locks.model===false),
+        website:known('website_enabled',locks.websitePublish===false),
+        newsletter:known('newsletter_enabled',locks.newsletter===false),
+        social:known('social_enabled',locks.social===false),
+        authority:known('production_authority_enabled',false),
+        shutdown:operation.shutdown_reason||base.stop_reason||'',
+        cadence:overview.monitoringCadence||operation.cadence||'Scheduled adapter checks'
+      };
+    }
+    function setEvidenceState(id,on,onText='Enabled',offText='Disabled'){const node=$('#'+id);if(!node)return;node.textContent=on?onText:offText;node.classList.toggle('is-on',!!on);node.classList.toggle('is-off',!on)}
+    function evidenceEditorial(pkg){
+      const accepted=Number(pkg.editorial_accepted)===1||['editorial_accepted','approved_web_pending_publish'].includes(pkg.status)||['approve_web_only','approved'].includes(pkg.editorial_decision);
+      if(accepted)return '<span class="evidence-clear">Editorial accepted</span>';
+      if(pkg.status==='changes_required')return '<span class="evidence-gate">Editorial: changes required</span>';
+      if(pkg.editorial_reviewed_at)return '<span class="evidence-gate">Editorial reviewed — acceptance not recorded</span>';
+      return '<span class="evidence-gate">Editorial: not obtained</span>';
+    }
+    function evidenceSpecialists(pkg){
+      const clinicalRequired=Number(pkg.qualified_review_required)===1,commsRequired=Number(pkg.communications_review_required)===1;
+      const clinical=!!pkg.qualified_reviewed_at,comms=!!pkg.communications_reviewed_at,labels=[];
+      if((clinicalRequired||commsRequired)&&!clinical&&!comms)labels.push('<span class="evidence-gate">Specialist review: not obtained</span><br>');
+      if(clinicalRequired)labels.push(`<span class="${clinical?'evidence-clear':'evidence-gate'}">Clinical: ${clinical?'obtained':'not obtained'}</span>`);
+      if(commsRequired)labels.push(`<span class="${comms?'evidence-clear':'evidence-gate'}">Medicines comms: ${comms?'obtained':'not obtained'}</span>`);
+      return labels.length?labels.join(''):'<span class="evidence-clear">Specialist review: not required</span>';
+    }
+    function evidenceMapping(pkg){
+      const changes=Array.isArray(pkg.proposedChanges)?pkg.proposedChanges:[],revision=[...changes].reverse().find(x=>x&&(x.pagePath||x.page_path||x.proposedText||x.after))||{};
+      const page=revision.pagePath||revision.page_path||pkg.page_path||'',hash=revision.copyHash||revision.copySha256||revision.copy_sha256||pkg.copy_hash||pkg.copy_sha256||'';
+      return `${page?`<b>${esc(page)}</b>`:'<span class="evidence-gate">Exact page not recorded</span>'}${hash?`<br><small>Copy SHA-256 ${esc(hash)}</small>`:'<br><span class="evidence-gate">Exact copy required</span>'}`;
+    }
+    function evidencePublication(pkg,operation){
+      const specialistBlocked=(Number(pkg.qualified_review_required)&&!pkg.qualified_reviewed_at)||(Number(pkg.communications_review_required)&&!pkg.communications_reviewed_at);
+      const enabled=operation.website&&operation.authority&&!specialistBlocked&&Number(pkg.web_eligible)===1;
+      return enabled?'<span class="evidence-clear">Publication eligible</span><br><small>Still requires package preflight</small>':'<span class="evidence-gate">Publication: disabled</span><br><small>Preflight fails closed</small>';
+    }
+    async function loadEvidenceDesk(){
+      try{
+        const [overview,sources,claims,events,packages]=await Promise.all(['/overview','/sources','/claims','/events','/packages'].map(path=>radarCall('/v1/hq/evidence-desk'+path)));
+        const control=overview.control||{},counts=overview.counts||{},operation=evidenceOperational(overview);
+        $('#evidenceSourceCount').textContent=Number(counts.sources?.total||0);$('#evidenceSourceActive').textContent=`${Number(counts.sources?.active||0)} active`;
+        $('#evidenceClaimCount').textContent=Number(counts.claims?.active||0);$('#evidenceEventCount').textContent=Number(counts.events?.open||0);$('#evidencePackageCount').textContent=Number(counts.packages?.total||0);$('#evidenceNoPublish').textContent=`${Number(counts.packages?.no_publication||0)} no-publish decisions`;
+        $('#evidenceControl').innerHTML=`<strong>${operation.monitoring?'Controlled monitoring enabled':'Evidence Desk sealed'}</strong><span>${operation.monitoring?'Structured source checks are active':'Source checks are off'} · ${operation.drafting?'evidence-bound drafting enabled':'automatic drafting disabled'} · publication remains approval-driven</span>${operation.shutdown?`<small>Stopped: ${esc(operation.shutdown)}</small>`:''}`;
+        setEvidenceState('evidenceMonitoringState',operation.monitoring,'Enabled','Disabled');setEvidenceState('evidenceDraftingState',operation.drafting,'Enabled','Disabled');setEvidenceState('evidenceWebsiteState',operation.website,'Enabled','Disabled');setEvidenceState('evidenceNewsletterState',operation.newsletter,'Enabled','Disabled');setEvidenceState('evidenceSocialState',operation.social,'Enabled','Disabled');setEvidenceState('evidenceAuthorityState',operation.authority,'Granted','Not granted');
+        $('#evidenceMonitoringDetail').textContent=operation.monitoring?operation.cadence:'Shutdown prevents fetch';$('#evidenceDraftingDetail').textContent=operation.drafting?'Exact copy remains SHA-locked':'No model drafting will run';
+        $('#evidenceSources').innerHTML=(sources.sources||[]).map(source=>`<div class="cms-item"><b>${esc(source.name)}</b><span>${esc(source.family.toUpperCase())} · ${esc(source.extraction_method.replaceAll('_',' '))} · ${esc(source.status)}</span><span>${esc(source.authority_name)} · ${esc(source.canonical_url)}</span></div>`).join('')||'<div class="empty">Load the founding source registry. Sources remain draft until their adapter is proved.</div>';
+        $('#evidenceClaims').innerHTML=(claims.claims||[]).map(claim=>`<div class="cms-item"><b>${esc(claim.claim_text)}</b><span>${esc(claim.risk_lane)} · ${esc(claim.communication_class.replaceAll('_',' '))}</span><span>${Number(claim.dependency_count)} source dependencies · ${Number(claim.page_count)} page placements</span></div>`).join('')||'<div class="empty">No claim-to-page dependencies have been commissioned yet.</div>';
+        const list=packages.packages||[];$('#evidencePackageRows').innerHTML=list.length?list.map(pkg=>`<tr><td><b>#${Number(pkg.id)} · ${esc(pkg.title)}</b><br><small>${esc(pkg.summary)}</small><br>${badge(pkg.status)}</td><td><span class="evidence-lane ${esc(pkg.risk_lane)}">${esc(pkg.risk_lane)}</span><br><small>${esc(String(pkg.communication_class||'').replaceAll('_',' '))}</small></td><td>${evidenceMapping(pkg)}</td><td>${evidenceEditorial(pkg)}</td><td>${evidenceSpecialists(pkg)}</td><td>${evidencePublication(pkg,operation)}<br><span class="evidence-read-only">Read only</span></td></tr>`).join(''):'<tr><td colspan="6">Nothing is waiting in the Inbox. Silence is a valid result.</td></tr>';
+        const eventList=events.events||[];$('#evidenceEventRows').innerHTML=eventList.length?eventList.map(event=>`<tr><td><b>${esc(event.headline)}</b><br><small>${esc(fmt(event.created_at))}</small></td><td>${esc(event.materiality.replaceAll('_',' '))}</td><td>${(event.impactedClaims||[]).length?`${event.impactedClaims.length} claim(s)<br><small>${(event.impactedClaims||[]).flatMap(x=>x.pages||[]).length} exact page placement(s)</small>`:'<span class="evidence-gate">Mapping required</span>'}</td><td><span class="evidence-lane ${esc(event.risk_lane)}">${esc(event.risk_lane)}</span></td><td>${badge(event.status)}</td><td>${event.package_id?`Package #${event.package_id}`:'No package'}</td></tr>`).join(''):'<tr><td colspan="6">No material source changes recorded.</td></tr>';
+      }catch(e){const rows=$('#evidencePackageRows');if(rows)rows.innerHTML=`<tr><td colspan="6">${esc(e.message)}</td></tr>`}
+    }
+
     rationaliseKnowledgeNavigation();
     installKnowledgeEditorialPresentation();
     installRadarView();
+    installEvidenceDeskView();
   };
   legacy.onerror = () => console.error('Shift HQ V1.11 runtime failed to load');
   document.head.appendChild(legacy);
