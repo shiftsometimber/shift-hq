@@ -10,7 +10,9 @@
     const badge = v => `<span class="badge">${esc(String(v || '—').replaceAll('_',' '))}</span>`;
 
     async function radarCall(path, opts={}) {
-      const r = await fetch(API + path, { ...opts, credentials:'include', headers:{'Accept':'application/json','Content-Type':'application/json',...(opts.headers||{})} });
+      const method=String(opts.method||'GET').toUpperCase();
+      const headers={'Accept':'application/json',...(method==='GET'||method==='HEAD'?{}:{'Content-Type':'application/json'}),...(opts.headers||{})};
+      const r = await fetch(API + path, { ...opts, credentials:'include', headers });
       let data={}; try { data=await r.json(); } catch {}
       if (!r.ok) throw new Error(data.message || data.error || `Shift Core ${r.status}`);
       return data;
