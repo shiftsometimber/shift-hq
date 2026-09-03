@@ -94,7 +94,7 @@
       if (intelligence?.nextSibling) nav.insertBefore(button,intelligence.nextSibling); else nav?.appendChild(button);
       const section=document.createElement('section'); section.id='radar'; section.className='view';
       section.innerHTML=`
-        <div class="toolbar"><div><p class="eyebrow">WORLDWIDE INTELLIGENCE</p><h2>Shift Radar</h2><p class="sub">Detect → verify → package → human review → publish → freshness, inside the existing HQ operating system.</p></div><button id="refreshRadar">Refresh Radar</button></div>
+        <div class="toolbar"><div><p class="eyebrow">WORLDWIDE INTELLIGENCE</p><h2>Shift Radar</h2><p class="sub">Detect → verify → package → human review → publish → freshness, inside the existing HQ operating system.</p><p id="radarScanStatus" role="status"></p></div><div class="actions"><button id="scanRadar">Run source scan</button><button id="refreshRadar">Refresh Radar</button></div></div>
         <div class="cards compact-cards"><article><span>Review queue</span><strong id="radarQueueCount">—</strong><em>needs human action</em></article><article><span>Verified</span><strong id="radarVerifiedCount">—</strong><em>evidence gate passed</em></article><article><span>Medicines</span><strong id="radarMedicineCount">—</strong><em>living registry</em></article><article><span>Forward Radar</span><strong id="radarForwardCount">—</strong><em>future milestones</em></article></div>
         <div class="panel tablewrap"><div class="panelhead"><div><p class="eyebrow">REVIEW DESK</p><h3>Detected developments</h3></div></div><table><thead><tr><th>Development</th><th>Region</th><th>Status</th><th>Verification</th><th>Scores</th><th>Action</th></tr></thead><tbody id="radarRows"><tr><td colspan="6">Open Radar to load the queue.</td></tr></tbody></table></div>
         <div class="cms-grid"><article class="panel"><p class="eyebrow">GLOBAL MEDICINES</p><h3>Living registry</h3><div id="radarMedicines" class="cms-list"><div class="empty">No medicines loaded.</div></div></article><article class="panel"><p class="eyebrow">FORWARD RADAR</p><h3>What is coming next</h3><div id="radarForward" class="cms-list"><div class="empty">No milestones loaded.</div></div></article></div>
@@ -102,6 +102,7 @@
       const users=$('#users'); users?.parentNode?.insertBefore(section,users);
       button.onclick=()=>{ $$('.view').forEach(x=>x.classList.toggle('active',x.id==='radar')); $$('nav button[data-view]').forEach(x=>x.classList.toggle('active',x===button)); const title=$('#title'); if(title) title.textContent='Worldwide intelligence, with a human hand on the publish button.'; loadRadar(); };
       $('#refreshRadar').onclick=loadRadar;
+      $('#scanRadar').onclick=async()=>{const status=$('#radarScanStatus'),button=$('#scanRadar');button.disabled=true;status.textContent='Fetching authoritative medicine sources…';try{const result=await radarCall('/v1/hq/radar/scan',{method:'POST',body:'{}'});status.textContent=`Scan complete · ${Number(result.detected||result.ingested||0)} developments detected.`;await loadRadar()}catch(e){status.textContent=`Scan FAILED · ${e.message}`}finally{button.disabled=false}};
     }
 
     async function loadRadar(){
@@ -250,9 +251,32 @@
       }catch(e){const rows=$('#evidencePackageRows');if(rows)rows.innerHTML=`<tr><td colspan="6">${esc(e.message)}</td></tr>`}
     }
 
+    function installWebsiteUpdater(){
+      const host=$('#contentList'),create=$('#newContent');
+      if(!host||!create)return;
+      const render=async()=>{
+        host.innerHTML='<div class="empty">Loading controlled public fields…</div>';
+        try{
+          const data=await radarCall('/v1/hq/site-content');
+          const rows=data.content||[];
+          host.innerHTML=rows.length?rows.map(x=>`<article class="cms-item" data-site-content="${Number(x.id)}"><b>${esc(x.label)}</b><span>${esc(x.page_path)} · ${badge(x.status)} · version ${Number(x.version||1)}</span><textarea aria-label="${esc(x.label)} text">${esc(x.draft_text||'')}</textarea><div class="actions"><button data-site-preview="${Number(x.id)}">Preview</button><button data-site-publish="${Number(x.id)}">Publish</button><button data-site-rollback="${Number(x.id)}">Rollback</button></div><p role="status"></p></article>`).join(''):'<div class="empty">No controlled public fields yet.</div>';
+          $$('[data-site-preview],[data-site-publish],[data-site-rollback]').forEach(button=>button.onclick=async()=>{
+            const id=button.dataset.sitePreview||button.dataset.sitePublish||button.dataset.siteRollback,card=button.closest('[data-site-content]'),text=card.querySelector('textarea').value,status=card.querySelector('[role=status]'),action=button.dataset.sitePreview?'preview':button.dataset.sitePublish?'publish':'rollback';
+            button.disabled=true;status.textContent=action==='preview'?'Preparing preview…':action==='publish'?'Publishing…':'Rolling back…';
+            try{const result=await radarCall(`/v1/hq/site-content/${id}`,{method:'PATCH',body:JSON.stringify({action,text})});if(action==='preview'){const p=result.preview||{};status.textContent=`Preview only · ${p.pagePath||''} · current: ${p.currentText||'underlying page wording'} · proposed: ${p.draftText||text}`;}else{status.textContent=`Committed · ${result.status} · version ${Number(result.version||0)}`;await render();}}catch(e){status.textContent=`FAILED · ${e.message}`;}finally{button.disabled=false;}
+          });
+        }catch(e){host.innerHTML=`<div class="empty">Website updater failed: ${esc(e.message)}</div>`;}
+      };
+      create.hidden=true;
+      const heading=$('#website .toolbar .sub');if(heading)heading.textContent='Preview, publish and roll back controlled public fields against the live delivery state.';
+      const button=$('#website .toolbar button');if(button){button.hidden=false;button.textContent='Refresh live state';button.onclick=render;}
+      document.querySelector('nav button[data-view="website"]')?.addEventListener('click',()=>setTimeout(render,0));
+    }
+
     rationaliseKnowledgeNavigation();
     installKnowledgeEditorialPresentation();
     installMedicineControls();
+    installWebsiteUpdater();
     installRadarView();
     installEvidenceDeskView();
   };
