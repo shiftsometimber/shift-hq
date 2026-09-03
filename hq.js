@@ -116,6 +116,39 @@
       } catch(e) { const rows=$('#radarRows'); if(rows) rows.innerHTML=`<tr><td colspan="6">${esc(e.message)}</td></tr>`; }
     }
 
+    function installMedicineControls(){
+      const link=document.querySelector('a[href="https://api.shiftsometimber.co.uk/hq/catalogue-controls"]');
+      if(!link)return;
+      link.href='#medicine-catalogue';
+      link.onclick=async event=>{event.preventDefault();await openMedicineControls()};
+    }
+
+    async function openMedicineControls(){
+      let dialog=$('#medicineControls');
+      if(!dialog){
+        dialog=document.createElement('dialog');
+        dialog.id='medicineControls';
+        dialog.className='wide-dialog';
+        document.body.appendChild(dialog);
+      }
+      dialog.innerHTML='<div style="padding:24px"><button type="button" data-close-medicine style="float:right" aria-label="Close">×</button><p class="eyebrow">MEDICINE COMMERCE</p><h2>Medicines, prices and real stock</h2><p class="sub">A treatment is buyable only when its product and strength are available and remaining stock is above zero.</p><p id="medicineControlStatus">Loading live catalogue…</p><div id="medicineControlList"></div></div>';
+      dialog.querySelector('[data-close-medicine]').onclick=()=>dialog.close();
+      dialog.showModal();
+      await loadMedicineControls();
+    }
+
+    async function loadMedicineControls(){
+      const status=$('#medicineControlStatus'),list=$('#medicineControlList');
+      try{
+        const data=await radarCall('/v1/hq/medicines');
+        const medicines=(data.medicines||[]).filter(m=>m.status!=='archived');
+        status.textContent=`${medicines.length} medicines loaded from Shift Core.`;
+        list.innerHTML=medicines.map(m=>`<article class="panel" data-medicine="${Number(m.id)}"><form data-medicine-form="${Number(m.id)}"><div class="toolbar"><div><h3>${esc(m.name)}</h3><p class="sub">${esc(m.activeIngredient||m.active_ingredient||'')}</p></div><label>Product status<select name="status"><option value="out_of_stock" ${m.status==='out_of_stock'?'selected':''}>Out of stock</option><option value="available" ${m.status==='available'?'selected':''}>Available</option></select></label><button type="submit">Save product</button></div></form><div class="cms-list">${(m.variants||[]).filter(v=>v.status!=='archived').map(v=>`<form class="cms-item" data-variant-form="${Number(v.id)}"><b>${esc(v.strengthLabel)}</b><div class="form-grid"><label>Cost (£)<input name="cost" type="number" min="0.01" step="0.01" value="${(Number(v.costPence)/100).toFixed(2)}" required></label><label>Selling (£)<input name="selling" type="number" min="0.01" step="0.01" value="${(Number(v.sellingPricePence)/100).toFixed(2)}" required></label><label>Remaining stock<input name="stock" type="number" min="0" step="1" value="${Number(v.stockOnHand||0)}" required></label><label>Availability<select name="status"><option value="out_of_stock" ${v.status==='out_of_stock'?'selected':''}>Out of stock</option><option value="available" ${v.status==='available'?'selected':''}>Available</option></select></label><button type="submit">Save strength</button></div><span>Gross profit ${money(v.marginPence)} · margin ${Number(v.marginPercent||0).toFixed(2)}% · ${Number(v.reserved||0)} reserved</span><small role="status"></small></form>`).join('')}</div></article>`).join('');
+        $$('[data-medicine-form]').forEach(form=>form.onsubmit=async event=>{event.preventDefault();const select=form.elements.status,button=form.querySelector('button');button.disabled=true;try{await radarCall(`/v1/hq/medicines/${form.dataset.medicineForm}`,{method:'PATCH',body:JSON.stringify({status:select.value})});await loadMedicineControls()}catch(e){status.textContent=e.message}finally{button.disabled=false}});
+        $$('[data-variant-form]').forEach(form=>form.onsubmit=async event=>{event.preventDefault();const fields=new FormData(form),message=form.querySelector('[role=status]'),button=form.querySelector('button');button.disabled=true;message.textContent='Saving…';try{const result=await radarCall(`/v1/hq/medicine-variants/${form.dataset.variantForm}`,{method:'PATCH',body:JSON.stringify({costPence:Math.round(Number(fields.get('cost'))*100),sellingPricePence:Math.round(Number(fields.get('selling'))*100),stockOnHand:Number(fields.get('stock')),status:fields.get('status')})});message.textContent=`Saved · margin ${Number(result.marginPercent||0).toFixed(2)}%`;await loadMedicineControls()}catch(e){message.textContent=e.message}finally{button.disabled=false}});
+      }catch(e){status.textContent=`Medicine catalogue failed: ${e.message}`;list.innerHTML=''}
+    }
+
     function radarActions(x){
       const b=(label,action,cls='')=>`<button class="${cls}" data-radar-action="${action}" data-radar-id="${x.id}">${label}</button>`;
       if(!x.verification?.verified) return b('Re-check / process','process','ghost')+' '+b('Reject','reject','ghost');
@@ -217,6 +250,7 @@
 
     rationaliseKnowledgeNavigation();
     installKnowledgeEditorialPresentation();
+    installMedicineControls();
     installRadarView();
     installEvidenceDeskView();
   };
