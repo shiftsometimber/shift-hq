@@ -10,7 +10,9 @@
     const badge = v => `<span class="badge">${esc(String(v || '—').replaceAll('_',' '))}</span>`;
 
     async function radarCall(path, opts={}) {
-      const r = await fetch(API + path, { ...opts, credentials:'include', headers:{'Accept':'application/json','Content-Type':'application/json',...(opts.headers||{})} });
+      const method=String(opts.method||'GET').toUpperCase();
+      const headers={'Accept':'application/json',...(method==='GET'||method==='HEAD'?{}:{'Content-Type':'application/json'}),...(opts.headers||{})};
+      const r = await fetch(API + path, { ...opts, credentials:'include', headers });
       let data={}; try { data=await r.json(); } catch {}
       if (!r.ok) throw new Error(data.message || data.error || `Shift Core ${r.status}`);
       return data;
@@ -92,7 +94,7 @@
       if (intelligence?.nextSibling) nav.insertBefore(button,intelligence.nextSibling); else nav?.appendChild(button);
       const section=document.createElement('section'); section.id='radar'; section.className='view';
       section.innerHTML=`
-        <div class="toolbar"><div><p class="eyebrow">WORLDWIDE INTELLIGENCE</p><h2>Shift Radar</h2><p class="sub">Detect → verify → package → human review → publish → freshness, inside the existing HQ operating system.</p></div><button id="refreshRadar">Refresh Radar</button></div>
+        <div class="toolbar"><div><p class="eyebrow">WORLDWIDE INTELLIGENCE</p><h2>Shift Radar</h2><p class="sub">Detect → verify → package → human review → publish → freshness, inside the existing HQ operating system.</p><p id="radarScanStatus" role="status"></p></div><div class="actions"><button id="scanRadar">Run source scan</button><button id="refreshRadar">Refresh Radar</button></div></div>
         <div class="cards compact-cards"><article><span>Review queue</span><strong id="radarQueueCount">—</strong><em>needs human action</em></article><article><span>Verified</span><strong id="radarVerifiedCount">—</strong><em>evidence gate passed</em></article><article><span>Medicines</span><strong id="radarMedicineCount">—</strong><em>living registry</em></article><article><span>Forward Radar</span><strong id="radarForwardCount">—</strong><em>future milestones</em></article></div>
         <div class="panel tablewrap"><div class="panelhead"><div><p class="eyebrow">REVIEW DESK</p><h3>Detected developments</h3></div></div><table><thead><tr><th>Development</th><th>Region</th><th>Status</th><th>Verification</th><th>Scores</th><th>Action</th></tr></thead><tbody id="radarRows"><tr><td colspan="6">Open Radar to load the queue.</td></tr></tbody></table></div>
         <div class="cms-grid"><article class="panel"><p class="eyebrow">GLOBAL MEDICINES</p><h3>Living registry</h3><div id="radarMedicines" class="cms-list"><div class="empty">No medicines loaded.</div></div></article><article class="panel"><p class="eyebrow">FORWARD RADAR</p><h3>What is coming next</h3><div id="radarForward" class="cms-list"><div class="empty">No milestones loaded.</div></div></article></div>
@@ -100,6 +102,7 @@
       const users=$('#users'); users?.parentNode?.insertBefore(section,users);
       button.onclick=()=>{ $$('.view').forEach(x=>x.classList.toggle('active',x.id==='radar')); $$('nav button[data-view]').forEach(x=>x.classList.toggle('active',x===button)); const title=$('#title'); if(title) title.textContent='Worldwide intelligence, with a human hand on the publish button.'; loadRadar(); };
       $('#refreshRadar').onclick=loadRadar;
+      $('#scanRadar').onclick=async()=>{const status=$('#radarScanStatus'),button=$('#scanRadar');button.disabled=true;status.textContent='Fetching authoritative medicine sources…';try{const result=await radarCall('/v1/hq/radar/scan',{method:'POST',body:'{}'});status.textContent=`Scan complete · ${Number(result.detected||result.ingested||0)} developments detected.`;await loadRadar()}catch(e){status.textContent=`Scan FAILED · ${e.message}`}finally{button.disabled=false}};
     }
 
     async function loadRadar(){
@@ -114,6 +117,50 @@
         $$('[data-radar-action]').forEach(b=>b.onclick=()=>radarReview(b.dataset.radarId,b.dataset.radarAction));
         $$('[data-radar-publish]').forEach(b=>b.onclick=()=>radarReview(b.dataset.radarPublish,'publish'));
       } catch(e) { const rows=$('#radarRows'); if(rows) rows.innerHTML=`<tr><td colspan="6">${esc(e.message)}</td></tr>`; }
+    }
+
+    function installMedicineControls(){
+      const link=document.querySelector('a[href="https://api.shiftsometimber.co.uk/hq/catalogue-controls"]');
+      if(!link)return;
+      link.href='#medicine-catalogue';
+      link.onclick=async event=>{event.preventDefault();await openMedicineControls()};
+    }
+
+    async function openMedicineControls(){
+      let dialog=$('#medicineControls');
+      if(!dialog){
+        dialog=document.createElement('dialog');
+        dialog.id='medicineControls';
+        dialog.className='wide-dialog';
+        document.body.appendChild(dialog);
+      }
+      dialog.innerHTML='<div style="padding:24px"><button type="button" data-close-medicine style="float:right" aria-label="Close">×</button><p class="eyebrow">MEDICINE COMMERCE</p><h2>Medicines, prices and real stock</h2><p class="sub">A treatment is buyable only when its product and strength are available and remaining stock is above zero.</p><p id="medicineControlStatus">Loading live catalogue…</p><div id="medicineControlList"></div></div>';
+      dialog.querySelector('[data-close-medicine]').onclick=()=>dialog.close();
+      dialog.showModal();
+      await loadMedicineControls();
+    }
+
+    async function loadMedicineControls(){
+      const status=$('#medicineControlStatus'),list=$('#medicineControlList');
+      try{
+        const data=await radarCall('/v1/hq/medicines');
+        const medicines=(data.medicines||[]).filter(m=>m.status!=='archived');
+        status.textContent=`${medicines.length} medicines loaded from Shift Core.`;
+        list.innerHTML=medicines.map(m=>`<article class="panel" data-medicine="${Number(m.id)}"><form data-medicine-form="${Number(m.id)}"><div class="toolbar"><div><h3>${esc(m.name)}</h3><p class="sub">${esc(m.activeIngredient||m.active_ingredient||'')}</p></div><label>Product status<select name="status"><option value="out_of_stock" ${m.status==='out_of_stock'?'selected':''}>Out of stock</option><option value="available" ${m.status==='available'?'selected':''}>Available</option></select></label><button type="submit">Save product</button></div></form><div class="cms-list">${(m.variants||[]).filter(v=>v.status!=='archived').map(v=>`<form class="cms-item" data-variant-form="${Number(v.id)}"><b>${esc(v.strengthLabel)}</b><div class="form-grid"><label>Cost (£)<input name="cost" type="number" min="0.01" step="0.01" value="${(Number(v.costPence)/100).toFixed(2)}" required></label><label>Selling (£)<input name="selling" type="number" min="0.01" step="0.01" value="${(Number(v.sellingPricePence)/100).toFixed(2)}" required></label><label>Remaining stock<input name="stock" type="number" min="0" step="1" value="${Number(v.stockOnHand||0)}" required></label><label>Availability<select name="status"><option value="out_of_stock" ${v.status==='out_of_stock'?'selected':''}>Out of stock</option><option value="available" ${v.status==='available'?'selected':''}>Available</option></select></label><button type="submit">Save strength</button></div><span>Gross profit ${money(v.marginPence)} · margin ${Number(v.marginPercent||0).toFixed(2)}% · ${Number(v.reserved||0)} reserved</span><small role="status"></small></form>`).join('')}</div></article>`).join('');
+        medicines.forEach(m=>{
+          const article=list.querySelector(`[data-medicine="${Number(m.id)}"]`),section=document.createElement('section');
+          if(!article)return;
+          section.className='cms-item';
+          section.innerHTML=`<b>Product image</b><div style="display:grid;grid-template-columns:minmax(120px,180px) 1fr;gap:16px;align-items:start;margin-top:10px">${m.hasImage?`<img src="${esc(m.imageUrl)}?v=${encodeURIComponent(m.imageUpdatedAt||'')}" alt="${esc(m.imageAlt||m.name)}" style="width:100%;aspect-ratio:4/3;object-fit:contain;border:1px solid #9aa08c;border-radius:10px;background:#f0ece2">`:'<div class="empty" style="min-height:100px">No product image</div>'}<form data-medicine-image="${Number(m.id)}"><label>JPG, PNG or WebP<input name="image" type="file" accept="image/jpeg,image/png,image/webp" ${m.hasImage?'':'required'}></label><label>Alt text<input name="alt" maxlength="180" value="${esc(m.imageAlt||`${m.name} treatment product`)}" required></label><div class="row-actions"><button type="submit">${m.hasImage?'Replace':'Upload'} image</button>${m.hasImage?'<button type="button" class="ghost" data-remove-image>Remove</button>':''}</div><small role="status">Saved images appear on the public treatment card.</small></form></div>`;
+          article.querySelector('form')?.after(section);
+        });
+        $$('[data-medicine-form]').forEach(form=>form.onsubmit=async event=>{event.preventDefault();const select=form.elements.status,button=form.querySelector('button');button.disabled=true;try{await radarCall(`/v1/hq/medicines/${form.dataset.medicineForm}`,{method:'PATCH',body:JSON.stringify({status:select.value})});await loadMedicineControls()}catch(e){status.textContent=e.message}finally{button.disabled=false}});
+        $$('[data-variant-form]').forEach(form=>form.onsubmit=async event=>{event.preventDefault();const fields=new FormData(form),message=form.querySelector('[role=status]'),button=form.querySelector('button');button.disabled=true;message.textContent='Saving…';try{const result=await radarCall(`/v1/hq/medicine-variants/${form.dataset.variantForm}`,{method:'PATCH',body:JSON.stringify({costPence:Math.round(Number(fields.get('cost'))*100),sellingPricePence:Math.round(Number(fields.get('selling'))*100),stockOnHand:Number(fields.get('stock')),status:fields.get('status')})});message.textContent=`Saved · margin ${Number(result.marginPercent||0).toFixed(2)}%`;await loadMedicineControls()}catch(e){message.textContent=e.message}finally{button.disabled=false}});
+        $$('[data-medicine-image]').forEach(form=>{
+          form.onsubmit=async event=>{event.preventDefault();const file=form.elements.image.files[0],message=form.querySelector('[role=status]'),button=form.querySelector('button[type=submit]');if(!file){message.textContent='Choose an image first.';return}if(file.size>1572864){message.textContent='Image must be 1.5 MB or smaller.';return}button.disabled=true;message.textContent='Uploading…';try{const imageBase64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file)});await radarCall(`/v1/hq/medicines/${form.dataset.medicineImage}/image`,{method:'PUT',body:JSON.stringify({mimeType:file.type,imageBase64,altText:form.elements.alt.value})});await loadMedicineControls()}catch(e){message.textContent=e.message}finally{button.disabled=false}};
+          form.querySelector('[data-remove-image]')?.addEventListener('click',async()=>{const message=form.querySelector('[role=status]');message.textContent='Removing…';try{await radarCall(`/v1/hq/medicines/${form.dataset.medicineImage}/image`,{method:'DELETE'});await loadMedicineControls()}catch(e){message.textContent=e.message}});
+        });
+      }catch(e){status.textContent=`Medicine catalogue failed: ${e.message}`;list.innerHTML=''}
     }
 
     function radarActions(x){
@@ -215,8 +262,32 @@
       }catch(e){const rows=$('#evidencePackageRows');if(rows)rows.innerHTML=`<tr><td colspan="6">${esc(e.message)}</td></tr>`}
     }
 
+    function installWebsiteUpdater(){
+      const host=$('#contentList'),create=$('#newContent');
+      if(!host||!create)return;
+      const render=async()=>{
+        host.innerHTML='<div class="empty">Loading controlled public fields…</div>';
+        try{
+          const data=await radarCall('/v1/hq/site-content');
+          const rows=data.content||[];
+          host.innerHTML=rows.length?rows.map(x=>`<article class="cms-item" data-site-content="${Number(x.id)}"><b>${esc(x.label)}</b><span>${esc(x.page_path)} · ${badge(x.status)} · version ${Number(x.version||1)}</span><textarea aria-label="${esc(x.label)} text">${esc(x.draft_text||'')}</textarea><div class="actions"><button data-site-preview="${Number(x.id)}">Preview</button><button data-site-publish="${Number(x.id)}">Publish</button><button data-site-rollback="${Number(x.id)}">Rollback</button></div><p role="status"></p></article>`).join(''):'<div class="empty">No controlled public fields yet.</div>';
+          $$('[data-site-preview],[data-site-publish],[data-site-rollback]').forEach(button=>button.onclick=async()=>{
+            const id=button.dataset.sitePreview||button.dataset.sitePublish||button.dataset.siteRollback,card=button.closest('[data-site-content]'),text=card.querySelector('textarea').value,status=card.querySelector('[role=status]'),action=button.dataset.sitePreview?'preview':button.dataset.sitePublish?'publish':'rollback';
+            button.disabled=true;status.textContent=action==='preview'?'Preparing preview…':action==='publish'?'Publishing…':'Rolling back…';
+            try{const result=await radarCall(`/v1/hq/site-content/${id}`,{method:'PATCH',body:JSON.stringify({action,text})});if(action==='preview'){const p=result.preview||{};status.textContent=`Preview only · ${p.pagePath||''} · current: ${p.currentText||'underlying page wording'} · proposed: ${p.draftText||text}`;}else{status.textContent=`Committed · ${result.status} · version ${Number(result.version||0)}`;await render();}}catch(e){status.textContent=`FAILED · ${e.message}`;}finally{button.disabled=false;}
+          });
+        }catch(e){host.innerHTML=`<div class="empty">Website updater failed: ${esc(e.message)}</div>`;}
+      };
+      create.hidden=true;
+      const heading=$('#website .toolbar .sub');if(heading)heading.textContent='Preview, publish and roll back controlled public fields against the live delivery state.';
+      const button=$('#website .toolbar button');if(button){button.hidden=false;button.textContent='Refresh live state';button.onclick=render;}
+      document.querySelector('nav button[data-view="website"]')?.addEventListener('click',()=>setTimeout(render,0));
+    }
+
     rationaliseKnowledgeNavigation();
     installKnowledgeEditorialPresentation();
+    installMedicineControls();
+    installWebsiteUpdater();
     installRadarView();
     installEvidenceDeskView();
   };
