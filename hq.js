@@ -8,6 +8,12 @@
     const API = 'https://api.shiftsometimber.co.uk';
     const fmt = d => { if (!d) return '—'; try { return new Date(d).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'}); } catch { return d; } };
     const badge = v => `<span class="badge">${esc(String(v || '—').replaceAll('_',' '))}</span>`;
+    const deepLink = new URLSearchParams(location.search);
+    const requestedView = deepLink.get('view');
+    const requestedEvent = /^\d+$/.test(deepLink.get('event') || '') ? deepLink.get('event') : null;
+    let radarEvents=[];
+    let openedDeepLink=false;
+    const radarDestinations=['medicine_news','dossier','ticker_knowledge','ticker_treatments','knowledge_links','member_watch','member_email','member_push','search','sitemap','social_instagram','social_facebook','social_linkedin','social_x'];
 
     async function radarCall(path, opts={}) {
       const method=String(opts.method||'GET').toUpperCase();
@@ -108,14 +114,19 @@
     async function loadRadar(){
       try {
         const [qj,mj,fj,pj]=await Promise.all([radarCall('/v1/hq/radar/queue'),radarCall('/v1/hq/radar/medicines'),radarCall('/v1/hq/radar/forward'),radarCall('/v1/hq/radar/publication-jobs')]);
-        const events=qj.events||[], meds=mj.medicines||[], forward=fj.milestones||[], jobs=pj.jobs||[];
+        const events=qj.events||[], meds=mj.medicines||[], forward=fj.milestones||[], jobs=pj.jobs||[];radarEvents=events;
         $('#radarQueueCount').textContent=events.length; $('#radarVerifiedCount').textContent=events.filter(x=>x.verification?.verified).length; $('#radarMedicineCount').textContent=meds.length; $('#radarForwardCount').textContent=forward.length;
-        $('#radarRows').innerHTML=events.length?events.map(x=>`<tr><td><b>${esc(x.headline)}</b><br><small>${esc(x.regulator||x.event_type||'development')}</small></td><td>${esc(x.region||'GLOBAL')}</td><td>${badge(x.status)}</td><td>${x.verification?.verified?'<span class="badge">Verified</span>':'<span class="badge">Needs evidence</span>'}<br><small>${esc(x.verification?.reason||'')}</small></td><td>Urgency ${Number(x.urgency_score||0)}<br>Relevance ${Number(x.relevance_score||0)}</td><td>${radarActions(x)}</td></tr>`).join(''):'<tr><td colspan="6">Nothing waiting for review.</td></tr>';
+        $('#radarRows').innerHTML=events.length?events.map(x=>`<tr data-radar-event="${Number(x.id)}"><td><b>${esc(x.headline)}</b><br><small>${esc(x.regulator||x.event_type||'development')}</small></td><td>${esc(x.region||'GLOBAL')}</td><td>${badge(x.status)}</td><td>${x.verification?.verified?'<span class="badge">Verified</span>':'<span class="badge">Needs evidence</span>'}<br><small>${esc(x.verification?.reason||'')}</small></td><td>Urgency ${Number(x.urgency_score||0)}<br>Relevance ${Number(x.relevance_score||0)}</td><td>${radarActions(x)}</td></tr>`).join(''):'<tr><td colspan="6">Nothing waiting for review.</td></tr>';
         $('#radarMedicines').innerHTML=meds.length?meds.slice(0,40).map(x=>`<div class="cms-item"><b>${esc(x.brand||x.generic_name||x.id)}</b><span>${esc(x.generic_name||'')} · Radar ${Number(x.radar_score||0)}</span><span>${esc(x.global_stage||'Unknown stage')} · UK: ${esc(x.uk_regulatory_status||'Unknown')} · NICE: ${esc(x.nice_status||'Unknown')} · NHS: ${esc(x.nhs_status||'Unknown')}</span></div>`).join(''):'<div class="empty">No approved medicines yet.</div>';
         $('#radarForward').innerHTML=forward.length?forward.slice(0,30).map(x=>`<div class="cms-item"><b>${esc(x.title||x.milestone||'Forward milestone')}</b><span>${esc(x.due_at||x.expected_at||'Date TBC')} · ${esc(x.status||'watching')}</span></div>`).join(''):'<div class="empty">No Forward Radar milestones yet.</div>';
         $('#radarPublicationJobs').innerHTML=jobs.length?jobs.slice(0,30).map(x=>`<div class="cms-item"><b>Event #${x.event_id} · ${esc(x.status)}</b><span>${esc(fmt(x.created_at))}${x.error_text?' · '+esc(x.error_text):''}</span>${x.status==='queued'?`<div class="row-actions"><button data-radar-publish="${x.event_id}">Publish to configured adapters</button></div>`:''}</div>`).join(''):'<div class="empty">No publication jobs yet.</div>';
-        $$('[data-radar-action]').forEach(b=>b.onclick=()=>radarReview(b.dataset.radarId,b.dataset.radarAction));
+        $$('[data-radar-open]').forEach(b=>b.onclick=()=>openRadarEvent(b.dataset.radarOpen));
         $$('[data-radar-publish]').forEach(b=>b.onclick=()=>radarReview(b.dataset.radarPublish,'publish'));
+        if(requestedEvent){
+          const target=document.querySelector(`[data-radar-event="${requestedEvent}"]`);
+          if(target){if(!openedDeepLink){openedDeepLink=true;openRadarEvent(requestedEvent);}}
+          else if($('#radarScanStatus')) $('#radarScanStatus').textContent=`Event #${requestedEvent} is not in the current review queue.`;
+        }
       } catch(e) { const rows=$('#radarRows'); if(rows) rows.innerHTML=`<tr><td colspan="6">${esc(e.message)}</td></tr>`; }
     }
 
@@ -164,12 +175,27 @@
     }
 
     function radarActions(x){
-      const b=(label,action,cls='')=>`<button class="${cls}" data-radar-action="${action}" data-radar-id="${x.id}">${label}</button>`;
-      if(!x.verification?.verified) return b('Re-check / process','process','ghost')+' '+b('Reject','reject','ghost');
-      if(['verified','needs_more_evidence'].includes(x.status)) return b('Prepare package','process')+' '+b('Hold','hold','ghost');
-      if(x.status==='ready_for_review') return b('Approve','approve')+' '+b('Hold','hold','ghost')+' '+b('Reject','reject','ghost');
-      if(x.status==='publish_failed') return b('Retry publish','publish');
-      return badge(x.status);
+      return `<button data-radar-open="${Number(x.id)}">Review update</button>`;
+    }
+
+    function radarField(label,name,value,rows=3){return `<label>${esc(label)}<textarea name="${esc(name)}" rows="${rows}">${esc(value||'')}</textarea></label>`}
+    function radarPackageFrom(form){
+      const contentPackage={};for(const name of ['headline','standfirst','what_changed','why_it_matters_to_uk','safety','article_markdown','ticker_line','dossier_amendment'])contentPackage[name]=form.elements[name]?.value||'';
+      for(const name of ['known_facts','unknowns'])try{contentPackage[name]=JSON.parse(form.elements[name]?.value||'[]')}catch{throw new Error(`${name.replaceAll('_',' ')} must be valid JSON.`)}
+      const destinations=radarDestinations.filter(name=>form.querySelector(`[name="destination_${name}"]`)?.checked);contentPackage.destinations=destinations;
+      return{contentPackage,medicinePatch:{medicine_id:form.elements.medicine_id?.value||''},destinations,note:form.elements.review_note?.value||''};
+    }
+    async function openRadarEvent(id){
+      const event=radarEvents.find(x=>String(x.id)===String(id));if(!event){if($('#radarScanStatus'))$('#radarScanStatus').textContent=`Event #${id} is not in the current review queue.`;return}
+      let dialog=$('#radarEventEditor');if(!dialog){dialog=document.createElement('dialog');dialog.id='radarEventEditor';dialog.className='wide-dialog';document.body.appendChild(dialog)}
+      const c=event.content_package||{},m=event.medicine_patch||{},sources=event.source_evidence||[],selected=new Set(c.destinations||[]),canPublish=['approved','publish_failed'].includes(event.status);
+      dialog.innerHTML=`<form id="radarEventForm" style="padding:24px"><button type="button" data-close-radar style="float:right" aria-label="Close">×</button><p class="eyebrow">SHIFT AI · EVENT #${Number(event.id)}</p><h2>${esc(event.headline)}</h2><p>${badge(event.status)} ${badge(event.verification?.verified?'Evidence verified':'Evidence needs review')} · Urgency ${Number(event.urgency_score||0)} · Relevance ${Number(event.relevance_score||0)}</p><section class="panel"><h3>Evidence</h3>${sources.length?sources.map(s=>`<p><strong>Level ${Number(s.source_tier||4)} · ${esc(s.authority||event.regulator||'Source')}</strong><br><a href="${esc(s.url||s.source_url||'#')}" target="_blank" rel="noopener">${esc(s.title||s.url||s.source_url||'Open original source')}</a><br><small>Source ${esc(fmt(s.source_date))} · retrieved ${esc(fmt(s.retrieved_at,true))}</small></p>`).join(''):'<p>No evidence record is attached. Do not approve.</p>'}</section><section class="panel"><h3>Editable publication package</h3><label>Medicine / candidate ID<input name="medicine_id" value="${esc(m.medicine_id||'')}"></label>${radarField('Headline','headline',c.headline||event.headline,2)}${radarField('Standfirst','standfirst',c.standfirst)}${radarField('What changed','what_changed',c.what_changed,5)}${radarField('What it means in the UK','why_it_matters_to_uk',c.why_it_matters_to_uk,5)}${radarField('Known facts (JSON)','known_facts',JSON.stringify(c.known_facts||[],null,2),7)}${radarField('Unknowns (JSON)','unknowns',JSON.stringify(c.unknowns||[],null,2),6)}${radarField('Safety wording','safety',c.safety,4)}${radarField('Full article','article_markdown',c.article_markdown,14)}${radarField('Ticker line','ticker_line',c.ticker_line,2)}${radarField('Dossier amendment','dossier_amendment',c.dossier_amendment,5)}<fieldset><legend>Approved destinations</legend>${radarDestinations.map(d=>`<label><input type="checkbox" name="destination_${d}" ${selected.has(d)?'checked':''}> ${esc(d.replaceAll('_',' '))}</label>`).join('')}</fieldset><label>Decision note<textarea name="review_note" rows="3">${esc(event.review_note||'')}</textarea></label></section><p id="radarEventState" role="status"></p><div class="actions"><button type="button" data-radar-save>Save modifications</button><button type="button" data-radar-decide="approve">Approve</button><button type="button" class="ghost" data-radar-decide="hold">Hold</button><button type="button" class="ghost" data-radar-decide="reject">Decline</button>${canPublish?'<button type="button" class="primary" data-radar-publish-now>Publish approved update</button>':''}</div><p class="sub">Approval and publication are separate audited actions. Nothing goes live merely because this editor opened.</p></form>`;
+      dialog.querySelector('[data-close-radar]').onclick=()=>dialog.close();
+      const form=dialog.querySelector('#radarEventForm'),state=dialog.querySelector('#radarEventState');
+      dialog.querySelector('[data-radar-save]').onclick=async()=>{state.textContent='Saving…';try{await radarCall(`/v1/hq/radar/events/${event.id}`,{method:'PATCH',body:JSON.stringify(radarPackageFrom(form))});state.textContent='Modifications saved and audited.';await loadRadar()}catch(e){state.textContent=`Save failed: ${e.message}`}};
+      dialog.querySelectorAll('[data-radar-decide]').forEach(button=>button.onclick=async()=>{const action=button.dataset.radarDecide,payload=action==='approve'?radarPackageFrom(form):{note:form.elements.review_note.value};state.textContent=`${action==='approve'?'Approving':action==='hold'?'Holding':'Declining'}…`;try{await radarCall(`/v1/hq/radar/events/${event.id}/${action}`,{method:'POST',body:JSON.stringify(payload)});state.textContent=`${action==='approve'?'Approved for publication':'Decision saved'} and audited.`;await loadRadar();setTimeout(()=>openRadarEvent(event.id),0)}catch(e){state.textContent=`Decision failed: ${e.message}`}});
+      dialog.querySelector('[data-radar-publish-now]')?.addEventListener('click',async()=>{state.textContent='Publishing approved destinations…';try{await radarCall(`/v1/hq/radar/events/${event.id}/publish`,{method:'POST',body:'{}'});state.textContent='Published and audited.';await loadRadar()}catch(e){state.textContent=`Publish failed: ${e.message}`}});
+      if(!dialog.open)dialog.showModal();
     }
 
     async function radarReview(id,action){
@@ -290,6 +316,13 @@
     installWebsiteUpdater();
     installRadarView();
     installEvidenceDeskView();
+    if(requestedView==='radar'){
+      const openDeepLink=()=>document.querySelector('nav button[data-view="radar"]')?.click();
+      if(S.me) openDeepLink(); else {
+        const loginObserver=new MutationObserver(()=>{if(S.me){loginObserver.disconnect();openDeepLink();}});
+        loginObserver.observe(document.body,{subtree:true,childList:true,attributes:true});
+      }
+    }
   };
   legacy.onerror = () => console.error('Shift HQ V1.11 runtime failed to load');
   document.head.appendChild(legacy);
