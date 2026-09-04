@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
-<meta name="theme-color" content="#253128"><meta name="shift-hq-build" content="1.11.2-commerce"><title>Shift HQ</title><link rel="stylesheet" href="hq.css?v=11.2"><link rel="stylesheet" href="hq-knowledge-editorial.css?v=2" data-g3-006="true">
+<meta name="theme-color" content="#253128"><meta name="shift-hq-build" content="1.11.3-commerce"><title>Shift HQ</title><link rel="stylesheet" href="hq.css?v=11.2"><link rel="stylesheet" href="hq-knowledge-editorial.css?v=2" data-g3-006="true">
 </head><body>
 <div class="shell">
-<aside><div class="brand"><b>SHIFT</b><span>HQ</span><small>V1.11</small></div><nav>
+<aside><div class="brand"><b>SHIFT</b><span>HQ</span><small>V1.11.3</small></div><nav>
 <button class="active" data-view="dashboard">⌂ Dashboard</button><button data-view="people">◎ People</button>
 <button data-view="pipeline">◇ Pipeline</button><button data-view="tasks">✓ Tasks</button>
 <button data-view="orders">▣ Orders</button><button data-view="website">▤ Website</button>
@@ -50,7 +50,7 @@
 <section id="products" class="view">
   <div class="toolbar">
     <div><p class="eyebrow">COMMERCE</p><h2>Products & SKUs</h2><p class="sub">Memberships, Timber Mill products and future services.</p></div>
-    <div class="actions"><a class="button" href="https://api.shiftsometimber.co.uk/hq/catalogue-controls" target="_blank" rel="noopener">Medicine catalogue, images & margins</a><button id="newProduct">+ New product</button></div>
+    <div class="actions"><a class="button" href="https://api.shiftsometimber.co.uk/hq/catalogue-controls" target="_blank" rel="noopener">Images & full catalogue</a><button id="newProduct">+ New product</button></div>
   </div>
   <div id="productGrid" class="product-grid"></div>
 </section>
@@ -69,7 +69,7 @@
     <article class="panel">
       <h3>Publishing workflow</h3>
       <div class="workflow"><span>Draft</span><b>→</b><span>Review</span><b>→</b><span>Published</span></div>
-      <p class="sub">Section 3 stores content and publishing state. Later sections will wire selected live pages to read these managed blocks from Shift Core.</p>
+      <p class="sub">Draft, preview, publish, pause and roll back the controlled public fields already connected to Shift Core. Every change retains its publishing state and version.</p>
       <div class="callout">Static public pages stay fast. Only genuinely editable content moves into the CMS.</div>
     </article>
   </div>
@@ -462,4 +462,4 @@
 <div class="form-grid"><label>Source / URL<input id="knowledgeSource" placeholder="internal://shift or source URL"></label><label>Trust tier<select id="knowledgeTrust"><option value="1">1 — authoritative</option><option value="2">2 — approved professional</option><option value="3">3 — Shift/community context</option><option value="4">4 — general reference</option><option value="5">5 — untrusted/review</option></select></label></div>
 <label>Knowledge text<textarea id="knowledgeText" rows="14" required></textarea></label><div class="actions"><button type="button" data-close="knowledgeDocModal">Cancel</button><button class="primary" type="submit">Ingest & index</button></div></form></dialog>
 
-<script src="hq.js?v=11.8"></script></body></html>
+<script src="hq.js?v=11.9"></script></body></html>
