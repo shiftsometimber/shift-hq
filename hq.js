@@ -96,17 +96,17 @@
       if ($('#radar')) return;
       const nav=$('aside nav'), intelligence=nav?.querySelector('button[data-view="intelligence"]');
       const button=document.createElement('button');
-      button.dataset.view='radar'; button.textContent='◉ Shift Radar';
+      button.dataset.view='radar'; button.textContent='✦ Medicines Intelligence';
       if (intelligence?.nextSibling) nav.insertBefore(button,intelligence.nextSibling); else nav?.appendChild(button);
       const section=document.createElement('section'); section.id='radar'; section.className='view';
       section.innerHTML=`
-        <div class="toolbar"><div><p class="eyebrow">WORLDWIDE INTELLIGENCE</p><h2>Shift Radar</h2><p class="sub">Detect → verify → package → human review → publish → freshness, inside the existing HQ operating system.</p><p id="radarScanStatus" role="status"></p></div><div class="actions"><button id="scanRadar">Run source scan</button><button id="refreshRadar">Refresh Radar</button></div></div>
+        <div class="toolbar"><div><p class="eyebrow">SHIFT AI · OPERATIONS DESK</p><h2>Medicines Intelligence Desk</h2><p class="sub">Detect → verify → package → human review → publish → freshness, inside the existing HQ operating system.</p><p id="radarScanStatus" role="status"></p></div><div class="actions"><button id="scanRadar">Run source scan</button><button id="refreshRadar">Refresh Radar</button></div></div>
         <div class="cards compact-cards"><article><span>Review queue</span><strong id="radarQueueCount">—</strong><em>needs human action</em></article><article><span>Verified</span><strong id="radarVerifiedCount">—</strong><em>evidence gate passed</em></article><article><span>Medicines</span><strong id="radarMedicineCount">—</strong><em>living registry</em></article><article><span>Forward Radar</span><strong id="radarForwardCount">—</strong><em>future milestones</em></article></div>
         <div class="panel tablewrap"><div class="panelhead"><div><p class="eyebrow">REVIEW DESK</p><h3>Detected developments</h3></div></div><table><thead><tr><th>Development</th><th>Region</th><th>Status</th><th>Verification</th><th>Scores</th><th>Action</th></tr></thead><tbody id="radarRows"><tr><td colspan="6">Open Radar to load the queue.</td></tr></tbody></table></div>
         <div class="cms-grid"><article class="panel"><p class="eyebrow">GLOBAL MEDICINES</p><h3>Living registry</h3><div id="radarMedicines" class="cms-list"><div class="empty">No medicines loaded.</div></div></article><article class="panel"><p class="eyebrow">FORWARD RADAR</p><h3>What is coming next</h3><div id="radarForward" class="cms-list"><div class="empty">No milestones loaded.</div></div></article></div>
         <div class="panel"><p class="eyebrow">PUBLICATION</p><h3>Adapter jobs</h3><p class="sub">Approval prepares auditable work for website, Shift Brain, search/sitemap and related-content adapters. Publishing stays explicit.</p><div id="radarPublicationJobs" class="cms-list"><div class="empty">No publication jobs loaded.</div></div></div>`;
       const users=$('#users'); users?.parentNode?.insertBefore(section,users);
-      button.onclick=()=>{ $$('.view').forEach(x=>x.classList.toggle('active',x.id==='radar')); $$('nav button[data-view]').forEach(x=>x.classList.toggle('active',x===button)); const title=$('#title'); if(title) title.textContent='Worldwide intelligence, with a human hand on the publish button.'; loadRadar(); };
+      button.onclick=()=>{ $$('.view').forEach(x=>x.classList.toggle('active',x.id==='radar')); $$('nav button[data-view]').forEach(x=>x.classList.toggle('active',x===button)); const title=$('#title'); if(title) title.textContent='Medicines intelligence, with a human hand on the publish button.'; loadRadar(); };
       $('#refreshRadar').onclick=loadRadar;
       $('#scanRadar').onclick=async()=>{const status=$('#radarScanStatus'),button=$('#scanRadar');button.disabled=true;status.textContent='Fetching authoritative medicine sources…';try{const result=await radarCall('/v1/hq/radar/scan',{method:'POST',body:'{}'});status.textContent=`Scan complete · ${Number(result.detected||result.ingested||0)} developments detected.`;await loadRadar()}catch(e){status.textContent=`Scan FAILED · ${e.message}`}finally{button.disabled=false}};
     }
@@ -131,10 +131,35 @@
     }
 
     function installMedicineControls(){
+      const nav=$('aside nav'),productsButton=nav?.querySelector('button[data-view="products"]');
+      let button=nav?.querySelector('button[data-view="medicines"]');
+      if(!button){
+        button=document.createElement('button');
+        button.dataset.view='medicines';
+        button.textContent='⚕ Medicines';
+        if(productsButton?.nextSibling)nav.insertBefore(button,productsButton.nextSibling);else nav?.appendChild(button);
+      }
+      let section=$('#medicines');
+      if(!section){
+        section=document.createElement('section');
+        section.id='medicines';
+        section.className='view';
+        section.innerHTML=`
+          <div class="toolbar"><div><p class="eyebrow">MEDICINE COMMERCE</p><h2>Medicines, strengths, stock & margins</h2><p class="sub">The working catalogue: product availability, strength-level cost and selling price, real stock and gross margin.</p></div><div class="toolbar-actions"><a class="button" href="${API}/hq/catalogue-controls" target="_blank" rel="noopener">Images & full catalogue</a><button id="refreshMedicines">Refresh</button></div></div>
+          <div class="callout medicine-boundary">A medicine is buyable only when the medicine and its strength are both available and remaining stock is above zero.</div>
+          <p id="medicineControlStatus" role="status">Open Medicines to load the live catalogue.</p>
+          <div id="medicineControlList"></div>`;
+        const products=$('#products');products?.parentNode?.insertBefore(section,products.nextSibling);
+      }
+      button.onclick=()=>{
+        $('.view').forEach(x=>x.classList.toggle('active',x.id==='medicines'));
+        $('nav button[data-view]').forEach(x=>x.classList.toggle('active',x===button));
+        const title=$('#title');if(title)title.textContent='Medicines, prices, stock and margin — in one place.';
+        loadMedicineControls();
+      };
+      $('#refreshMedicines').onclick=loadMedicineControls;
       const link=document.querySelector('a[href="https://api.shiftsometimber.co.uk/hq/catalogue-controls"]');
-      if(!link)return;
-      link.href='#medicine-catalogue';
-      link.onclick=async event=>{event.preventDefault();await openMedicineControls()};
+      if(link){link.textContent='Images & full catalogue';link.onclick=null;}
     }
 
     async function openMedicineControls(){
