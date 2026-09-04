@@ -1,3 +1,4 @@
+/* Shift HQ 1.11.3 commerce */
 (() => {
   const legacy = document.createElement('script');
   legacy.src = 'hq-v111.js?v=11.2';
