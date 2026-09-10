@@ -4,6 +4,7 @@ on:
     paths:
       - 'hq.js'
       - 'hq-v111.js'
+      - 'turnstile-auth-v1.js'
       - 'hq.css'
       - 'hq-knowledge-editorial.css'
       - 'index.html'
@@ -20,16 +21,21 @@ jobs:
         run: |
           node --check hq.js
           node --check hq-v111.js
+          node --check turnstile-auth-v1.js
       - name: Protect V1.11 runtime and Radar shell wiring
         run: |
-          # Reviewed V1.11.2 baseline: login startup guards, responsive commerce
-          # cards and genuine Stripe refund-email controls.
           test "$(git hash-object hq-v111.js)" = "55bbc2e76fb3bafb1a7c1446d0a76932fc3d6776"
           grep -q "installRadarView" hq.js
           grep -q "rationaliseKnowledgeNavigation" hq.js
           grep -q "/v1/hq/radar/queue" hq.js
           grep -q "/v1/hq/radar/publication-jobs" hq.js
           test ! -f radar.html
+      - name: Block Safari sign-in hangs and hidden SEO summaries
+        run: |
+          grep -q "Security check timed out. Please try again." turnstile-auth-v1.js
+          grep -q "scriptPromise=null" turnstile-auth-v1.js
+          grep -q "radarSeoSummary" hq.js
+          grep -q "SEO summary" hq.js
       - name: G3-006 Knowledge editorial presentation contract
         run: |
           grep -q "knowledge-editorial-intro" hq.js
