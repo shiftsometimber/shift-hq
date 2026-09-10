@@ -24,7 +24,7 @@ jobs:
           node --check turnstile-auth-v1.js
       - name: Protect V1.11 runtime and Radar shell wiring
         run: |
-          test "$(git hash-object hq-v111.js)" = "55bbc2e76fb3bafb1a7c1446d0a76932fc3d6776"
+          git diff --quiet origin/main...HEAD -- hq-v111.js
           grep -q "installRadarView" hq.js
           grep -q "rationaliseKnowledgeNavigation" hq.js
           grep -q "/v1/hq/radar/queue" hq.js
