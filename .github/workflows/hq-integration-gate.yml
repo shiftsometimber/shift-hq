@@ -23,8 +23,9 @@ jobs:
       - name: Protect V1.11 runtime and Radar shell wiring
         run: |
           # Reviewed V1.11.2 baseline: login startup guards, responsive commerce
-          # cards and genuine Stripe refund-email controls.
-          test "$(git hash-object hq-v111.js)" = "55bbc2e76fb3bafb1a7c1446d0a76932fc3d6776"
+          # cards, Timber Mill catalogue and genuine Stripe refund-email controls.
+          # Preserve the 6 Sep Turnstile login/bootstrap protection (bcb1ffe8).
+          test "$(git hash-object hq-v111.js)" = "c25ea60d13b6b82f48518898478645f9547ad94d"
           grep -q "installRadarView" hq.js
           grep -q "rationaliseKnowledgeNavigation" hq.js
           grep -q "/v1/hq/radar/queue" hq.js

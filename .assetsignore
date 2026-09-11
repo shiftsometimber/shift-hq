@@ -1,0 +1,9 @@
+# Serve only the existing HQ browser files.
+*
+!index.html
+!hq.js
+!hq-v111.js
+!hq.css
+!hq-knowledge-editorial.css
+!hq-evidence-desk.css
+!turnstile-auth-v1.js
