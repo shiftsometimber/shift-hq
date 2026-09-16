@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'hq.js'
+      - 'radar-source-review-ui.test.mjs'
+      - 'radar-source-review-logic.test.mjs'
       - 'hq-v111.js'
       - 'hq.css'
       - 'hq-knowledge-editorial.css'
@@ -42,3 +44,21 @@ jobs:
           grep -q "#f7f3e8" hq-knowledge-editorial.css
           grep -q "@media(max-width:900px)" hq-knowledge-editorial.css
           grep -q "prefers-reduced-motion" hq-knowledge-editorial.css
+      - name: Verify source correction logic and existing evidence boundary
+        run: |
+          node --test radar-source-review-logic.test.mjs
+          node evidence-desk-ui-source-gate.mjs
+      - name: Install Chromium for isolated Radar UI fixtures
+        run: |
+          npm install --no-save --ignore-scripts playwright
+          npx playwright install --with-deps chromium
+      - name: Verify source correction with fictional local fixtures
+        run: node radar-source-review-ui.test.mjs
+      - name: Retain Radar UI fixture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radar-source-review-evidence
+          path: radar-source-review-evidence
+          if-no-files-found: warn
+          retention-days: 30
