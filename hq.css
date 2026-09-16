@@ -51,3 +51,10 @@ dialog{border:0;border-radius:14px;padding:0;max-width:470px;width:calc(100% - 3
 .order-lines{display:grid;gap:8px;margin:18px 0}.order-lines>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;padding:12px 14px;border:1px solid #707762;border-radius:12px;background:#171914}.order-lines span{color:#b8b5ad;font-size:13px}.order-lines strong{grid-column:2;grid-row:1/3;align-self:center}
 @media(max-width:600px){#productGrid{grid-template-columns:1fr!important}.product-card{min-width:0;padding:18px!important}.wide-dialog{width:calc(100% - 16px)!important;max-height:calc(100dvh - 16px);margin:8px}.wide-dialog form{padding:18px!important}.product-actions{display:grid;grid-template-columns:1fr 1fr}.product-actions button{min-width:0;padding:10px 7px}}
 @media(max-width:600px){#inventoryDialog .card{grid-template-columns:minmax(0,1fr) minmax(88px,110px)!important}#inventoryDialog .card span,#inventoryDialog .card label,#inventoryDialog .card button{grid-column:auto}.order-lines>div{grid-template-columns:minmax(0,1fr) auto}}
+
+/* Source-change warnings are scoped to the existing Radar desk and editor. */
+.radar-source-change-label{font-weight:750;color:#253128;background:#f7f3e8;border:1px solid #707762;border-radius:8px;padding:8px;white-space:normal}
+.radar-source-change{border:2px solid #707762;background:#f7f3e8;color:#253128;overflow-wrap:anywhere}
+.radar-source-change a{color:#253128;text-decoration:underline}
+.radar-source-change details{margin-top:12px}.radar-source-change summary{font-weight:750;cursor:pointer}
+#radarEventEditor textarea[readonly],#radarEventEditor input[readonly]{opacity:.8}
