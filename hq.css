@@ -58,3 +58,6 @@ dialog{border:0;border-radius:14px;padding:0;max-width:470px;width:calc(100% - 3
 .radar-source-change a{color:#253128;text-decoration:underline}
 .radar-source-change details{margin-top:12px}.radar-source-change summary{font-weight:750;cursor:pointer}
 #radarEventEditor textarea[readonly],#radarEventEditor input[readonly]{opacity:.8}
+
+#radarEventEditor .actions{flex-wrap:wrap}
+#radarEventEditor .actions button{max-width:100%;white-space:normal}
