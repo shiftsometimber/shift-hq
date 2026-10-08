@@ -24,10 +24,10 @@ jobs:
           node --check hq-v111.js
       - name: Protect V1.11 runtime and Radar shell wiring
         run: |
-          # Reviewed V1.11.2 baseline: login startup guards, responsive commerce
+          # Reviewed HQ management baseline: role-aware CRM startup plus login guards, commerce
           # cards, Timber Mill catalogue and genuine Stripe refund-email controls.
           # Preserve the 6 Sep Turnstile login/bootstrap protection (bcb1ffe8).
-          test "$(git hash-object hq-v111.js)" = "c25ea60d13b6b82f48518898478645f9547ad94d"
+          test "$(git hash-object hq-v111.js)" = "082a1bf557cf8ec57279db9b155a4a7fc5010b42"
           grep -q "installRadarView" hq.js
           grep -q "rationaliseKnowledgeNavigation" hq.js
           grep -q "/v1/hq/radar/queue" hq.js
