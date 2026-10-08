@@ -155,8 +155,8 @@
         const products=$('#products');products?.parentNode?.insertBefore(section,products.nextSibling);
       }
       button.onclick=()=>{
-        $('.view').forEach(x=>x.classList.toggle('active',x.id==='medicines'));
-        $('nav button[data-view]').forEach(x=>x.classList.toggle('active',x===button));
+        $$('.view').forEach(x=>x.classList.toggle('active',x.id==='medicines'));
+        $$('nav button[data-view]').forEach(x=>x.classList.toggle('active',x===button));
         const title=$('#title');if(title)title.textContent='Medicines, prices, stock and margin — in one place.';
         loadMedicineControls();
       };
@@ -371,6 +371,7 @@
     installWebsiteUpdater();
     installRadarView();
     installEvidenceDeskView();
+    window.installManagementHQ?.();
     if(requestedView==='radar'){
       const openDeepLink=()=>document.querySelector('nav button[data-view="radar"]')?.click();
       if(S.me) openDeepLink(); else {
