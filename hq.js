@@ -372,6 +372,8 @@
     installRadarView();
     installEvidenceDeskView();
     window.installManagementHQ?.();
+    window.installGpDirectoryHQ?.();
+    window.installGpMemberEditorHQ?.();
     if(requestedView==='radar'){
       const openDeepLink=()=>document.querySelector('nav button[data-view="radar"]')?.click();
       if(S.me) openDeepLink(); else {
