@@ -6,6 +6,7 @@ on:
       - 'radar-source-review-ui.test.mjs'
       - 'radar-source-review-logic.test.mjs'
       - 'hq-v111.js'
+      - 'turnstile-auth-v1.js'
       - 'hq.css'
       - 'hq-knowledge-editorial.css'
       - 'index.html'
@@ -22,6 +23,7 @@ jobs:
         run: |
           node --check hq.js
           node --check hq-v111.js
+          node --check turnstile-auth-v1.js
       - name: Protect V1.11 runtime and Radar shell wiring
         run: |
           # Reviewed HQ management baseline: role-aware CRM startup plus login guards, commerce
@@ -33,6 +35,12 @@ jobs:
           grep -q "/v1/hq/radar/queue" hq.js
           grep -q "/v1/hq/radar/publication-jobs" hq.js
           test ! -f radar.html
+      - name: Block Safari sign-in hangs and hidden SEO summaries
+        run: |
+          grep -q "Security check timed out. Please try again." turnstile-auth-v1.js
+          grep -q "scriptPromise=null" turnstile-auth-v1.js
+          grep -q "radarSeoSummary" hq.js
+          grep -q "SEO summary" hq.js
       - name: G3-006 Knowledge editorial presentation contract
         run: |
           grep -q "knowledge-editorial-intro" hq.js
