@@ -54,7 +54,7 @@ jobs:
           grep -q "prefers-reduced-motion" hq-knowledge-editorial.css
       - name: Verify source correction logic and existing evidence boundary
         run: |
-          node --test radar-source-review-logic.test.mjs
+          node --test radar-source-review-logic.test.mjs radar-source-intake.test.mjs
           node evidence-desk-ui-source-gate.mjs
       - name: Install Chromium for isolated Radar UI fixtures
         run: |
