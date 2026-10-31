@@ -114,9 +114,11 @@
       $('#scanRadar').onclick=async()=>{const status=$('#radarScanStatus'),button=$('#scanRadar');button.disabled=true;status.textContent='Fetching authoritative medicine sources…';try{const result=await radarCall('/v1/hq/radar/scan',{method:'POST',body:'{}'});status.textContent=`Scan complete · ${Number(result.detected||result.ingested||0)} developments detected.`;await loadRadar()}catch(e){status.textContent=`Scan FAILED · ${e.message}`}finally{button.disabled=false}};
     }
 
+    function radarQueuePath(eventId){return '/v1/hq/radar/queue'+(eventId?'?event='+encodeURIComponent(eventId):'');}
+
     async function loadRadar(){
       try {
-        const [qj,mj,fj,pj]=await Promise.all([radarCall('/v1/hq/radar/queue'),radarCall('/v1/hq/radar/medicines'),radarCall('/v1/hq/radar/forward'),radarCall('/v1/hq/radar/publication-jobs')]);
+        const [qj,mj,fj,pj]=await Promise.all([radarCall(radarQueuePath(requestedEvent)),radarCall('/v1/hq/radar/medicines'),radarCall('/v1/hq/radar/forward'),radarCall('/v1/hq/radar/publication-jobs')]);
         const events=qj.events||[], meds=mj.medicines||[], forward=fj.milestones||[], jobs=pj.jobs||[];radarEvents=events;
         $('#radarQueueCount').textContent=events.length; $('#radarVerifiedCount').textContent=events.filter(x=>x.verification?.verified&&!x.source_change).length; $('#radarMedicineCount').textContent=meds.length; $('#radarForwardCount').textContent=forward.length;
         $('#radarRows').innerHTML=events.length?events.map(x=>`<tr data-radar-event="${Number(x.id)}"><td><b>${esc(x.headline)}</b><p class="radar-summary">${radarSummary(x)}</p><small>${esc(x.regulator||x.event_type||'development')}</small>${radarSeoSummary(x)}</td><td>${esc(x.region||'GLOBAL')}</td><td>${badge(x.status)}${radarSourceWarning(x,true)}</td><td>${x.source_change?'<span class="badge">Fresh review required</span>':x.verification?.verified?'<span class="badge">Verified</span>':'<span class="badge">Needs evidence</span>'}<br><small>${esc(x.verification?.reason||'')}</small></td><td>Urgency ${Number(x.urgency_score||0)}<br>Relevance ${Number(x.relevance_score||0)}</td><td>${radarActions(x)}</td></tr>`).join(''):'<tr><td colspan="6">Nothing waiting for review.</td></tr>';
