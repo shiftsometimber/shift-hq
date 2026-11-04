@@ -45,8 +45,10 @@ test('cross-origin and missing-origin POSTs are refused before authentication',a
   for(const origin of ['', 'https://hq.shiftsometimber.co.uk','https://evil.example'])assert.equal((await worker.fetch(post('/api/login',{}, {Origin:origin}),env)).status,403);
   assert.equal(calls.length,0);
 });
-test('role policy excludes administration, directory, finance, staff assignment and signing',()=>{
-  for(const path of ['/api/clinical/staff','/api/clinical/partners','/api/clinical/partners/organisations','/api/clinical/commissioning','/api/clinical/notifications','/api/clinical/prescription-finance','/api/clinical/'+id+'/assignment','/api/clinical/prescriptions/'+id+'/sign'])for(const method of ['GET','POST'])assert.equal(allowedPath(path,method,'clinician'),false,path);
+test('role policy excludes administration, directory, finance, staff assignment and key approval',()=>{
+  for(const path of ['/api/clinical/staff','/api/clinical/partners','/api/clinical/partners/organisations','/api/clinical/commissioning','/api/clinical/notifications','/api/clinical/prescription-finance','/api/clinical/'+id+'/assignment','/api/clinical/prescriptions/keys/'+id+'/approve'])for(const method of ['GET','POST'])assert.equal(allowedPath(path,method,'clinician'),false,path);
+  assert(allowedPath('/api/clinical/prescriptions/'+id+'/sign','POST','clinician'));
+  assert(!allowedPath('/api/clinical/prescriptions/'+id+'/sign','POST','dispensing'));
   assert(allowedPath('/api/clinical/'+id+'/action','POST','clinician'));
   assert(!allowedPath('/api/clinical/'+id,'GET','dispensing'));
   assert(allowedPath('/api/clinical/partners/fulfilment/ORDER-1/action','POST','dispensing'));

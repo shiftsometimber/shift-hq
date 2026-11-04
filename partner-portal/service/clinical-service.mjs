@@ -1,0 +1,38 @@
+import original,{existingHqIdentity,partnerRoute,prescriptionHqRoute,hqClinicalRoute,commissioningRoute,notificationManagementRoute,internalDispensingAdapters,credentialsCurrent,currentPartner} from './clinical-kernel.mjs';
+import {ensureSharedSchema} from './schema.mjs';
+import {withSharedOutbox,drainSharedWorkflow} from './shared-workflow.mjs';
+import {hqDeskRoute} from './hq-desk.mjs';
+const API='/v1/hq/clinical';
+const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private','Access-Control-Allow-Origin':'https://hq.shiftsometimber.co.uk','Access-Control-Allow-Credentials':'true','Vary':'Origin'}});
+export default {
+ async fetch(request,env,ctx){
+  const url=new URL(request.url);
+  if(url.hostname!=='api.shiftsometimber.co.uk'||!url.pathname.startsWith(API))return original.fetch(request,env,ctx);
+  try{
+   const desk=await hqDeskRoute(request,env);if(desk)return desk;
+   // Onboarding exposes only the current professional's activation state, never cases.
+   if(url.pathname===API+'/partners/enrolment'&&request.method==='GET'){
+    if(env.PARTNER_LOGIN_ENABLED!=='true'||env.PARTNER_INTERNAL_SETUP_ONLY==='true')return json({error:'professional_onboarding_not_open'},503);
+    const auth=await existingHqIdentity(request,env);if(auth.response)return auth.response;
+    if(auth.user?.role!=='clinical')return json({error:'partner_role_required'},403);
+    const record=await env.DB.prepare('SELECT state_json FROM partner_staff WHERE hq_user_id=?').bind(auth.user.id).first(),staff=record?JSON.parse(record.state_json):null;
+    if(!staff||!['credentials_pending','active'].includes(staff.status)||!credentialsCurrent(staff,new Date().toISOString()))return json({error:'approved_professional_required'},403);
+    await currentPartner(env,staff);return json({kind:staff.kind,status:staff.status,mfaEnabled:auth.user.mfaEnabled===true});
+   }
+   const flags={...env,NOTIFICATION_EVENTS_ENABLED:'true',PARTNER_OPERATIONS_ENABLED:'true',PARTNER_INTERNAL_SETUP_ONLY:env.PARTNER_INTERNAL_SETUP_ONLY==='false'?'false':'true',PRESCRIPTION_WORKFLOW_ENABLED:'true',PARTNER_NOTIFICATION_REVIEW_ENABLED:'true'};
+   if(env.SHARED_ORDER_WORKFLOW_ENABLED==='true')await ensureSharedSchema(env.DB);
+   const run=withSharedOutbox(flags);
+   const rx=await prescriptionHqRoute(request,run,existingHqIdentity);if(rx)return complete(rx,env);
+   const setup=await commissioningRoute(request,run,existingHqIdentity);if(setup)return setup;
+   const notifications=await notificationManagementRoute(request,run,existingHqIdentity);if(notifications)return notifications;
+   const partner=await partnerRoute(request,run,existingHqIdentity,internalDispensingAdapters(run));if(partner)return complete(partner,env);
+   return complete(await hqClinicalRoute(request,run,existingHqIdentity),env);
+  }catch{return json({error:'clinical_service_unavailable'},503);}
+ },
+ async scheduled(event,env,ctx){if(env.SHARED_ORDER_WORKFLOW_ENABLED==='true')ctx.waitUntil(drainSharedWorkflow(env));}
+};
+async function complete(response,env){
+ if(!response||!response.ok||env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return response;
+ const outcome=await drainSharedWorkflow(env),headers=new Headers(response.headers);headers.set('X-Shift-Shared-Order-Sync',outcome.pending?'pending':'complete');
+ return new Response(response.body,{status:response.status,headers});
+}

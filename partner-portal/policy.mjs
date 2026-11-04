@@ -2,11 +2,11 @@
 // for professional checks, organisation approval, assignments, consent and grants.
 const uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
 export function allowedPath(path, method, kind) {
+  if(['clinician','dispensing'].includes(kind)&&((method==='GET'&&/^\/api\/clinical\/partner-desk(?:\/threads\/[a-f0-9-]{36})?$/.test(path))||(method==='POST'&&/^\/api\/clinical\/partner-desk\/threads(?:\/[a-f0-9-]{36}\/reply)?$/.test(path))))return true;
   if (method==='GET' && path==='/api/clinical/partners/me') return ['clinician','dispensing'].includes(kind);
   if(kind==='clinician'){
     if(method==='GET') return path==='/api/clinical' || new RegExp('^/api/clinical/'+uuid+'(?:/(?:context|audit|evidence/[A-Za-z0-9_-]{1,100}))?$','i').test(path) || new RegExp('^/api/clinical/prescriptions/'+uuid+'$','i').test(path);
-    // Key registration/signing on this new origin needs separate commissioning.
-    if(method==='POST') return new RegExp('^/api/clinical/'+uuid+'/action$','i').test(path) || new RegExp('^/api/clinical/prescriptions/'+uuid+'/(?:proposal|query|decline)$','i').test(path);
+    if(method==='POST') return new RegExp('^/api/clinical/'+uuid+'/action$','i').test(path) || new RegExp('^/api/clinical/prescriptions/'+uuid+'/(?:proposal|query|decline|keys/challenge|keys/register|signing-challenge|sign)$','i').test(path);
   }
   if(kind==='dispensing'){
     if(method==='GET') return /^\/api\/clinical\/partners\/fulfilment(?:\/[A-Za-z0-9_-]{1,100})?$/.test(path);

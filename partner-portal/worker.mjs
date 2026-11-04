@@ -1,6 +1,7 @@
-import {homePage,joinedDemoPage,unavailablePage,CSS,CLIENT,portalHeader} from './ui.mjs';
-import {HOST,ORIGIN,SESSION_COOKIE,MFA_COOKIE,seal,unseal,cookieValue,setCookie,upstreamSession} from './session.mjs';
+import {homePage,joinedDemoPage,partnerHqPage,unavailablePage,CSS,CLIENT,portalHeader} from './ui.mjs';
+import {HOST,ORIGIN,SESSION_COOKIE,MFA_COOKIE,SETUP_COOKIE,seal,unseal,cookieValue,setCookie,upstreamSession} from './session.mjs';
 import {allowedPath,validProfessional,destination} from './policy.mjs';
+import {HQ_CLIENT} from './hq-client.mjs';
 
 const API='https://api.shiftsometimber.co.uk/v1/hq';
 const UPSTREAM_ORIGIN='https://hq.shiftsometimber.co.uk';
@@ -15,7 +16,7 @@ const SECURITY={
 function respond(body,status=200,type='text/html; charset=utf-8',extra={}){return new Response(body,{status,headers:{...SECURITY,'Content-Type':type,...extra}});}
 const json=(value,status=200,extra={})=>respond(JSON.stringify(value),status,'application/json; charset=utf-8',extra);
 const closed=()=>json({error:'professional_onboarding_not_open',message:'Partner sign-in and live casework await approved onboarding and commissioning.'},503);
-const clearCookies=response=>{response.headers.append('Set-Cookie',setCookie(SESSION_COOKIE,'',0));response.headers.append('Set-Cookie',setCookie(MFA_COOKIE,'',0));return response;};
+const clearCookies=response=>{for(const name of [SESSION_COOKIE,MFA_COOKIE,SETUP_COOKIE])response.headers.append('Set-Cookie',setCookie(name,'',0));return response;};
 const enabled=env=>env.PARTNER_ACCESS_ENABLED==='true';
 const authHeaders=token=>({'Cookie':'sst_hq_session='+token,'Origin':UPSTREAM_ORIGIN});
 async function auth(env, token) {
@@ -38,7 +39,7 @@ async function bodyJson(request) {
   if(!reader)throw Object.assign(Error('Request body required.'),{status:400});
   for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>24000){await reader.cancel();throw Object.assign(Error('Request too large.'),{status:413});}parts.push(value);}
   const raw=new Uint8Array(size);let at=0;for(const part of parts){raw.set(part,at);at+=part.byteLength;}
-  try{return JSON.parse(new TextDecoder().decode(raw));}catch{throw Object.assign(Error('Invalid JSON.'),{status:400});}
+  try{const data=JSON.parse(new TextDecoder().decode(raw));if(!data||typeof data!=='object'||Array.isArray(data))throw Error();return data;}catch{throw Object.assign(Error('A JSON object is required.'),{status:400});}
 }
 async function finishLogin(upstream,env) {
   const s=upstreamSession(upstream);if(!s||s.ttl<1)return json({message:'A verified partner session was not issued.'},401);
@@ -68,8 +69,25 @@ async function login(request,env,verify) {
     const value=await seal({challenge:result.challenge},env.PORTAL_SESSION_KEY,'mfa',300);
     return json({mfaRequired:true},200,{'Set-Cookie':setCookie(MFA_COOKIE,value,300)});
   }
-  if(!verify)return json({message:'Authenticator verification is required for partner access.'},403);
+  if(!verify){
+    const s=upstreamSession(response);
+    if(s){const r=await env.CLINICAL.fetch(new Request(API+'/clinical/partners/enrolment',{headers:authHeaders(s.token),redirect:'manual'}));const profile=r.ok?await r.json():null;
+      if(profile?.status==='credentials_pending'&&profile.mfaEnabled===false){const value=await seal({token:s.token},env.PORTAL_SESSION_KEY,'setup',300);return json({mfaSetupRequired:true},200,{'Set-Cookie':setCookie(SETUP_COOKIE,value,300)});}
+    }
+    return json({message:'Authenticator verification is required for partner access.'},403);
+  }
   return finishLogin(response,env);
+}
+async function setupMfa(request,env,enable){
+  if(!enabled(env))return closed();const setup=await unseal(cookieValue(request,SETUP_COOKIE),env.PORTAL_SESSION_KEY,'setup');if(!setup?.token)return json({message:'Restart sign-in to set up your authenticator.'},401);
+  const check=await env.CLINICAL.fetch(new Request(API+'/clinical/partners/enrolment',{headers:authHeaders(setup.token),redirect:'manual'}));const p=check.ok?await check.json():null;
+  if(p?.status!=='credentials_pending'||p.mfaEnabled!==false)return clearCookies(json({message:'Authenticator setup requires your approved pending account.'},403));
+  const b=await bodyJson(request);if(enable&&!/^\d{6}$/.test(b.code||''))return json({message:'Enter a valid six-digit code.'},422);
+  const r=await env.HQ_AUTH.fetch(new Request(API+'/mfa/'+(enable?'enable':'setup'),{method:'POST',headers:{...authHeaders(setup.token),'Content-Type':'application/json'},body:JSON.stringify(enable?{code:b.code}:{}),redirect:'manual'}));
+  if(!r.ok)return json({message:'Authenticator setup could not be verified. Please check the code.'},r.status===429?429:422);
+  if(!enable){const data=await r.json();if(typeof data.secret!=='string'||data.secret.length>200)return json({message:'Authenticator setup is unavailable.'},503);return json({secret:data.secret});}
+  try{await env.HQ_AUTH.fetch(new Request(API+'/auth/logout',{method:'POST',headers:authHeaders(setup.token),redirect:'manual'}));}catch{}
+  return clearCookies(json({mfaEnabled:true,activationPending:true}));
 }
 export function rewrite(text) {
   return text.replaceAll(API+'/me','/api/identity').replaceAll('/v1/hq/me','/api/identity')
@@ -81,8 +99,8 @@ export function rewrite(text) {
 async function upstreamPage(env,path){const response=await env.CLINICAL.fetch(new Request(UPSTREAM_ORIGIN+path));if(!response.ok)throw Error('workspace_template_unavailable');return response.text();}
 async function workspace(env,kind,demo,professionalKind=kind) {
   const clinician=kind==='clinician';
-  let html=await upstreamPage(env,clinician?'/clinical-portal':kind==='profile'?'/clinical-portal/my-profile':'/clinical-portal/dispensing'+(demo?'/demo':''));
-  html=rewrite(html).replace(/<header\b[^>]*>[\s\S]*?<\/header>/i,portalHeader({demo,kind:professionalKind,signedIn:!demo}));
+  let html=await upstreamPage(env,clinician?'/clinical-portal':kind==='profile'?'/clinical-portal/my-profile':['activation','application'].includes(kind)?'/clinical-portal/partners/'+kind:'/clinical-portal/dispensing'+(demo?'/demo':''));
+  html=rewrite(html).replace(/<header\b[^>]*>[\s\S]*?<\/header>/i,portalHeader({demo,kind:professionalKind,signedIn:!demo&&!['activation','application'].includes(kind)}));
   if(clinician){
     html=html.replace(/<section class="view active" id="welcome">[\s\S]*?<\/section>/,'<section class="view active" id="welcome"><h1 id="title">Clinical reviews</h1><p>'+ (demo?'Fictional clinical exercises. No patient data or live actions.':'Your assigned work uses the existing clinical record and shared order history.')+'</p><button id="openClinical" type="button">Open clinical reviews</button><span id="hqUserChip"></span></section>');
     if(demo)html=html.replace('src="/clinical-assets/client.mjs"','src="/clinical-assets/demo-client.mjs"');
@@ -105,6 +123,21 @@ async function handle(request,env) {
   if(path.startsWith('/api/')){
     if(path==='/api/login'&&request.method==='POST')return login(request,env,false);
     if(path==='/api/mfa'&&request.method==='POST')return login(request,env,true);
+    if(path==='/api/security/mfa/setup'&&request.method==='POST')return setupMfa(request,env,false);
+    if(path==='/api/security/mfa/enable'&&request.method==='POST')return setupMfa(request,env,true);
+    if(/^\/api\/clinical\/partners\/application(?:\/(?:action|evidence(?:\/[a-f0-9-]{36})?))?$/.test(path)){
+      if(!enabled(env))return closed();const token=request.headers.get('X-Application-Token');if(!/^[a-f0-9]{64}$/.test(token||''))return json({message:'A valid private application link is required.'},401);
+      const evidence=path.endsWith('/evidence');const headers=new Headers({Origin:UPSTREAM_ORIGIN,'X-Application-Token':token});
+      for(const key of ['Content-Type','X-Evidence-Kind','X-Profile-Version'])if(request.headers.has(key))headers.set(key,request.headers.get(key));
+      if(evidence&&request.method==='POST'&&Number(request.headers.get('Content-Length')||0)>5*1024*1024)return json({message:'Images must be smaller than 5 MB.'},413);
+      const response=await env.CLINICAL.fetch(new Request(API+path.replace('/api/clinical','/clinical'),{method:request.method,headers,body:request.method==='POST'?(evidence?request.body:JSON.stringify(await bodyJson(request))):undefined,duplex:'half',redirect:'manual'}));
+      return respond(response.body,response.status,response.headers.get('Content-Type')||'application/json');
+    }
+    if(path==='/api/clinical/partners/activation'&&request.method==='POST'){
+      if(!enabled(env))return closed();const b=await bodyJson(request);if(!/^[a-f0-9]{64}$/.test(b.token||'')||typeof b.password!=='string'||b.password.length<15||b.password.length>128)return json({message:'A valid single-use setup link and password of 15–128 characters are required.'},422);
+      const response=await env.CLINICAL.fetch(new Request(API+'/clinical/partners/activation',{method:'POST',headers:{Origin:UPSTREAM_ORIGIN,'Content-Type':'application/json'},body:JSON.stringify({token:b.token,password:b.password}),redirect:'manual'}));
+      const d=await response.json().catch(()=>({}));return json(response.ok?{username:d.username,next:'Sign in here to set up your authenticator. HQ approval is required before assigned work opens.'}:{error:d.error||'Account setup is unavailable.'},response.status);
+    }
     if(!enabled(env))return closed();
     const own=await session(request,env);if(!own?.staff)return clearCookies(json({message:'Please sign in with your active partner account.'},401));
     if(path==='/api/identity'&&request.method==='GET')return json({user:{id:own.identity.user.id,role:'clinical',name:own.staff.details?.name||own.staff.name, mfaEnabled:true},partner:{kind:own.staff.kind,orgId:own.staff.orgId}});
@@ -117,18 +150,23 @@ async function handle(request,env) {
     let body;if(request.method==='POST'){headers.set('Content-Type','application/json');body=JSON.stringify(await bodyJson(request));}
     const response=await env.CLINICAL.fetch(new Request(upstreamPath+(search.size?'?'+search:''),{method:request.method,headers,body,redirect:'manual'}));
     if(response.status>=300&&response.status<400)return json({message:'The workspace returned an unexpected redirect.'},502);
-    return respond(response.body,response.status,response.headers.get('Content-Type')||'application/json',response.headers.has('Content-Disposition')?{'Content-Disposition':response.headers.get('Content-Disposition')}:{});
+    const outgoing={};if(response.headers.has('Content-Disposition'))outgoing['Content-Disposition']=response.headers.get('Content-Disposition');const sync=response.headers.get('X-Shift-Shared-Order-Sync');if(['pending','complete'].includes(sync))outgoing['X-Shift-Shared-Order-Sync']=sync;
+    return respond(response.body,response.status,response.headers.get('Content-Type')||'application/json',outgoing);
   }
   if(!['GET','HEAD'].includes(request.method))return respond('Not found',404,'text/plain');
   if(path==='/')return respond(homePage(enabled(env)));
   if(path==='/demo')return respond(joinedDemoPage());
+  if(path==='/activate')return respond(await workspace(env,'activation',false));
+  if(path==='/apply')return respond(await workspace(env,'application',false));
   if(path==='/assets/partner-v1.css')return respond(CSS+WORKSPACE_CSS,200,'text/css; charset=utf-8');
-  if(path==='/assets/partner-v1.js')return respond(CLIENT,200,'text/javascript; charset=utf-8');
+  if(path==='/assets/partner-v1.js')return respond(CLIENT+HQ_CLIENT,200,'text/javascript; charset=utf-8');
+  if(path==='/assets/partner-fetch.mjs')return respond("export async function partnerFetch(...args){const r=await globalThis.fetch(...args);const status=r.headers.get('X-Shift-Shared-Order-Sync');if(status)document.dispatchEvent(new CustomEvent('partner-order-sync',{detail:status}));return r;}",200,'text/javascript; charset=utf-8');
   if(path==='/robots.txt')return respond('User-agent: *\nDisallow: /\n',200,'text/plain');
   if(ASSETS.has(path)){
     const response=await env.CLINICAL.fetch(new Request(UPSTREAM_ORIGIN+path));
     if(!response.ok)return respond('Asset unavailable',503,'text/plain');
     let text=rewrite(await response.text());
+    if(path==='/clinical-assets/client.mjs'||path==='/clinical-assets/partners/client.mjs')text="import {partnerFetch as fetch} from '/assets/partner-fetch.mjs';\n"+text;
     if(path==='/clinical-assets/partners/demo.mjs')text=text.replaceAll('new URL(url)','new URL(url, location.origin)');
     if(path==='/clinical-assets/partners/client.mjs'||path==='/clinical-assets/partners/demo-client.mjs')text=text.replaceAll("await openOrder(order);notice.textContent='Order update recorded.","await refresh();await openOrder(order);notice.textContent='Order update recorded.");
     // Fictional demo identifiers also work in the managed HTTP preview.
@@ -136,9 +174,10 @@ async function handle(request,env) {
     return respond(text,200,response.headers.get('Content-Type')||'text/javascript; charset=utf-8');
   }
   if(path==='/demo/clinical'||path==='/demo/dispensing')return respond(await workspace(env,path.endsWith('clinical')?'clinician':'dispensing',true));
-  if(['/workspace/clinical','/workspace/dispensing','/workspace/profile'].includes(path)){
+  if(['/workspace/clinical','/workspace/dispensing','/workspace/profile','/workspace/hq'].includes(path)){
     if(!enabled(env))return respond(unavailablePage(),503);
     const own=await session(request,env);if(!own?.staff)return respond('',303,'text/plain',{'Location':'/'});
+    if(path==='/workspace/hq')return respond(partnerHqPage(own.staff.kind));
     if(path!=='/workspace/profile'&&path!==destination(own.staff))return respond(unavailablePage('Your approved role does not include this workspace.',403),403);
     return respond(await workspace(env,path==='/workspace/profile'?'profile':own.staff.kind,false,own.staff.kind));
   }

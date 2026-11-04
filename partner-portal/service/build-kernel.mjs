@@ -1,0 +1,31 @@
+import fs from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+export async function buildKernel(){
+ const file=new URL('./vendor/clinical-portal-20261024.mjs',import.meta.url),original=await fs.readFile(file,'utf8');
+ if(createHash('sha256').update(original).digest('hex')!=='b7bd886a5357222af1717f053959d608094dd32f07c072440166bf4998f5d3c5')throw Error('Clinical baseline changed; reconcile before building.');
+ let source=original;
+ const once=(before,after)=>{if(source.split(before).length!==2)throw Error('Clinical adaptation anchor changed: '+before.slice(0,80));source=source.replace(before,after);};
+ once('var RP_ID = "hq.shiftsometimber.co.uk";','var RP_ID = "partner.shiftsometimber.co.uk";');
+ once('var RP_ORIGIN = "https://hq.shiftsometimber.co.uk";','var RP_ORIGIN = "https://partner.shiftsometimber.co.uk";');
+ // Match the real catalogue CHECK constraints; no out-of-stock/archived item is admitted.
+ once('!["active", "published"].includes(variant.status)','!["available", "active", "published"].includes(variant.status)');
+ once("v.status IN ('active','published')","v.status IN ('available','active','published')");
+ once("v.status='active' AND v.sellable=1","v.status IN ('available','active') AND v.sellable=1");
+ once('quantity: text(input.quantity, 300)','quantity: text(input.quantity, 200)');
+ once('directions: text(input.directions, 2e3)','directions: text(input.directions, 1e3)');
+ once('return { link: ORIGIN + "/clinical-portal/partners/" + kind + "#" + raw, expiresAt, sent: false };','return { link: "https://partner.shiftsometimber.co.uk/" + (kind === "activation" ? "activate" : "apply") + "#" + raw, expiresAt, sent: false };');
+ once('const answers = JSON.parse(assessment.answers_json);','const answers = JSON.parse(assessment.answers_json); validateSSTPatient(answers);');
+ once('if (b.outcome === "proceed") {','if (b.outcome === "proceed") { validateSSTPatient(JSON.parse(assessment.answers_json));');
+ source+=`\nfunction validateSSTPatient(answers){const value=answers.dateOfBirth,date=new Date(value+'T00:00:00Z'),today=new Date();if(typeof value!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)||!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==value)fail(422,'valid_date_of_birth_required');let age=today.getUTCFullYear()-date.getUTCFullYear();if(today.getUTCMonth()<date.getUTCMonth()||today.getUTCMonth()===date.getUTCMonth()&&today.getUTCDate()<date.getUTCDate())age--;if(age<18||age>120)fail(422,'adult_service_required');if(answers.insulinUse===true||String(answers.insulinUse||'').toLowerCase()==='yes')fail(422,'insulin_service_excluded');}\n`;
+ once('function clientData(input, type, challenge) {','function clientData(input, type, challenge, origin = RP_ORIGIN) {');
+ once('d.origin !== RP_ORIGIN','d.origin !== origin');once('d.topOrigin !== RP_ORIGIN','d.topOrigin !== origin');
+ once('async function authenticator(bytes, registration) {','async function authenticator(bytes, registration, rpId = RP_ID) {');
+ once('new TextEncoder().encode(RP_ID)','new TextEncoder().encode(rpId)');
+ once('const client = clientData(proof.clientDataJSON, "webauthn.get", challenge), auth = unb64(proof.authenticatorData, 6e3), { flags, counter } = await authenticator(auth, false);',`let origin = RP_ORIGIN;
+  if(historical){try{origin=JSON.parse(new TextDecoder().decode(unb64(proof.clientDataJSON,6e3))).origin;}catch{fail(422,"invalid_signing_client_data");}if(!["https://partner.shiftsometimber.co.uk","https://hq.shiftsometimber.co.uk"].includes(origin))fail(403,"signing_origin_or_challenge_mismatch");}
+  const client = clientData(proof.clientDataJSON, "webauthn.get", challenge,origin), auth = unb64(proof.authenticatorData, 6e3), { flags, counter } = await authenticator(auth, false,new URL(origin).hostname);`);
+ source+='\nexport {prescriptionHqRoute, partnerRoute, hqClinicalRoute, commissioningRoute, notificationManagementRoute, internalDispensingAdapters, credentialsCurrent, currentPartner, permission, authCondition, caseView, caseAction, memberPrescription, memberFulfilment, memberView, memberTracking, verifyRegistration, verifyAssertion, careFields, careChecks, CARE_HANDOVER_VERSION};\n';
+ await fs.writeFile(new URL('./clinical-kernel.mjs',import.meta.url),source);
+ return {baseline:'f65e4594-fd83-49d4-b20d-f43fcee88e1c',sha256:createHash('sha256').update(source).digest('hex')};
+}
+if(process.argv[1]&&new URL(import.meta.url).pathname===process.argv[1])console.log(JSON.stringify(await buildKernel()));

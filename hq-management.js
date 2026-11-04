@@ -55,6 +55,7 @@ window.installManagementHQ=()=>{
  nav.addEventListener('click',event=>{const b=event.target.closest('button[data-view]');if(b&&b.parentElement.tagName==='DETAILS')b.parentElement.open=true});
  window.addEventListener('pagehide',()=>{clearReports();get('management-headlines').replaceChildren();get('management-attention').replaceChildren();get('management-operations').replaceChildren()});window.addEventListener('pageshow',event=>{if(event.persisted)location.reload()});
  window.installPartnersHQ?.();
+ window.installPartnerDeskHQ?.();
  operationsHome=window.HQOperations.install({getPrincipal:()=>S.me,getPermissions:()=>S.permissions||[],read:(path,opts)=>call(path,opts),reportOptions:()=>({...options(),kind:'management'}),navigate});
  if(S.me)refreshHome();
 };

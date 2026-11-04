@@ -1,5 +1,6 @@
 export const SESSION_COOKIE = '__Host-shift_partner';
 export const MFA_COOKIE = '__Host-shift_partner_mfa';
+export const SETUP_COOKIE = '__Host-shift_partner_setup';
 export const HOST = 'partner.shiftsometimber.co.uk';
 export const ORIGIN = 'https://' + HOST;
 const enc = new TextEncoder(), dec = new TextDecoder();

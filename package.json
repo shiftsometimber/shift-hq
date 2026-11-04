@@ -1,0 +1,1 @@
+{"private":true,"scripts":{"dev":"node partner-portal/qa/server.mjs"}}

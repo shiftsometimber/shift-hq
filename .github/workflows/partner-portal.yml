@@ -13,5 +13,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
+      - run: node partner-portal/service/build-kernel.mjs && node partner-portal/service/build-member-kernel.mjs
       - run: node --test partner-portal/test/*.test.mjs
+      - run: node --test hq-operations.test.cjs radar-source-review-logic.test.mjs radar-source-intake.test.mjs
+      - run: node --check hq-partner-desk.js && node --check hq-management.js && node partner-portal/build.mjs && node --check .partner-qa/worker.bundle.mjs
