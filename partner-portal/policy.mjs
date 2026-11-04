@@ -2,6 +2,11 @@
 // for professional checks, organisation approval, assignments, consent and grants.
 const uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
 export function allowedPath(path, method, kind) {
+  if(kind==='clinician'&&((method==='GET'&&/^\/api\/clinical\/platform\/diagnostics(?:\/[a-f0-9-]{36}\/result)?$/.test(path))||(method==='POST'&&/^\/api\/clinical\/platform\/diagnostics(?:\/[a-f0-9-]{36}\/review)?$/.test(path))))return true;
+  if(kind==='clinician'&&method==='POST'&&path==='/api/clinical/platform/repeat-clearance')return true;
+  if(['clinical_admin','pharmacy_admin'].includes(kind))return method==='GET'&&/^\/api\/clinical\/platform(?:\/(?:identity|audit|memberships))?$/.test(path)||method==='POST'&&/^\/api\/clinical\/platform\/memberships\/\d+\/revoke$/.test(path);
+  if(['clinician','dispensing'].includes(kind)&&method==='GET'&&/^\/api\/clinical\/platform(?:\/(?:followups|audit))?$/.test(path))return true;
+  if(kind==='clinician'&&method==='POST'&&/^\/api\/clinical\/platform\/followups(?:\/[a-f0-9-]{36}\/complete)?$/.test(path))return true;
   if(['clinician','dispensing'].includes(kind)&&((method==='GET'&&/^\/api\/clinical\/partner-desk(?:\/threads\/[a-f0-9-]{36})?$/.test(path))||(method==='POST'&&/^\/api\/clinical\/partner-desk\/threads(?:\/[a-f0-9-]{36}\/reply)?$/.test(path))))return true;
   if (method==='GET' && path==='/api/clinical/partners/me') return ['clinician','dispensing'].includes(kind);
   if(kind==='clinician'){

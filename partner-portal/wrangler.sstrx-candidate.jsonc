@@ -1,0 +1,15 @@
+{
+  "name": "shift-partner-portal",
+  "main": "gateway-entry.mjs",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "PARTNER_ACCESS_ENABLED": "true",
+    "SSTRX_PORTAL_ENABLED": "false"
+  },
+  "services": [
+    {"binding": "CLINICAL", "service": "shift-hq-clinical-portal"},
+    {"binding": "HQ_AUTH", "service": "shift-core"}
+  ]
+}

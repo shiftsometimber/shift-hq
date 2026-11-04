@@ -95,6 +95,8 @@ export async function completeSharedResponse(response,request,env){
  let orderNumber=fulfilment?.[1];
  if(record){const linked=await env.DB.prepare('SELECT order_number FROM clinical_member_records WHERE id=?').bind(record[1]).first();orderNumber=linked?.order_number;}
  if(!orderNumber)return response;
+ await captureClinicalFollowup(env,orderNumber);
  const outcome=await drainSharedWorkflow(env,{orderNumber}),headers=new Headers(response.headers);headers.set('X-Shift-Shared-Order-Sync',outcome.pending?'pending':'complete');
  return new Response(response.body,{status:response.status,headers});
 }
+import {captureClinicalFollowup} from '../platform/followups.mjs';
