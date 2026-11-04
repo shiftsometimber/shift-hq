@@ -96,3 +96,8 @@ test('Late responses cannot render after logout, superseded refresh or a change 
   gate.cancel(); assert.equal(gate.current(next, owner), false);
   const changed = gate.start(colleague); assert.equal(gate.current(changed, colleague), true); assert.equal(gate.current(changed, owner), false);
 });
+
+test('Home includes only partner questions awaiting HQ and keeps message contents out of attention cards',()=>{
+ const items=attentionItems(source('partnerquestions',[{id:'one',order_number:'TEST-ORDER',status:'awaiting_hq',priority:'urgent',owner_name:'SHIFT HQ',subject:'Private subject',body:'Private message'},{id:'two',status:'awaiting_partner'},{id:'three',status:'closed'}]),now);
+ assert.equal(items.length,1);assert.equal(items[0].view,'partnerdesk');assert.equal(items[0].priority,0);assert.equal(items[0].owner,'SHIFT HQ');assert.ok(!JSON.stringify(items).includes('Private'));
+});

@@ -14,6 +14,8 @@ test('one real SQLite order: HQ assignment → partner login/MFA → clinical re
   const queue=await json(await f.partner('/partners/fulfilment',pharmacy));assert.equal(queue.orders[0].orderNumber,ORDER);
   const ask=await json(await f.partner('/partner-desk/threads',pharmacy,{orderNumber:ORDER,subject:'Order handover',priority:'normal',message:'Fictional question: please confirm the handover reference.'}),201);
   const desk=await json(await f.hq('/partner-desk'));assert.equal(desk.counts.awaitingHq,1);assert.equal(desk.threads[0].id,ask.id);
+  const questions=await json(await f.hq('/partner-desk/questions'));assert.equal(questions.threads[0].order_number,ORDER);assert(!JSON.stringify(questions).includes('please confirm the handover reference'));
+  await json(await f.partner('/partner-desk/questions',pharmacy),403);
   await json(await f.hq('/partner-desk/threads/'+ask.id+'/reply',1,{version:1,message:'Fictional HQ reply: the reference is attached to this order.'}));
   const conversation=await json(await f.partner('/partner-desk/threads/'+ask.id,pharmacy));assert.equal(conversation.messages[1].actor_kind,'hq');assert.equal(conversation.thread.order_number,ORDER);
   await json(await f.partner('/partner-desk/threads/'+ask.id+'/reply',pharmacy,{version:2,message:'Fictional partner reply returned to HQ.'}));

@@ -5,6 +5,7 @@
     { key: 'support', label: 'Support', view: 'support', path: '/v1/hq/support', field: 'tickets', permission: 'support_read' },
     { key: 'tasks', label: 'Tasks', view: 'tasks', path: '/v1/crm/tasks', field: 'tasks', permission: 'crm_read' },
     { key: 'handovers', label: 'Handovers', view: 'partnerhandovers', path: '/v1/hq/management/partner-handovers', field: 'items', roles: ['owner', 'admin', 'operations', 'support'], limit: 500 },
+    { key: 'partnerquestions', label: 'Partner questions', view: 'partnerdesk', path: '/v1/hq/clinical/partner-desk/questions', field: 'threads', roles: ['owner', 'admin', 'operations'], limit: 100 },
     { key: 'messages', label: 'Messages', view: 'outbox', path: '/v1/hq/outbox', field: 'messages', permission: 'communications_read', coverage: 'Outbox only. Approval drafts and other delivery channels are not included.' }
   ];
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -69,6 +70,11 @@
         label = state === 'blocked' ? 'Blocked handover' : late ? 'Overdue handover' : 'Handover awaiting review';
         next = row.next_action || 'Review the handover and set its next internal action.';
         priority = state === 'blocked' ? 0 : late ? 1 : 2;
+      } else if (source.key === 'partnerquestions') {
+        if (state !== 'awaiting_hq') return [];
+        label = row.priority === 'urgent' ? 'Urgent partner question' : 'Partner awaiting HQ';
+        next = 'Read the order conversation and reply in Partner desk. Clinical decisions stay in the clinical workspace.';
+        priority = row.priority === 'urgent' ? 0 : 2;
       } else if (source.key === 'messages') {
         if (!['failed', 'unknown', 'uncertain'].includes(state)) return [];
         label = state === 'failed' ? 'Failed message' : 'Uncertain message outcome';

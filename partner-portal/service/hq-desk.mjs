@@ -33,6 +33,11 @@ export async function hqDeskRoute(request,env){
   if(request.method==='POST'&&origin!=='https://hq.shiftsometimber.co.uk')fail(403,'origin_required');
   const a=await actor(request,env);if(a.response)return a.response;await ensureSharedSchema(env.DB);
   const parts=url.pathname.slice(BASE.length).split('/').filter(Boolean);
+  if(parts[0]==='questions'&&parts.length===1&&request.method==='GET'){
+   if(!a.internal)fail(403,'hq_access_required');
+   const questions=await rows(env.DB.prepare("SELECT id,order_number,status,priority,'SHIFT HQ' owner_name,created_at,updated_at FROM partner_hq_threads WHERE status='awaiting_hq' ORDER BY CASE priority WHEN 'urgent' THEN 0 ELSE 1 END,created_at LIMIT 101"));
+   return json({threads:questions.slice(0,100),hasMore:questions.length>100});
+  }
   if(parts[0]==='counts'&&parts.length===1&&request.method==='GET'){
    if(!a.internal)fail(403,'hq_access_required');
    const counts=await env.DB.prepare("SELECT COUNT(*) awaitingHq,SUM(CASE WHEN priority='urgent' THEN 1 ELSE 0 END) urgent FROM partner_hq_threads WHERE status='awaiting_hq'").first();return json({awaitingHq:counts.awaitingHq,urgent:counts.urgent||0});

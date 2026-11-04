@@ -1,5 +1,6 @@
 /* Fictional, local-only fixture. Production network access is blocked by CSP. */
 (() => {
+ const nativeFetch=window.fetch.bind(window);
  const scenario=new URLSearchParams(location.search).get('qa')||'owner';
  const role=scenario==='support'?'support':'owner',principal={id:1,name:'Example owner',email:'owner@example.invalid',role,status:'active'},permissions=role==='owner'?['*']:['support_read','crm_read','intelligence_read'];
  const date=new Date(),ago=h=>new Date(date.getTime()-h*3600000).toISOString(),tomorrow=new Date(date.getTime()+86400000).toISOString().slice(0,10);
@@ -13,6 +14,7 @@
  window.fetch=async(input,init={})=>{
   const url=new URL(typeof input==='string'?input:input.url,location.href),path=url.pathname;
   if(url.origin!=='https://api.shiftsometimber.co.uk')throw Error('Fixture blocked unexpected network request.');
+  if(path.startsWith('/v1/hq/clinical/partner-desk'))return nativeFetch('/qa-api'+path+url.search,init);
   if(path.endsWith('/auth/logout')){signedOut=true;sessionStorage.setItem('hq-fixture-signed-out','1');return result({ok:true});}
   if(init.method&&init.method!=='GET')return result({ok:false,error:'fixture_read_only'},403);
   if(signedOut)return result({ok:false,error:'fixture_signed_out'},401);
@@ -37,8 +39,8 @@
  };
  document.addEventListener('DOMContentLoaded',()=>{
   const banner=document.createElement('div');banner.style.cssText='background:#e7e3da;color:#050505;padding:12px 20px;border-bottom:1px solid #707762;font:13px sans-serif;display:flex;gap:12px;align-items:center;flex-wrap:wrap';
-  banner.innerHTML='<strong>READ-ONLY PREVIEW · FICTIONAL DATA</strong><label>Scenario <select id="fixture-scenario"><option value="owner">Working queues</option><option value="empty">Empty queues</option><option value="unavailable">Unavailable sources</option><option value="support">Support permissions</option><option value="stale">Older snapshot</option><option value="loading">Held responses</option></select></label><button id="fixture-release">Release held responses</button><button id="fixture-reset">Reset fixture sign-in</button>';
+  banner.innerHTML='<strong>LOCAL PREVIEW · FICTIONAL DATA</strong><label>Scenario <select id="fixture-scenario"><option value="owner">Working queues</option><option value="empty">Empty queues</option><option value="unavailable">Unavailable sources</option><option value="support">Support permissions</option><option value="stale">Older snapshot</option><option value="loading">Held responses</option></select></label><button id="fixture-release">Release held responses</button><button id="fixture-reset">Reset fixture sign-in</button>';
   document.body.prepend(banner);const select=document.getElementById('fixture-scenario');select.value=scenario;select.onchange=()=>{sessionStorage.removeItem('hq-fixture-signed-out');location.search='?qa='+select.value};document.getElementById('fixture-release').onclick=()=>{for(const release of releases.splice(0))release();};document.getElementById('fixture-reset').onclick=()=>{sessionStorage.removeItem('hq-fixture-signed-out');location.reload()};
-  const notice=document.getElementById('notice'),observer=new MutationObserver(()=>{if(notice.textContent.includes('live Shift Core'))notice.textContent='Read-only local fixture · fictional data · production access blocked.'});observer.observe(notice,{subtree:true,childList:true});
+  const notice=document.getElementById('notice'),observer=new MutationObserver(()=>{if(notice.textContent.includes('live Shift Core'))notice.textContent='Local fixture · fictional data · production access blocked.'});observer.observe(notice,{subtree:true,childList:true});
  });
 })();
