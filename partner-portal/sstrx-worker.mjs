@@ -1,6 +1,6 @@
 // Branded gateway over the original partner gateway. Same identity and services.
 import {createPortal} from './worker.mjs';
-import {partnerHqPage} from './ui.mjs';
+import {partnerHqPage,BRAND} from './ui.mjs';
 import {signInPage,workspacePage,SST_RX_CSS,SST_RX_CLIENT} from './platform/ui.mjs';
 import {SST_LOGO_BASE64} from './assets/logo-data.mjs';
 const ORIGIN='https://sstrx.shiftsometimber.co.uk',native=createPortal(ORIGIN);
@@ -30,6 +30,7 @@ async function handle(request,env){
  const response=await native.fetch(request,env);
  if(url.pathname==='/clinical-assets/client.mjs'&&response.ok){const code=await response.text();return secure(code+"\ndocument.addEventListener('sstrx-open-record',async e=>{await showPortal();await open(e.detail);});\n",'text/javascript; charset=utf-8');}
  if(url.pathname==='/clinical-assets/partners/client.mjs'&&response.ok){const code=await response.text();return secure(code+"\ndocument.addEventListener('sstrx-open-record',e=>openOrder(e.detail));\n",'text/javascript; charset=utf-8');}
+ if(response.ok&&response.headers.get('Content-Type')?.includes('text/html')){const html=(await response.text()).replaceAll(BRAND,'<a class="brand" href="/" aria-label="SST Rx home"><img class="rx-logo" src="/assets/sstrx-logo.png" alt="SST Rx"></a>').replace('</head>','<link rel="stylesheet" href="/assets/sstrx.css"></head>').replace(/<title>([\s\S]*?)<\/title>/i,(_,title)=>'<title>'+title.replace(/ \| SHIFT$/,'')+' · SST Rx</title>');return secure(html);}
  return response;
 }
 export default {async fetch(request,env){try{return await handle(request,env)}catch{return Response.json({error:'sst_rx_source_unavailable'},{status:503,headers:{'Cache-Control':'no-store, private','X-Robots-Tag':'noindex, nofollow','X-Content-Type-Options':'nosniff'}})}}};
