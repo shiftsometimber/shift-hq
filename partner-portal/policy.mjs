@@ -1,0 +1,20 @@
+// This is an additional boundary. The existing clinical service remains authoritative
+// for professional checks, organisation approval, assignments, consent and grants.
+const uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
+export function allowedPath(path, method, kind) {
+  if (method==='GET' && path==='/api/clinical/partners/me') return ['clinician','dispensing'].includes(kind);
+  if(kind==='clinician'){
+    if(method==='GET') return path==='/api/clinical' || new RegExp('^/api/clinical/'+uuid+'(?:/(?:context|audit|evidence/[A-Za-z0-9_-]{1,100}))?$','i').test(path) || new RegExp('^/api/clinical/prescriptions/'+uuid+'$','i').test(path);
+    // Key registration/signing on this new origin needs separate commissioning.
+    if(method==='POST') return new RegExp('^/api/clinical/'+uuid+'/action$','i').test(path) || new RegExp('^/api/clinical/prescriptions/'+uuid+'/(?:proposal|query|decline)$','i').test(path);
+  }
+  if(kind==='dispensing'){
+    if(method==='GET') return /^\/api\/clinical\/partners\/fulfilment(?:\/[A-Za-z0-9_-]{1,100})?$/.test(path);
+    if(method==='POST') return /^\/api\/clinical\/partners\/fulfilment\/[A-Za-z0-9_-]{1,100}\/action$/.test(path);
+  }
+  return false;
+}
+export function validProfessional(identity, staff) {
+  return !!(identity?.user?.role==='clinical' && identity.user.mfaEnabled===true && staff?.status==='active' && ['clinician','dispensing'].includes(staff.kind) && staff.orgId && Number(staff.hqUserId)===Number(identity.user.id));
+}
+export const destination = staff => staff.kind==='clinician'?'/workspace/clinical':'/workspace/dispensing';
