@@ -1,0 +1,200 @@
+{
+  "date": "2026-11-04",
+  "status": "SOFTWARE_DEPLOYED_AND_VERIFIED; REAL_PARTNER_ACCEPTANCE_PENDING",
+  "source_head": "2dbcdea7ddf393193691184aece7bebb77cf66b5",
+  "urls": {
+    "hq": "https://hq.shiftsometimber.co.uk/",
+    "partner": "https://partner.shiftsometimber.co.uk/"
+  },
+  "components": {
+    "shift-hq-clinical-portal": {
+      "source_commit": "aca1f93975fddaf6a99cbb0a787b6f71fa51ffab",
+      "deployment_id": "26353016-66ef-4321-bdfb-89b61c7d52dd",
+      "created_on": "2026-11-04T20:01:37.247604Z",
+      "versions": [
+        {
+          "version_id": "4dd631ce-7f2d-41a7-b57c-8b5d58ccc5f2",
+          "percentage": 100
+        }
+      ]
+    },
+    "shift-clinical-records": {
+      "source_commit": "aca1f93975fddaf6a99cbb0a787b6f71fa51ffab",
+      "deployment_id": "b790ce5a-bf4a-4f67-a763-c9a11b14c308",
+      "created_on": "2026-11-04T20:01:51.563232Z",
+      "versions": [
+        {
+          "version_id": "47214224-d09b-451e-830c-8eaa672af1cb",
+          "percentage": 100
+        }
+      ]
+    },
+    "shift-partner-portal": {
+      "source_commit": "2dbcdea7ddf393193691184aece7bebb77cf66b5",
+      "deployment_id": "7ffcd961-4499-4d55-9ddd-86e78ead18ed",
+      "created_on": "2026-11-04T20:06:04.373139Z",
+      "versions": [
+        {
+          "version_id": "c8702eb0-2320-470c-bb1b-210fd2715e17",
+          "percentage": 100
+        }
+      ]
+    },
+    "shift-hq": {
+      "source_commit": "2dbcdea7ddf393193691184aece7bebb77cf66b5",
+      "deployment_id": "c38c6a16-9830-4ec1-972c-9d02ba9ff129",
+      "created_on": "2026-11-04T20:06:14.500915Z",
+      "versions": [
+        {
+          "version_id": "0fa4f773-4dc2-414b-babf-f72ca9a3f039",
+          "percentage": 100
+        }
+      ]
+    }
+  },
+  "preservation": {
+    "core_deployment_unchanged": true,
+    "protected_hq_v111_blob": "082a1bf557cf8ec57279db9b155a4a7fc5010b42",
+    "same_existing_clinical_and_order_database": true,
+    "gateway_session_secret_binding_preserved": true,
+    "optional_member_context_sharing": false,
+    "existing_member_assessment_test_restriction_preserved": true
+  },
+  "schema": {
+    "additive_only": true,
+    "tables": [
+      "medicine_prescription_events",
+      "order_reference_registry",
+      "partner_workflow_sync",
+      "partner_hq_threads",
+      "partner_hq_messages"
+    ],
+    "real_business_records_created": 0,
+    "real_clinical_actions": 0
+  },
+  "tests": {
+    "total": 53,
+    "failed": 0,
+    "partner_and_connected_backend": 33,
+    "hq_regressions": 20,
+    "ci": [
+      {
+        "id": 41903208148,
+        "status": "completed",
+        "conclusion": "success",
+        "html_url": "https://github.com/shiftsometimber/shift-hq/actions/runs/41903208148"
+      }
+    ],
+    "limits": "SQLite/native-handler integration with fictional identities. Core password/MFA uses a protocol fixture, not real accounts. No real prescribing/dispensing/provider acceptance is claimed.",
+    "coverage": [
+      "Same-order HQ assignment, review, member agreement, cryptographic signing, pharmacy stages and original Core member order visibility",
+      "Order-linked two-way conversations plus HQ Home attention queue",
+      "Role/organisation/assignment boundaries, revocation, CSRF, one-use activation, limited MFA enrolment, wrong-origin signatures, stale versions, stock checks",
+      "Atomic outbox failure rollback, idempotent retry, bounded-backlog visibility, unrelated-order independence and pending-supply blocking",
+      "Browser logout/revocation clears private conversations and owner counts; narrow-frame CSS checks"
+    ]
+  },
+  "browser_evidence": {
+    "live": [
+      "Public HQ shell with current owner-5 and partner-desk-3 assets and grouped navigation",
+      "Partner landing with enabled invite-only sign-in"
+    ],
+    "fictional": [
+      "HQ Home displays partner question from the same SQLite handler",
+      "Partner sees HQ reply and HQ sees partner reply on TEST-SHARED-1042",
+      "Expired/revoked partner access clears conversation, order selector and forms",
+      "HQ logout clears conversation, metrics, badge and owner-only panel"
+    ],
+    "not_verified_live": [
+      "Authenticated HQ business data and timings",
+      "Real professional MFA, provider assessment acceptance or patient fulfilment"
+    ]
+  },
+  "speed": {
+    "metric": "Partner sign-in shell usable",
+    "environment": "Production partner portal, desktop cloud Chrome; ordinary reloads, warm cache, no CPU/network throttling. Includes shell and enabled controls; excludes authentication and private work.",
+    "n": 20,
+    "medianMs": 134.5,
+    "p95Ms": 715,
+    "samplesMs": [
+      790,
+      340,
+      111,
+      350,
+      575,
+      612,
+      139,
+      100,
+      120,
+      119,
+      111,
+      715,
+      95,
+      354,
+      136,
+      127,
+      121,
+      115,
+      157,
+      133
+    ],
+    "overflowCount": 0,
+    "disabledCount": 0,
+    "before": null
+  },
+  "retry_schedule": {
+    "schedules": [
+      {
+        "cron": "*/5 * * * *",
+        "created_on": "2026-11-04T19:30:49.559507Z",
+        "modified_on": "2026-11-04T19:30:49.559507Z"
+      }
+    ]
+  },
+  "operational_readiness": {
+    "approved_professional_accounts": 0,
+    "ready_for_real_clinical_use": false,
+    "remaining": [
+      "Named prescribing and dispensing organisations, qualified professional verification and current grants",
+      "Approved clinical protocol/assessment and appropriate evidence retention configuration",
+      "Qualified independent signing-key governance and real-identity acceptance",
+      "Existing private member assessment restriction remains in place"
+    ]
+  },
+  "business_information": {
+    "available_framework": [
+      "Paid order value with source/period",
+      "Registrations, return cohorts and helpfulness ratings with denominators",
+      "Owner, age, priority and next action for support, tasks, handovers and partner questions",
+      "Clinical assignments, pharmacy progress, exceptions and pending synchronisation"
+    ],
+    "not_connected": [
+      "Reconciled bank/cash balance, settlement timing, liabilities and cash forecast",
+      "Full prescribing/pharmacy/product/fulfilment/acquisition costs and actual contribution",
+      "Attributable acquisition cost, payback and commercial repeat-purchase cohorts"
+    ]
+  },
+  "communications": {
+    "emails_sent": 0,
+    "invitations_sent": 0,
+    "whatsapp_sent": 0,
+    "charges_or_refunds": 0
+  },
+  "screenshots": [
+    {
+      "name": "shift-hq-live-final-20261104.jpg",
+      "library_file_id": "libfile_868320100b408191ad5dbf345974dbe7",
+      "kind": "live public/signed-out capture"
+    },
+    {
+      "name": "shift-partner-live-final-20261104.jpg",
+      "library_file_id": "libfile_c0bc14f515a88191b8aee1691cd6ebf8",
+      "kind": "live public/signed-out capture"
+    },
+    {
+      "name": "shift-owner-home-partner-question-fictional-20261104.jpg",
+      "library_file_id": "libfile_b1cd1ec9b3f08191b7f64e09dbe212b3",
+      "kind": "fictional local QA — same-order partner question on HQ Home"
+    }
+  ]
+}

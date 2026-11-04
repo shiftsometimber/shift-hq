@@ -3,13 +3,15 @@
 Partner address: https://partner.shiftsometimber.co.uk/
 HQ address: https://hq.shiftsometimber.co.uk/
 
+**4 November: software deployed and verified; real partner acceptance remains pending.** The four production components are serving the connected release. All 53 checks passed. No professional accounts have yet been approved in production. The approved provider assessment, professional governance and retention configuration, and real-identity acceptance remain separate requirements. Cash and full cost feeds are not connected. See connected-release.json for exact serving versions, preserved controls, scope and evidence.
+
 The connected release adds the **Partner desk** to the existing HQ, plus a separate partner sign-in and role-scoped workspace. Existing HQ modules and the protected hq-v111.js remain intact. My Timber, checkout, payment processing and the Core deployment are not replaced.
 
 ## One order, shared progress
 
 The existing clinical, prescription and dispensing handlers remain authoritative in the existing D1 database. A transactional outbox projects their confirmed events into the existing Core prescription ledger and order registry. The member order API reads those same orders. Approval, verified signature, pharmacy receipt, preparation, dispatch and delivery remain distinct steps. A projection failure is visible, durable and retried; further supply changes for that order are blocked until it is reconciled. No second order store is created.
 
-Partner questions and HQ replies use order-linked internal threads. HQ shows questions, unassigned reviews, exceptions and pending synchronisation; assigned verified professionals can use **Talk to SHIFT HQ**. These actions do not send email, SMS or WhatsApp. Each staff request rechecks current identity, MFA, organisation, professional evidence, grants and assignment.
+Partner questions and HQ replies use order-linked internal threads. HQ Home includes partner questions in Needs your attention; Partner desk shows questions, unassigned reviews, exceptions and pending synchronisation; assigned verified professionals can use **Talk to SHIFT HQ**. These actions do not send email, SMS or WhatsApp. Each staff request rechecks current identity, MFA, organisation, professional evidence, grants and assignment.
 
 ## Access and commissioning
 
