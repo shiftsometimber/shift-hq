@@ -1,0 +1,128 @@
+{
+  "date": "2026-11-04",
+  "source_commit": "97d21931954326e457c9268ef660a77f1540e7fb",
+  "worker": "shift-partner-portal",
+  "bundle_sha256": "d99f76d718a41fff27638a7385f9e71267f745e563d2bc9461913a3e372f650b",
+  "deployment": {
+    "id": "74d46c4e-e007-463d-8303-41899f5280f0",
+    "created_on": "2026-11-04T15:34:20.569503Z",
+    "versions": [
+      {
+        "version_id": "78eecc74-4286-405f-afc5-8dac762acb70",
+        "percentage": 100
+      }
+    ]
+  },
+  "custom_domain": {
+    "id": "69ba0d2dfea496bdfc2908cc87c39b261456e4f3",
+    "zone_id": "66ec3268950adcfc837b7b8b2f8356ed",
+    "zone_name": "shiftsometimber.co.uk",
+    "hostname": "partner.shiftsometimber.co.uk",
+    "service": "shift-partner-portal",
+    "environment": "production",
+    "cert_id": "81be8029-35d7-4bcb-bb70-231a83dceaba",
+    "previews_enabled": false,
+    "enabled": true
+  },
+  "access": {
+    "PARTNER_ACCESS_ENABLED": false,
+    "professional_accounts_created": 0,
+    "invitations_sent": 0,
+    "live_clinical_actions": 0,
+    "communications_sent": 0
+  },
+  "bindings": [
+    {
+      "name": "CLINICAL",
+      "service": "shift-hq-clinical-portal"
+    },
+    {
+      "name": "HQ_AUTH",
+      "service": "shift-core"
+    },
+    {
+      "name": "PORTAL_SESSION_KEY",
+      "type": "secret_text"
+    }
+  ],
+  "tests": {
+    "unit": {
+      "passed": 18,
+      "failed": 0
+    },
+    "ci": {
+      "run_id": 41858886211,
+      "conclusion": "success",
+      "url": "https://github.com/shiftsometimber/shift-hq/actions/runs/41858886211"
+    }
+  },
+  "browser_verification": [
+    {
+      "url": "https://partner.shiftsometimber.co.uk/",
+      "result": "PASS — live landing, sign-in disabled, onboarding notice visible"
+    },
+    {
+      "url": "https://partner.shiftsometimber.co.uk/demo",
+      "result": "PASS — stage selector updates four role views with one fictional reference"
+    },
+    {
+      "url": "https://partner.shiftsometimber.co.uk/demo/clinical",
+      "result": "PASS — deployed clinical module and fictional clinical card load on new host"
+    },
+    {
+      "url": "https://partner.shiftsometimber.co.uk/demo/dispensing",
+      "result": "PASS — fictional pharmacy acknowledgement updates detail and queue; unavailable stock blocks preparation"
+    },
+    {
+      "url": "https://partner.shiftsometimber.co.uk/api/clinical",
+      "result": "PASS — professional_onboarding_not_open; no case data returned"
+    },
+    {
+      "url": "https://partner.shiftsometimber.co.uk/workspace/clinical",
+      "result": "PASS — commissioning hold visible; no case data returned"
+    },
+    {
+      "environment": "managed local preview",
+      "result": "PASS — landing, clinical and dispensing fit 375px content widths with no horizontal overflow"
+    }
+  ],
+  "verification_limits": [
+    "Command-line HTTP request blocked by Cloudflare error 1010; no further command-line site requests made.",
+    "No live professional login, real-patient review, signing, prescribing or fulfilment acceptance performed. Requires separately approved onboarding and commissioning.",
+    "Detailed clinical and dispensing demonstrations have separate fictional fixtures; the joined overview illustrates the common status model."
+  ],
+  "preserved_services": {
+    "shift-hq": {
+      "deployment_id": "41dc0309-f49d-4071-a830-41ea968733ea",
+      "versions": [
+        {
+          "version_id": "55b6aede-5c6a-4c42-8cb4-b8de9be39925",
+          "percentage": 100
+        }
+      ],
+      "created_on": "2026-11-04T14:36:33.664796Z"
+    },
+    "shift-hq-clinical-portal": {
+      "deployment_id": "281c6154-30a3-495c-839f-dfdf5178ad97",
+      "versions": [
+        {
+          "version_id": "f65e4594-fd83-49d4-b20d-f43fcee88e1c",
+          "percentage": 100
+        }
+      ],
+      "created_on": "2026-10-24T20:54:19.574342Z"
+    },
+    "shift-core": {
+      "deployment_id": "e27b48f9-dde1-432f-af6f-41ac701f6fd4",
+      "versions": [
+        {
+          "version_id": "a301697d-5586-4839-aa44-5edb01105731",
+          "percentage": 100
+        }
+      ],
+      "created_on": "2026-11-04T14:50:19.508883Z"
+    }
+  },
+  "protected_hq_blob": "082a1bf557cf8ec57279db9b155a4a7fc5010b42",
+  "rollback": "Roll back shift-partner-portal only; retain access hold. Existing HQ, Core and clinical services were not changed by this release."
+}
