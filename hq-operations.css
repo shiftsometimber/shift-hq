@@ -1,0 +1,56 @@
+/* Operational hierarchy, shared states and accessible controls. */
+.management-hq .hq-management-heading { background:#050505; color:#e7e3da; border-radius:12px; padding:22px; margin-bottom:18px; }
+.management-hq .hq-management-heading h2 { font-size:26px; margin:0 0 8px; font-weight:650; }
+.management-hq .hq-management-heading p { color:#cdc9c0; margin:0; line-height:1.5; }
+.management-hq .hq-home-actions { display:flex; gap:8px; flex-wrap:wrap; flex-shrink:0; }
+.management-hq .hq-home-actions button { border:1px solid #707762; border-radius:7px; padding:10px 12px; background:#e7e3da; color:#050505; }
+.management-hq .hq-home-actions .primary { background:#707762; color:#fff; }
+.management-hq .hq-management-columns { grid-template-columns:minmax(0,1.65fr) minmax(280px,1fr); align-items:start; }
+.management-hq .hq-management-columns > article { min-width:0; }
+.management-hq .hq-queue-note { color:#606456; font-size:13px; line-height:1.5; margin:4px 0 14px; }
+.management-hq .hq-attention-controls { display:flex; align-items:center; gap:10px; padding-bottom:14px; border-bottom:1px solid #d5d1c7; flex-wrap:wrap; }
+.management-hq .hq-attention-controls label { font-size:13px; font-weight:600; }
+.management-hq .hq-attention-controls select { background:#f7f5ef; color:#22251f; border:1px solid #aaa99c; border-radius:6px; padding:8px; }
+.management-hq #hq-attention-count { color:#606456; font-size:12px; }
+.management-hq .hq-action-item { padding:15px 0; border-bottom:1px solid #d5d1c7; }
+.management-hq .hq-action-item:last-child { border-bottom:0; padding-bottom:0; }
+.management-hq .hq-action-top,.management-hq .hq-action-bottom { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.management-hq .hq-action-top { font-size:12px; color:#606456; margin-bottom:9px; }
+.management-hq .hq-action-kind { font-weight:650; color:#424b36; background:#e6e8df; border-radius:5px; padding:5px 7px; }
+.management-hq .hq-action-priority { background:#f1dfce; color:#794321; }
+.management-hq .hq-action-item > strong { font-size:16px; overflow-wrap:anywhere; }
+.management-hq .hq-action-item p { line-height:1.5; font-size:14px; margin:6px 0 12px; overflow-wrap:anywhere; }
+.management-hq .hq-action-bottom > span { font-size:12px; color:#606456; line-height:1.5; overflow-wrap:anywhere; }
+.management-hq .hq-action-bottom button,.management-hq .hq-state button { border:1px solid #707762; color:#303727; background:transparent; padding:9px 11px; border-radius:6px; font-weight:600; flex-shrink:0; }
+.management-hq .hq-state { padding:20px 0 8px; line-height:1.5; min-height:145px; }
+.management-hq .hq-state p { color:#606456; font-size:14px; margin:8px 0 14px; }
+.management-hq .hq-state strong { font-size:16px; font-weight:600; }
+.management-hq .hq-partial-warning { background:#f0e6d4; color:#684c23; padding:12px; border-radius:7px; font-size:13px; line-height:1.5; }
+.management-hq .hq-workload-row { display:grid; grid-template-columns:1fr auto; gap:8px 14px; width:100%; border:0; border-bottom:1px solid #d5d1c7; background:transparent; text-align:left; padding:14px 0; color:#22251f; }
+.management-hq .hq-workload-row small { display:block; margin-top:5px; font-size:12px; }
+.management-hq .hq-workload-row strong { font-size:22px; font-weight:600; }
+.management-hq .hq-workload-row:disabled { opacity:1; cursor:default; }
+.management-hq .hq-workload-bar { grid-column:1/-1; height:5px; background:#e4e2d9; border-radius:3px; }
+.management-hq .hq-workload-bar i { display:block; height:100%; background:#707762; border-radius:3px; }
+.management-hq .hq-source-status { margin-top:18px; }
+.management-hq .hq-source-status > summary { font-weight:600; cursor:pointer; font-size:14px; padding:8px 0; }
+.management-hq .hq-source-row { display:flex; align-items:start; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid #d5d1c7; font-size:12px; }
+.management-hq .hq-source-row small { display:block; margin-top:5px; font-size:12px; line-height:1.5; }
+.management-hq .hq-data-state { display:inline-block; font-size:11px; padding:5px 7px; border-radius:5px; line-height:1.4; font-weight:600; flex-shrink:0; }
+.management-hq .hq-data-available { color:#35432b; background:#e3e8db; }
+.management-hq .hq-data-error,.management-hq .hq-data-disconnected { color:#704b22; background:#eee0cc; }
+.management-hq .hq-data-restricted { color:#55584e; background:#e7e5dc; }
+.management-hq .hq-headlines article { border:1px solid #d5d1c7; }
+.management-hq .hq-headlines small { line-height:1.5; margin-top:4px; overflow-wrap:anywhere; }
+.management-hq .hq-headlines .hq-data-state { margin-top:8px; }
+.management-hq .hq-nav-count { display:inline-block; margin-left:8px; padding:2px 6px; border-radius:5px; font-size:11px; background:#e7e3da; color:#050505; }
+.management-hq .hq-nav-group summary { line-height:1.4; }
+.management-hq :is(button,input,select,summary,a):focus-visible { outline:3px solid #707762; outline-offset:3px; }
+.management-hq aside :is(button,summary):focus-visible { outline-color:#e7e3da; }
+.management-hq button:disabled { cursor:default; }
+.management-hq .hq-skeleton { height:46px; margin-top:15px; background:#e7e4db; border-radius:6px; animation:hq-queue-pulse 1.5s ease-in-out infinite alternate; }
+.management-hq .hq-skeleton:nth-of-type(2) { width:85%; }
+@keyframes hq-queue-pulse { from { opacity:.55; } to { opacity:1; } }
+@media(prefers-reduced-motion:reduce) { .management-hq .hq-skeleton { animation:none; } }
+@media(max-width:1150px) { .management-hq .hq-management-columns { grid-template-columns:1fr; } .management-hq .hq-management-heading { align-items:flex-start; flex-direction:column; } }
+@media(max-width:760px) { .management-hq main > header { gap:8px; align-items:flex-start; margin-bottom:12px; } .management-hq main > header h1 { margin:3px 0 10px; } .management-hq .hq-management-heading { padding:18px; } .management-hq .hq-home-actions { width:100%; } .management-hq .hq-home-actions button { flex:1; } .management-hq .hq-action-bottom { align-items:flex-start; flex-direction:column; gap:10px; } .management-hq .hq-action-bottom button { width:100%; } .management-hq .hq-headlines { gap:10px; } .management-hq .hq-management-columns > article { padding:16px; } .management-hq .hq-home-actions button,.management-hq .hq-attention-controls select { font-size:16px; } }

@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - 'hq.js'
+      - 'hq-management.js'
+      - 'hq-operations.js'
+      - 'hq-operations.css'
+      - 'hq-operations.test.cjs'
       - 'radar-source-review-ui.test.mjs'
       - 'radar-source-review-logic.test.mjs'
       - 'hq-v111.js'
@@ -22,8 +26,12 @@ jobs:
       - name: Syntax check HQ runtimes
         run: |
           node --check hq.js
+          node --check hq-management.js
+          node --check hq-operations.js
           node --check hq-v111.js
           node --check turnstile-auth-v1.js
+      - name: Verify HQ source states and session-bound rendering
+        run: node --test hq-operations.test.cjs
       - name: Protect V1.11 runtime and Radar shell wiring
         run: |
           # Reviewed HQ management baseline: role-aware CRM startup plus login guards, commerce
