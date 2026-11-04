@@ -26,6 +26,8 @@ test('one real SQLite order: HQ assignment → partner login/MFA → clinical re
    const member=await json(memberResponse);assert.equal(member.orders[0].orderNumber,ORDER);assert.equal(member.orders[0].clinicalStatus,status);assert(!JSON.stringify(member).includes('clinical-signature:'));assert(!JSON.stringify(member).includes('clinical-professional:'));
    const owner=await json(await f.hq('/partner-desk'));assert.equal(owner.orders[0].sharedStatus,status);
   }
+  await json(await f.hq('/partner-desk/assign',1,{recordId:RECORD,staffUserId:3,active:false}));
+  assert.equal((await json(await f.hq('/partner-desk'))).counts.unassigned,0,'Completed supply must not become an unassigned clinical review');
   const visible=await json(await f.member());assert(!JSON.stringify(visible).includes('Fictional sandbox decision only'));
   assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM medicine_prescription_events').get().n,6);
   assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM partner_workflow_sync WHERE status='pending'").get().n,0);
