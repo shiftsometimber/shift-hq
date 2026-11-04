@@ -240,6 +240,7 @@
       get('management-asof').textContent = report ? (report.period.start + ' to ' + report.period.end + ' · report generated ' + formatTime(report.generatedAt) + ' · Europe/London') : 'Report ' + (reportFailure?.stateLabel || 'unavailable') + ' · queues checked separately';
       removeCounts();
       for (const s of loaded) {
+        if (s.key === 'partnerquestions') continue; // Partner desk owns its single live navigation badge.
         const count = attentionItems(s).length, button = nav.querySelector('button[data-view="' + s.view + '"]');
         if (!button || !count) continue;
         const badge = document.createElement('span'); badge.dataset.hqQueueCount = s.key; badge.className = 'hq-nav-count';
