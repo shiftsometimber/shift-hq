@@ -1,6 +1,6 @@
 import original,{existingHqIdentity,partnerRoute,prescriptionHqRoute,hqClinicalRoute,commissioningRoute,notificationManagementRoute,internalDispensingAdapters,credentialsCurrent,currentPartner} from './clinical-kernel.mjs';
 import {ensureSharedSchema} from './schema.mjs';
-import {withSharedOutbox,drainSharedWorkflow} from './shared-workflow.mjs';
+import {withSharedOutbox,drainSharedWorkflow,completeSharedResponse} from './shared-workflow.mjs';
 import {hqDeskRoute} from './hq-desk.mjs';
 const API='/v1/hq/clinical';
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private','Access-Control-Allow-Origin':'https://hq.shiftsometimber.co.uk','Access-Control-Allow-Credentials':'true','Vary':'Origin'}});
@@ -22,17 +22,12 @@ export default {
    const flags={...env,NOTIFICATION_EVENTS_ENABLED:'true',PARTNER_OPERATIONS_ENABLED:'true',PARTNER_INTERNAL_SETUP_ONLY:env.PARTNER_INTERNAL_SETUP_ONLY==='false'?'false':'true',PRESCRIPTION_WORKFLOW_ENABLED:'true',PARTNER_NOTIFICATION_REVIEW_ENABLED:'true'};
    if(env.SHARED_ORDER_WORKFLOW_ENABLED==='true')await ensureSharedSchema(env.DB);
    const run=withSharedOutbox(flags);
-   const rx=await prescriptionHqRoute(request,run,existingHqIdentity);if(rx)return complete(rx,env);
+   const rx=await prescriptionHqRoute(request,run,existingHqIdentity);if(rx)return completeSharedResponse(rx,request,env);
    const setup=await commissioningRoute(request,run,existingHqIdentity);if(setup)return setup;
    const notifications=await notificationManagementRoute(request,run,existingHqIdentity);if(notifications)return notifications;
-   const partner=await partnerRoute(request,run,existingHqIdentity,internalDispensingAdapters(run));if(partner)return complete(partner,env);
-   return complete(await hqClinicalRoute(request,run,existingHqIdentity),env);
+   const partner=await partnerRoute(request,run,existingHqIdentity,internalDispensingAdapters(run));if(partner)return completeSharedResponse(partner,request,env);
+   return completeSharedResponse(await hqClinicalRoute(request,run,existingHqIdentity),request,env);
   }catch{return json({error:'clinical_service_unavailable'},503);}
  },
  async scheduled(event,env,ctx){if(env.SHARED_ORDER_WORKFLOW_ENABLED==='true')ctx.waitUntil(drainSharedWorkflow(env));}
 };
-async function complete(response,env){
- if(!response||!response.ok||env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return response;
- const outcome=await drainSharedWorkflow(env),headers=new Headers(response.headers);headers.set('X-Shift-Shared-Order-Sync',outcome.pending?'pending':'complete');
- return new Response(response.body,{status:response.status,headers});
-}

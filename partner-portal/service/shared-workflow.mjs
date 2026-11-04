@@ -83,5 +83,18 @@ export async function drainSharedWorkflow(env,{orderNumber,limit=50}={}){
   try{await projectOne(env.DB,event);await env.DB.prepare("UPDATE partner_workflow_sync SET status='completed',completed_at=?,attempts=attempts+1,last_error=NULL WHERE id=? AND status='pending'").bind(stamp(),event.id).run();completed++;}
   catch(error){blocked.add(event.order_number);await env.DB.prepare("UPDATE partner_workflow_sync SET attempts=attempts+1,last_error=? WHERE id=? AND status='pending'").bind(safeError(error),event.id).run();}
  }
- return {completed,pending:blocked.size};
+ const pending=await env.DB.prepare(`SELECT COUNT(DISTINCT order_number) n FROM partner_workflow_sync WHERE status='pending'${orderNumber?' AND order_number=?':''}`).bind(...orderNumber?[orderNumber]:[]).first();
+ return {completed,pending:Number(pending?.n||0)};
+}
+// Request completion reconciles only the authorised order. Other orders retry
+// through the scheduled drain, so an unrelated backlog cannot delay this reply
+// or produce a misleading warning about the current member's order.
+export async function completeSharedResponse(response,request,env){
+ if(!response||!response.ok||env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return response;
+ const path=new URL(request.url).pathname,fulfilment=path.match(/\/clinical\/partners\/fulfilment\/([A-Za-z0-9_-]{1,100})(?:\/|$)/),record=path.match(/\/(?:clinical|clinical-records)\/(?:prescriptions\/)?([a-f0-9-]{36})(?:\/|$)/i);
+ let orderNumber=fulfilment?.[1];
+ if(record){const linked=await env.DB.prepare('SELECT order_number FROM clinical_member_records WHERE id=?').bind(record[1]).first();orderNumber=linked?.order_number;}
+ if(!orderNumber)return response;
+ const outcome=await drainSharedWorkflow(env,{orderNumber}),headers=new Headers(response.headers);headers.set('X-Shift-Shared-Order-Sync',outcome.pending?'pending':'complete');
+ return new Response(response.body,{status:response.status,headers});
 }
