@@ -1,9 +1,9 @@
 name: Partner portal isolation
 on:
   push:
-    paths: ['partner-portal/**', '.github/workflows/partner-portal.yml']
+    paths: ['partner-portal/**', 'hq-*.js', 'hq-*.css', 'index.html', '.assetsignore', '.github/workflows/partner-portal.yml']
   pull_request:
-    paths: ['partner-portal/**', '.github/workflows/partner-portal.yml']
+    paths: ['partner-portal/**', 'hq-*.js', 'hq-*.css', 'index.html', '.assetsignore', '.github/workflows/partner-portal.yml']
 permissions:
   contents: read
 jobs:

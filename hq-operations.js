@@ -153,7 +153,7 @@
     let pending = null, controller = null, activePrincipal = null, sources = [], report = null, lastRefresh = null, reportFailure = null;
     const queue = get('management-attention'), nav = document.querySelector('aside nav');
     const heading = document.querySelector('.hq-management-heading');
-    heading.querySelector('h2').textContent = 'Your next move.';
+    heading.querySelector('h2').textContent = 'Your daily business brief.';
     const actions = document.createElement('div');
     actions.className = 'hq-home-actions';
     actions.innerHTML = '<button id="hq-home-refresh" class="secondary" type="button">Refresh overview</button>';
@@ -172,6 +172,12 @@
     get('management-operations').after(sourcePanel);
     const columns = document.querySelector('.hq-management-columns');
     columns.after(get('management-headlines'));
+    const ownerContext = document.createElement('section');
+    ownerContext.className = 'hq-owner-context panel'; ownerContext.hidden = true;
+    ownerContext.innerHTML = '<h2>Cash, margin & commitments</h2><p>Paid order value is a sales measure. A cash balance and profit need their own reconciled sources.</p><div class="hq-owner-gaps"><article><h3>Cash available</h3><strong>Not connected</strong><p>Bank balances, pending payouts, refunds due and upcoming bills are not included in this overview.</p></article><article><h3>Actual contribution</h3><strong>Not connected</strong><p>Prescribing, pharmacy, stock, delivery, payment and acquisition costs are needed before a margin or break-even figure can be confirmed.</p></article><article><h3>Growth quality</h3><strong>Partly available</strong><p>Registration and return cohorts are shown below with their definitions. Acquisition cost, repeat purchase, cancellations and payback need linked commercial data.</p></article></div><p class="hq-muted">Review support and handovers above for the owner, age and next action. Open Partner desk for order-linked questions, clinical assignments and pharmacy progress.</p><button type="button" data-owner-report>Open management reports</button> <button type="button" data-owner-partners>Open Partner desk</button>';
+    columns.before(ownerContext);
+    ownerContext.querySelector('[data-owner-report]').onclick = () => get('home-reports').click();
+    ownerContext.querySelector('[data-owner-partners]').onclick = () => navigate('partnerdesk');
     const footnote = document.querySelector('#dashboard > .hq-muted');
     if (footnote) footnote.textContent = 'Work queues are current snapshots. Financial figures use the selected report dates; Today cohort rates carry their own window.';
 
@@ -179,6 +185,7 @@
     function clear(message = 'Sign in to load your overview.') {
       gate.cancel(); controller?.abort(); controller = null; pending = null; activePrincipal = null;
       sources = []; report = null; lastRefresh = null; reportFailure = null;
+      ownerContext.hidden = true;
       get('management-headlines').replaceChildren(); get('management-operations').replaceChildren();
       get('hq-home-sources').replaceChildren(); get('hq-attention-count').textContent = '';
       queue.removeAttribute('aria-busy'); queue.innerHTML = '<div class="hq-state"><strong>' + esc(message) + '</strong><p>Your overview loads after a successful HQ sign-in.</p></div>';
@@ -194,6 +201,7 @@
       get('management-asof').textContent = 'Refreshing overview · Europe/London';
     }
     function render() {
+      ownerContext.hidden = !['owner', 'admin'].includes(getPrincipal()?.role);
       const metrics = new Map((report?.metrics || []).map(m => [m.key, m]));
       const filter = get('hq-attention-filter').value;
       const loaded = sources.filter(s => s.status === 'available');

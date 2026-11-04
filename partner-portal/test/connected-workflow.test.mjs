@@ -9,11 +9,15 @@ test('one real SQLite order: HQ assignment → partner login/MFA → clinical re
  const f=await fixture();try{
   const {cookie,proposal}=await reviewAndPropose(f);assert.equal(proposal.orderNumber,ORDER);
   await issue(f,cookie,proposal);assert.equal(f.order().clinical_status,'sent_to_pharmacy');
-  const pharmacy=await f.login('DSPTEST');const queue=await json(await f.partner('/partners/fulfilment',pharmacy));assert.equal(queue.orders[0].orderNumber,ORDER);
+  const pharmacy=await f.login('DSPTEST');
+  const parallel=await Promise.all([f.partner('/partner-desk',pharmacy),f.partner('/partners/fulfilment',pharmacy)]);for(const response of parallel)assert.equal(response.status,200);
+  const queue=await json(await f.partner('/partners/fulfilment',pharmacy));assert.equal(queue.orders[0].orderNumber,ORDER);
   const ask=await json(await f.partner('/partner-desk/threads',pharmacy,{orderNumber:ORDER,subject:'Order handover',priority:'normal',message:'Fictional question: please confirm the handover reference.'}),201);
   const desk=await json(await f.hq('/partner-desk'));assert.equal(desk.counts.awaitingHq,1);assert.equal(desk.threads[0].id,ask.id);
   await json(await f.hq('/partner-desk/threads/'+ask.id+'/reply',1,{version:1,message:'Fictional HQ reply: the reference is attached to this order.'}));
   const conversation=await json(await f.partner('/partner-desk/threads/'+ask.id,pharmacy));assert.equal(conversation.messages[1].actor_kind,'hq');assert.equal(conversation.thread.order_number,ORDER);
+  await json(await f.partner('/partner-desk/threads/'+ask.id+'/reply',pharmacy,{version:2,message:'Fictional partner reply returned to HQ.'}));
+  assert.equal((await json(await f.hq('/partner-desk/counts'))).awaitingHq,1);
   for(const [action,status]of [['accept','pharmacy_received'],['prepare','dispensing'],['dispatch','dispatched'],['delivered','fulfilled']]){
    const current=await json(await f.partner('/partners/fulfilment/'+ORDER,pharmacy));
    await json(await f.partner('/partners/fulfilment/'+ORDER+'/action',pharmacy,{version:current.order.version,action,carrier:'dpd',trackingNumber:'12345678901234',message:'Fictional delivery confirmation, no real shipment.'}));
