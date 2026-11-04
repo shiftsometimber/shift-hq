@@ -23,8 +23,15 @@ jobs:
       - run: node partner-portal/qa/build-native-auth.mjs && node partner-portal/qa/full-loop-scenario.mjs --sstrx
       - run: npx playwright install --with-deps chromium webkit
       - run: node partner-portal/qa/browser-acceptance.mjs
+      - run: node partner-portal/qa/measure-api.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: sstrx-acceptance-${{ github.sha }}
-          path: .partner-qa/
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            .partner-qa/*.bundle.mjs
+            .partner-qa/full-loop/report.json
+            .partner-qa/browser/acceptance.json
+            .partner-qa/api-performance.json
