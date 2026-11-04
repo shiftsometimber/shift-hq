@@ -59,31 +59,31 @@
   "browser_verification": [
     {
       "url": "https://partner.shiftsometimber.co.uk/",
-      "result": "PASS — live landing, sign-in disabled, onboarding notice visible"
+      "result": "PASS \u2014 live landing, sign-in disabled, onboarding notice visible"
     },
     {
       "url": "https://partner.shiftsometimber.co.uk/demo",
-      "result": "PASS — stage selector updates four role views with one fictional reference"
+      "result": "PASS \u2014 stage selector updates four role views with one fictional reference"
     },
     {
       "url": "https://partner.shiftsometimber.co.uk/demo/clinical",
-      "result": "PASS — deployed clinical module and fictional clinical card load on new host"
+      "result": "PASS \u2014 deployed clinical module and fictional clinical card load on new host"
     },
     {
       "url": "https://partner.shiftsometimber.co.uk/demo/dispensing",
-      "result": "PASS — fictional pharmacy acknowledgement updates detail and queue; unavailable stock blocks preparation"
+      "result": "PASS \u2014 fictional pharmacy acknowledgement updates detail and queue; unavailable stock blocks preparation"
     },
     {
       "url": "https://partner.shiftsometimber.co.uk/api/clinical",
-      "result": "PASS — professional_onboarding_not_open; no case data returned"
+      "result": "PASS \u2014 professional_onboarding_not_open; no case data returned"
     },
     {
       "url": "https://partner.shiftsometimber.co.uk/workspace/clinical",
-      "result": "PASS — commissioning hold visible; no case data returned"
+      "result": "PASS \u2014 commissioning hold visible; no case data returned"
     },
     {
       "environment": "managed local preview",
-      "result": "PASS — landing, clinical and dispensing fit 375px content widths with no horizontal overflow"
+      "result": "PASS \u2014 landing, clinical and dispensing fit 375px content widths with no horizontal overflow"
     }
   ],
   "verification_limits": [
@@ -124,5 +124,103 @@
     }
   },
   "protected_hq_blob": "082a1bf557cf8ec57279db9b155a4a7fc5010b42",
-  "rollback": "Roll back shift-partner-portal only; retain access hold. Existing HQ, Core and clinical services were not changed by this release."
+  "rollback": "Roll back shift-partner-portal only; retain access hold. Existing HQ, Core and clinical services were not changed by this release.",
+  "acceptance_review": {
+    "reviewed_at": "2026-11-04T18:05:17.629421+00:00",
+    "timezone": "Europe/London",
+    "verdict": "NOT_READY_FOR_OPERATIONAL_PARTNER_USE",
+    "production_version_verified": "78eecc74-4286-405f-afc5-8dac762acb70",
+    "clinical_version_verified": "f65e4594-fd83-49d4-b20d-f43fcee88e1c",
+    "automated_retest": {
+      "portal_security_checks": {
+        "passed": 18,
+        "failed": 0
+      },
+      "hq_source_regression_checks": {
+        "passed": 19,
+        "failed": 0
+      },
+      "evidence_desk_source_gate": "PASS",
+      "protected_hq_runtime_blob": "082a1bf557cf8ec57279db9b155a4a7fc5010b42"
+    },
+    "isolated_deployed_service_audit": {
+      "source_sha256": "b7bd886a5357222af1717f053959d608094dd32f07c072440166bf4998f5d3c5",
+      "network_requests": 0,
+      "database_calls": 0,
+      "passed_negative_controls": 6,
+      "result": "Login, MFA, clinical queue/detail and fulfilment remain blocked even with input environment flags set true in the isolated sandbox; the deployed wrapper overrides them. These are evidence of operational holds, not readiness passes."
+    },
+    "signing_gateway_probe": {
+      "environment": "local Worker with fictional verified clinician session and mocked services",
+      "blocked_endpoints": [
+        "keys/challenge",
+        "keys/register",
+        "signing-challenge",
+        "sign"
+      ],
+      "status": 403,
+      "underlying_signing_rp_id": "hq.shiftsometimber.co.uk",
+      "underlying_signing_origin": "https://hq.shiftsometimber.co.uk",
+      "result": "Current new-origin signing path is not commissioned. Enabling only the portal flag does not resolve this."
+    },
+    "requirements": [
+      {
+        "requirement": "Separate partner address and consistent grouped navigation",
+        "result": "PASS",
+        "evidence": "Live landing, joined overview and role demonstrations render at partner.shiftsometimber.co.uk."
+      },
+      {
+        "requirement": "Keep HQ internal and preserve existing source functions",
+        "result": "PASS_FOR_SOURCE_AND_MOCKED_BOUNDARY_CHECKS",
+        "limit": "Authenticated production HQ regression and production professional access were not tested."
+      },
+      {
+        "requirement": "Partner sign-in and MFA usable by approved professionals",
+        "result": "BLOCKED",
+        "evidence": "PARTNER_ACCESS_ENABLED=false plus upstream internal-setup and partner-login hard-coded holds."
+      },
+      {
+        "requirement": "Assigned clinical review and evidence casework",
+        "result": "BLOCKED",
+        "evidence": "Clinical service forces CLINICAL_CASEWORK_ENABLED/CLINICAL_REVIEW_READY/CLINICAL_CONTEXT_ENABLED=false."
+      },
+      {
+        "requirement": "Valid prescription handover through the new partner journey",
+        "result": "BLOCKED",
+        "evidence": "Signing endpoints rejected by gateway; existing signing origin is HQ. No alternative provider integration accepted end to end."
+      },
+      {
+        "requirement": "Same order proceeds through clinician, pharmacy, HQ and member views",
+        "result": "NOT_PROVEN",
+        "evidence": "The joined overview is illustrative; clinician DEMO-0001 and pharmacy DEMO-1042 belong to separate in-browser fictional fixtures."
+      }
+    ],
+    "production_changes_during_review": false,
+    "real_accounts_created": 0,
+    "real_clinical_actions": 0,
+    "messages_sent": 0,
+    "next_acceptance": "Complete one fictional order through production-equivalent isolated services and distinct authorised test identities: login/MFA, assignment, review, valid prescription handover, pharmacy acknowledgement/preparation/dispatch, HQ and member status, revocation and cross-organisation rejection. Separately authorise any live access or provider activation.",
+    "live_browser_retest": [
+      {
+        "url": "https://partner.shiftsometimber.co.uk/",
+        "result": "Sign-in form disabled; commissioning notice visible."
+      },
+      {
+        "url": "https://partner.shiftsometimber.co.uk/demo",
+        "result": "Selector changes four illustrative role cards; states are not submitted to the operational backend."
+      },
+      {
+        "url": "https://partner.shiftsometimber.co.uk/demo/clinical",
+        "result": "Fictional clinical card DEMO-0001 renders; separate fixture from pharmacy."
+      },
+      {
+        "url": "https://partner.shiftsometimber.co.uk/demo/dispensing",
+        "result": "Fictional DEMO-1042 moves received \u2192 accepted \u2192 preparing \u2192 dispatched. Unavailable stock blocks preparation; tracking uses a fictional number; no delivery-link request or external notification sent."
+      },
+      {
+        "url": "https://partner.shiftsometimber.co.uk/workspace/clinical",
+        "result": "Live clinical workspace still displays awaiting commissioning; screenshot captured."
+      }
+    ]
+  }
 }

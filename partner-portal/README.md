@@ -4,6 +4,8 @@ Separate partner address: https://partner.shiftsometimber.co.uk
 
 This is a new Cloudflare Worker, `shift-partner-portal`. It does not replace HQ, change My Timber, duplicate the clinical database or create professional accounts. Clinical and dispensing work stays in the deployed `shift-hq-clinical-portal` service. Existing order IDs, optimistic versions, assignments, organisation checks, evidence restrictions, events and audit records remain authoritative. Authentication is delegated privately to the existing Core service.
 
+**Functional acceptance, 4 November 2026: NOT READY for operational partner use.** The deployment and its security checks pass, but professional login, clinical casework and fulfilment remain deliberately closed in the deployed clinical wrapper. Signing on the new origin is also blocked. The role demonstrations have separate fictional fixtures and do not prove one shared order passing through the complete workflow. See `release.json` → `acceptance_review` for the retest evidence and remaining acceptance. Changing only the portal environment flag will not resolve these holds.
+
 ## Grouped journey
 
 The portal brings together assigned clinical reviews, shared evidence, confirmed prescription handovers, pharmacy preparation and delivery tracking. Each team has a separate view of the same existing records. Clinical approval, a signed prescription, pharmacy acknowledgement and dispatch are distinct stages.
@@ -26,6 +28,8 @@ Opening professional access is a separate authorised onboarding/commissioning st
 ## Verification
 
 Run `node --test partner-portal/test/*.test.mjs` (Node 22+). The suite exercises session separation, MFA, role restrictions, CSRF, revocation and authority denials, same-record routing, closed commissioning, no-store responses and bounded inputs.
+
+The bounded `qa/closed-service-audit.mjs` runs a captured, hash-pinned deployed clinical Worker in a local VM with fictional identity only, no network and a database stub that fails on access. Its six passing negative controls prove the operational holds persist even when input environment flags are true; they are not operational acceptance passes. Run it with the path to the matching captured Worker. Never run these probes with a production database or real credentials.
 
 Run `node partner-portal/build.mjs` for the dependency-free Worker bundle at ignored `.partner-qa/worker.bundle.mjs`. The source snapshot used by `preview.mjs` is a local QA fixture captured from the deployed public shells/assets; it contains no business records and is not committed.
 
