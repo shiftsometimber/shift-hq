@@ -1,5 +1,7 @@
 name: Shift HQ Integration Gate
 on:
+  push:
+    branches: ['improve/hq-operations-20261104']
   pull_request:
     paths:
       - 'hq.js'

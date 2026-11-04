@@ -1,8 +1,18 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const { readFileSync } = require('node:fs');
 const { SOURCE_DEFINITIONS, overdue, metricValue, errorState, canRead, sourceResult, attentionItems, createRequestGate, timestamp } = require('./hq-operations.js');
 const now = new Date('2026-11-04T12:00:00Z');
 const source = (key, rows) => ({ ...SOURCE_DEFINITIONS.find(s => s.key === key), status: 'available', rows });
+
+test('Production packaging includes the new runtime assets and keeps the isolated fixture out', () => {
+  const rules = readFileSync(__dirname + '/.assetsignore', 'utf8').split(/\r?\n/).map(line => line.trim());
+  assert.ok(rules.includes('*'));
+  for (const path of ['hq-operations.js', 'hq-operations.css']) assert.ok(rules.includes('!' + path), path + ' must be published');
+  assert.ok(!rules.some(line => line.startsWith('!.qa-preview')));
+  const index = readFileSync(__dirname + '/index.html', 'utf8');
+  assert.ok(index.indexOf('<script src="hq-operations.js?') < index.indexOf('<script src="hq-management.js?'));
+});
 
 test('Unavailable, null, non-finite and malformed figures never become zero; genuine zero remains zero', () => {
   for (const m of [undefined, { status: 'unavailable', value: 0 }, { status: 'available', value: null }, { status: 'available', value: NaN }, { status: 'available', value: '0' }, { status: 'available', value: Infinity }]) assert.equal(metricValue(m), 'Unavailable');
