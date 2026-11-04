@@ -1,7 +1,7 @@
 import {DatabaseSync} from 'node:sqlite';
 import fs from 'node:fs';
 export function database(){
- const sql=new DatabaseSync(':memory:');sql.exec(fs.readFileSync(new URL('./schema-snapshot.sql',import.meta.url),'utf8'));
+ const sql=new DatabaseSync(':memory:',{enableDoubleQuotedStringLiterals:true});sql.exec(fs.readFileSync(new URL('./schema-snapshot.sql',import.meta.url),'utf8'));
  sql.exec(`CREATE TABLE medicine_inventory(variant_id INTEGER PRIMARY KEY,stock_on_hand INTEGER NOT NULL,reserved INTEGER NOT NULL,updated_at TEXT NOT NULL);CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,email TEXT,first_name TEXT,last_name TEXT);CREATE TABLE user_auth(user_id INTEGER PRIMARY KEY,email_verified INTEGER NOT NULL);CREATE TABLE user_sessions(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL,token_hash TEXT UNIQUE,expires_at TEXT,revoked_at TEXT);`);
  class Statement{
   constructor(source,args=[]){this.sql=source;this.args=args;}

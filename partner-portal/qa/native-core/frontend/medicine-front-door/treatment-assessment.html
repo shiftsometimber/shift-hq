@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Clinical verification · Shift Some Timber</title>
+  <link rel="stylesheet" href="/clinical-intake-v1.css">
+</head>
+<body>
+<main class="clinical-main">
+  <p aria-label="Treatment journey">CHOOSE → ACCOUNT → ASSESSMENT → VERIFY → PAY → PRESCRIBER REVIEW</p>
+  <h1>Verify before any payment.</h1>
+  <p>Your health, GP, identity and clothed body images go securely to the commissioned pharmacy partner. Shift does not store the image files. Payment stays locked until this step is accepted.</p>
+  <p>Verification checks your details and evidence. The clinician makes the separate prescribing decision. They may need to contact you or independently check information.</p>
+  <p id="accountStatus" role="status">Checking your My Timber account…</p>
+  <p id="selectionStatus"></p>
+  <div id="assessmentActions" hidden>
+    <button id="checkAssessment" type="button">Check this assessment</button>
+    <button id="resumeAssessment" type="button" hidden>Open secure pharmacy questions</button>
+    <a href="/member/dashboard#today">My Timber treatment tracking</a>
+  </div>
+  <form id="assessment" class="clinical-form" enctype="multipart/form-data" hidden>
+    <input name="variantId" id="variantId" type="hidden">
+    <fieldset><legend>Your contact details</legend>
+      <p>Use your saved contact details or enter your current details. Your verified account email is used for contact. Changes here apply to this assessment.</p>
+      <button id="useContactDetails" type="button">Use contact details saved in My Timber</button>
+      <p id="savedContactStatus" role="status" aria-live="polite"></p>
+      <label>First name<input name="patientFirstName" autocomplete="given-name" maxlength="100" required></label>
+      <label>Last name<input name="patientLastName" autocomplete="family-name" maxlength="100" required></label>
+      <label>Account email<input id="patientEmail" type="email" autocomplete="email" readonly></label>
+      <label>Phone<input name="patientPhone" type="tel" autocomplete="tel" maxlength="50" required></label>
+      <label>Address line 1<input name="patientAddress1" autocomplete="address-line1" maxlength="120" required></label>
+      <label>Address line 2 (optional)<input name="patientAddress2" autocomplete="address-line2" maxlength="120"></label>
+      <label>Town or city<input name="patientTown" autocomplete="address-level2" maxlength="100" required></label>
+      <label>Postcode<input name="patientPostcode" autocomplete="postal-code" maxlength="12" required></label>
+    </fieldset>
+    <fieldset><legend>Your health</legend>
+      <label>Date of birth<input name="dateOfBirth" type="date" required></label>
+      <label>Height (cm)<input name="heightCm" type="number" min="100" max="250" required></label>
+      <label>Weight (kg)<input name="weightKg" type="number" min="30" max="400" step="0.1" required></label>
+      <label>Do you have a diagnosed weight-related condition?<select name="weightRelatedCondition" required><option value="">Choose one</option><option value="no">No</option><option value="yes">Yes</option></select></label>
+      <label>Conditions<textarea name="conditions" required aria-describedby="answerSizeHelp"></textarea></label>
+      <label>Medicines<textarea name="medicines" required aria-describedby="answerSizeHelp"></textarea></label>
+      <p id="answerSizeHelp">The current connection accepts up to 1,000 characters per answer. Do not omit relevant information to fit. If you need more space, the pharmacy must provide a secure route for the full details.</p>
+      <label>Do you currently take insulin?<select name="insulinUse" required><option value="">Choose one</option><option value="no">No</option><option value="yes">Yes</option></select></label>
+      <p>If you take insulin, you cannot use SHIFT’s weight-management injection service. This applies to new and repeat orders. Speak to the clinician who manages your diabetes about suitable options. Do not stop or reduce insulin to qualify. <a href="/shift-health">Explore SHIFT Health</a> for wider health guides and practical support.</p>
+    </fieldset>
+    <fieldset><legend>Identity and body check</legend>
+      <label>Photo ID<input name="photoId" type="file" accept="image/jpeg,image/png,image/heic,image/heif" required></label>
+      <label>Clothed front image<input name="bodyFront" type="file" accept="image/jpeg,image/png,image/heic,image/heif" required></label>
+      <label>Clothed side image<input name="bodySide" type="file" accept="image/jpeg,image/png,image/heic,image/heif" required></label>
+      <label><input name="imageConsent" type="checkbox" required> I consent to these images being sent to the pharmacy partner for clinical checks.</label>
+    </fieldset>
+    <fieldset><legend>Previous treatment</legend>
+      <label>Used weight-loss medicine before?<select name="previousTreatment" id="previousTreatment" required><option value="">Choose one</option><option value="no">No</option><option value="yes">Yes</option></select></label>
+      <div id="previousDetails" hidden>
+        <label>Medicine<input name="previousMedicine"></label>
+        <label>Dose<input name="previousDose"></label>
+        <label>Last dose date<input name="lastDoseDate" type="date"></label>
+      </div>
+    </fieldset>
+    <fieldset><legend>Your GP</legend>
+      <label>GP name<input name="gpName" required></label>
+      <label>Practice<input name="gpPractice" required></label>
+      <label>Address<textarea name="gpAddress" required></textarea></label>
+      <label>Postcode<input name="gpPostcode" required></label>
+      <label><input name="gpContactConsent" type="checkbox" required> I give the pharmacy partner permission to contact my GP.</label>
+    </fieldset>
+    <label><input name="answersConfirmed" type="checkbox" required> I confirm my answers are complete and accurate.</label>
+    <button type="submit">Verify my details before payment</button>
+    <p id="draftHelp">Answers stay on this page until submitted. Refreshing or closing it can lose unsent answers and selected files. Submitted assessments can be reopened securely with the same account; health answers are not saved in browser storage.</p>
+  </form>
+  <p id="status" role="status" aria-live="polite"></p>
+</main>
+<script src="/treatment-assessment.js?v=handover-3"></script>
+<script defer src="/assets/member-experience/gp-form.mjs"></script>
+</body>
+</html>
+

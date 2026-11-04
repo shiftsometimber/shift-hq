@@ -1,0 +1,543 @@
+{
+  "startedAt": "2026-11-04T21:03:06.832Z",
+  "scope": "Fresh isolated native-API run plus separate live public UI observation; not live clinical acceptance",
+  "timingLimit": "Local response wait only, excludes network and may exclude initial handler work; NOT live user-facing speed measurements.",
+  "accounts": {
+    "memberEmail": "full-loop-member-20261104@example.test",
+    "memberId": 1,
+    "ownerId": 1,
+    "emailVerified": true,
+    "nativeMfaVerified": true,
+    "actors": {
+      "owner": {
+        "id": 1,
+        "role": "owner",
+        "mfaEnabled": true
+      },
+      "governor": {
+        "id": 2,
+        "role": "owner",
+        "mfaEnabled": true
+      },
+      "clinician": {
+        "id": 3,
+        "role": "clinical",
+        "mfaEnabled": true
+      },
+      "dispenser": {
+        "id": 4,
+        "role": "clinical",
+        "mfaEnabled": true
+      }
+    },
+    "outboundMessages": 0,
+    "capturedMessages": 2
+  },
+  "checks": [
+    {
+      "stage": "Fresh accounts",
+      "status": "PASS",
+      "detail": "Native member registration, captured email verification, password login; native staff password login and real TOTP MFA for four synthetic HQ/partner identities."
+    },
+    {
+      "stage": "Questionnaire and evidence intake",
+      "status": "PASS",
+      "detail": "Fresh multipart assessment, three placeholder images and explicit consent accepted by native Core; provider verification is a local simulated pharmacy receipt."
+    },
+    {
+      "stage": "Purchase processing",
+      "status": "PASS",
+      "detail": "Native checkout generated SST-20261104-A20B8597; signature-verified simulated test payment callback marked it paid. No card or Stripe account contacted."
+    },
+    {
+      "stage": "Purchase \u2192 clinician assessment handover",
+      "status": "FAIL",
+      "detail": "Paid public intake created no clinician-facing clinical_member_records entry. Public intake and partner clinical record are separate stores; no automatic handover in this run."
+    },
+    {
+      "stage": "Submit partner clinical questionnaire",
+      "status": "PASS",
+      "detail": "Fresh record and all required evidence submitted via native member API. Assessment version 4."
+    },
+    {
+      "stage": "Partner login and permissions",
+      "status": "PASS",
+      "detail": "Clinician and dispenser signed into the actual portal gateway with native passwords and MFA; approved scopes are fictional fixtures."
+    },
+    {
+      "stage": "Partner isolation",
+      "status": "PASS",
+      "detail": "Dispenser receives HTTP 403 for HQ-only questions/counts endpoint."
+    },
+    {
+      "stage": "Clinician review",
+      "status": "PASS",
+      "detail": "Fresh assessment version 4, medical evidence decisions and explicit identity verification recorded on the same generated order."
+    },
+    {
+      "stage": "Test payment \u2192 prescription signing",
+      "status": "FAIL",
+      "detail": "A native paid cs_test checkout is rejected: HTTP 409 payment_reconciliation_required. Signing recognises cs_live prefixes only."
+    },
+    {
+      "stage": "Prescription \u2192 dispenser",
+      "status": "PASS WITH WORKAROUNDS",
+      "detail": "Software authenticator proof verified; native service created pharmacy task. Both intake-bridge and payment-format workarounds remain."
+    },
+    {
+      "stage": "Delivery address handover",
+      "status": "FIXED / PASS",
+      "detail": "Member\u2019s complete alternative delivery address and postcode reach the pharmacy task from the immutable signed assessment. Dispatch now rejects an incomplete address."
+    },
+    {
+      "stage": "Partner \u2194 HQ communication",
+      "status": "PASS",
+      "detail": "Question and reply persisted and visible on both private workspaces for this order; no email or external message sent."
+    },
+    {
+      "stage": "Dispensing \u2192 delivery \u2192 member/HQ",
+      "status": "PASS WITH WORKAROUNDS",
+      "detail": "All four native pharmacy transitions synchronised to Core, member orders and HQ; test tracking visible in member record. No actual shipment."
+    },
+    {
+      "stage": "Member proactive notifications",
+      "status": "NOT PROVEN",
+      "detail": "Events exist, but channels await approval; zero provider-delivered clinical notifications. In-portal status updates work; email/push delivery is not demonstrated."
+    }
+  ],
+  "timings": [
+    {
+      "stage": "Clinical intake submission",
+      "ms": 31,
+      "http": 200
+    },
+    {
+      "stage": "Create checkout",
+      "ms": 3,
+      "http": 201
+    },
+    {
+      "stage": "Payment callback",
+      "ms": 2,
+      "http": 200
+    },
+    {
+      "stage": "Create clinical record",
+      "ms": 2,
+      "http": 201
+    },
+    {
+      "stage": "Upload photo_id",
+      "ms": 2,
+      "http": 201
+    },
+    {
+      "stage": "Upload front_photo",
+      "ms": 1,
+      "http": 201
+    },
+    {
+      "stage": "Upload scale_photo",
+      "ms": 3,
+      "http": 201
+    },
+    {
+      "stage": "Submit partner clinical questionnaire",
+      "ms": 0,
+      "http": 200
+    },
+    {
+      "stage": "HQ assign fresh case",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "clinician partner password login",
+      "ms": 0,
+      "http": 200
+    },
+    {
+      "stage": "clinician partner TOTP",
+      "ms": 0,
+      "http": 200
+    },
+    {
+      "stage": "dispenser partner password login",
+      "ms": 0,
+      "http": 200
+    },
+    {
+      "stage": "dispenser partner TOTP",
+      "ms": 0,
+      "http": 200
+    },
+    {
+      "stage": "Partner blocked from HQ-only counts",
+      "ms": 2,
+      "http": 403
+    },
+    {
+      "stage": "Clinical start_review",
+      "ms": 9,
+      "http": 200
+    },
+    {
+      "stage": "Clinical review_evidence",
+      "ms": 4,
+      "http": 200
+    },
+    {
+      "stage": "Clinical review_evidence",
+      "ms": 6,
+      "http": 200
+    },
+    {
+      "stage": "Clinical decision",
+      "ms": 5,
+      "http": 200
+    },
+    {
+      "stage": "Create prescription proposal",
+      "ms": 9,
+      "http": 200
+    },
+    {
+      "stage": "Member treatment agreement",
+      "ms": 7,
+      "http": 200
+    },
+    {
+      "stage": "Register signing challenge",
+      "ms": 10,
+      "http": 200
+    },
+    {
+      "stage": "Register signing key",
+      "ms": 5,
+      "http": 200
+    },
+    {
+      "stage": "Independent signing key approval",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "Re-propose after isolated payment workaround",
+      "ms": 4,
+      "http": 200
+    },
+    {
+      "stage": "Member re-agreement after workaround",
+      "ms": 2,
+      "http": 200
+    },
+    {
+      "stage": "Signing challenge after workaround",
+      "ms": 0,
+      "http": 200
+    },
+    {
+      "stage": "Sign test prescription",
+      "ms": 9,
+      "http": 200
+    },
+    {
+      "stage": "Pharmacy question to HQ",
+      "ms": 4,
+      "http": 201
+    },
+    {
+      "stage": "HQ receives pharmacy question",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "HQ reply",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "Partner receives HQ reply",
+      "ms": 3,
+      "http": 200
+    },
+    {
+      "stage": "Pharmacy order accept",
+      "ms": 6,
+      "http": 200
+    },
+    {
+      "stage": "Pharmacy accept",
+      "ms": 6,
+      "http": 200
+    },
+    {
+      "stage": "Member order after accept",
+      "ms": 2,
+      "http": 200
+    },
+    {
+      "stage": "HQ order after accept",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "Pharmacy order prepare",
+      "ms": 5,
+      "http": 200
+    },
+    {
+      "stage": "Pharmacy prepare",
+      "ms": 7,
+      "http": 200
+    },
+    {
+      "stage": "Member order after prepare",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "HQ order after prepare",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "Pharmacy order dispatch",
+      "ms": 6,
+      "http": 200
+    },
+    {
+      "stage": "Pharmacy dispatch",
+      "ms": 7,
+      "http": 200
+    },
+    {
+      "stage": "Member order after dispatch",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "HQ order after dispatch",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "Pharmacy order delivered",
+      "ms": 3,
+      "http": 200
+    },
+    {
+      "stage": "Pharmacy delivered",
+      "ms": 4,
+      "http": 200
+    },
+    {
+      "stage": "Member order after delivered",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "HQ order after delivered",
+      "ms": 1,
+      "http": 200
+    },
+    {
+      "stage": "Member fulfilment tracking",
+      "ms": 2,
+      "http": 200
+    }
+  ],
+  "workarounds": [
+    "Created a second native clinical record via the member API to continue; public-intake answers/evidence were not automatically bridged.",
+    "Professional organisation approvals, credentials and scope grants are synthetic test fixtures, not regulator checks or approved real partner access.",
+    "DOWNSTREAM CONTINUATION ONLY: isolated order session ID replaced by cs_live_SYNTHETIC_NOT_A_PAYMENT; treatment re-proposed and member re-agreed. This is not real payment verification or a full-loop pass."
+  ],
+  "outboundMessages": 0,
+  "realPayments": 0,
+  "realPrescriptions": 0,
+  "intakeReference": "SCI-c6639bbc-6228-470d-9396-0fee1c1226b4",
+  "orderNumber": "SST-20261104-A20B8597",
+  "paymentProvider": "simulated local Stripe transport, cs_test session, no transaction",
+  "recordId": "a265cabf-6591-41d3-af9a-c6bb1fe50ea0",
+  "assessmentVersion": 4,
+  "paymentSigningError": "payment_reconciliation_required",
+  "testPrescriptionId": "bd28e099-a63a-4846-bd81-81e022bf9e2b",
+  "delivery": {
+    "name": "TEST Full Loop Member",
+    "address": "TEST ALTERNATIVE DELIVERY \u2014 DO NOT SHIP",
+    "postcode": "BB1 1BB",
+    "source": "member_delivery_address"
+  },
+  "statusTransitions": [
+    {
+      "operation": "accept",
+      "core": "pharmacy_received",
+      "member": "pharmacy_received",
+      "hq": "pharmacy_received"
+    },
+    {
+      "operation": "prepare",
+      "core": "dispensing",
+      "member": "dispensing",
+      "hq": "dispensing"
+    },
+    {
+      "operation": "dispatch",
+      "core": "dispatched",
+      "member": "dispatched",
+      "hq": "dispatched"
+    },
+    {
+      "operation": "delivered",
+      "core": "fulfilled",
+      "member": "fulfilled",
+      "hq": "fulfilled"
+    }
+  ],
+  "memberTracking": {
+    "orderNumber": "SST-20261104-A20B8597",
+    "status": "delivered",
+    "updatedAt": "2026-11-04T21:03:07.117Z",
+    "tracking": {
+      "carrier": "dpd",
+      "number": "12345678901234",
+      "url": "https://track.dpd.co.uk/parcels/12345678901234",
+      "dispatchedAt": "2026-11-04T21:03:07.102Z"
+    },
+    "actionNeeded": false,
+    "prescriptionId": "bd28e099-a63a-4846-bd81-81e022bf9e2b",
+    "deliveryUpdate": {
+      "kind": "delivered",
+      "source": "pharmacy_manual_record",
+      "recordedAt": "2026-11-04T21:03:07.117Z",
+      "note": "FICTIONAL TEST ONLY \u2014 NO SHIPMENT"
+    },
+    "version": 4,
+    "queryId": null,
+    "canReply": false,
+    "message": null,
+    "memberReply": null,
+    "events": [
+      {
+        "action": "prescription_received",
+        "created_at": "2026-11-04T21:03:07.049Z"
+      },
+      {
+        "action": "fulfilment_viewed",
+        "created_at": "2026-11-04T21:03:07.066Z"
+      },
+      {
+        "action": "fulfilment_accept",
+        "created_at": "2026-11-04T21:03:07.072Z"
+      },
+      {
+        "action": "fulfilment_viewed",
+        "created_at": "2026-11-04T21:03:07.081Z"
+      },
+      {
+        "action": "fulfilment_prepare",
+        "created_at": "2026-11-04T21:03:07.088Z"
+      },
+      {
+        "action": "fulfilment_viewed",
+        "created_at": "2026-11-04T21:03:07.098Z"
+      },
+      {
+        "action": "fulfilment_dispatch",
+        "created_at": "2026-11-04T21:03:07.102Z"
+      },
+      {
+        "action": "fulfilment_viewed",
+        "created_at": "2026-11-04T21:03:07.114Z"
+      },
+      {
+        "action": "fulfilment_delivered",
+        "created_at": "2026-11-04T21:03:07.117Z"
+      }
+    ]
+  },
+  "pendingSharedSync": 0,
+  "notificationChannels": [
+    {
+      "channel": "app",
+      "status": "awaiting_approval",
+      "count": 13
+    },
+    {
+      "channel": "app",
+      "status": "superseded",
+      "count": 2
+    },
+    {
+      "channel": "email",
+      "status": "awaiting_approval",
+      "count": 13
+    },
+    {
+      "channel": "email",
+      "status": "superseded",
+      "count": 2
+    },
+    {
+      "channel": "whatsapp",
+      "status": "awaiting_approval",
+      "count": 13
+    },
+    {
+      "channel": "whatsapp",
+      "status": "superseded",
+      "count": 2
+    }
+  ],
+  "sentNotificationChannels": 0,
+  "overall": "FAIL \u2014 public availability, automatic intake handover, test-payment signing and proactive notification delivery prevent an unassisted complete live loop.",
+  "completedAt": "2026-11-04T21:03:07.124Z",
+  "liveObservations": {
+    "publicRoute": "https://shiftsometimber.co.uk/start-here?route=weight-loss#weight-loss-questions",
+    "purchaseBlocked": "All six visible medicine cards show no stock; Mounjaro 2.5 mg selection and purchase button disabled.",
+    "memberClinicalReviewReady": false,
+    "pharmacyClinicalIntakeUrlConfigured": false,
+    "pharmacyIntegrationSecretConfigured": false,
+    "activeProfessionals": 0,
+    "approvedPartnerOrganisations": 0,
+    "readOnlyDatabaseRowsWritten": 0
+  },
+  "deliveryFixRelease": {
+    "sourceCommit": "89e676025bd7b9af55e83a429c7da01ec7fe2c0c",
+    "worker": "shift-hq-clinical-portal",
+    "deploymentId": "30a5658c-77a7-4b9c-a399-3551b9d7dfd0",
+    "versionId": "ecc8585e-ddbb-445e-936b-d9c3d2f4b631",
+    "percentage": 100,
+    "deployedAt": "2026-11-04T21:03:27.719714Z",
+    "nonReleaseBindingsPreserved": true,
+    "sourceIncludesAddressMappingAndDispatchGuard": true,
+    "servingSourceSha256": "f82b92dd30158d1984c98ede8ee095be61f2371eb09649982016aa868f52ab66",
+    "tests": {
+      "partnerSuite": {
+        "passed": 37,
+        "failed": 0
+      },
+      "macDeliverySubset": {
+        "passed": 4,
+        "failed": 0
+      }
+    }
+  },
+  "browserEvidence": {
+    "clinician": "Native assigned-case UI opened and signed assessment version 4 verified.",
+    "dispenser": "Native signed prescription and distinct alternative delivery address/postcode verified.",
+    "member": "Native signed prescription, delivery-recorded status and tracking verified.",
+    "hq": "Native Partner desk component embedded in isolated QA shell; order fulfilled, pharmacy delivered, and private question/reply verified.",
+    "limitations": "Screenshots after the first live availability capture are fictional isolated QA. Clinical actions were API-driven; browser checks verified their resulting native screens, not every clinical action through UI. No real courier scan, provider receipt, card payment, real professional qualification or end-to-end notification delivery was verified."
+  },
+  "speedEvidence": {
+    "currentFullLoopLiveTimings": "Not measured: live purchase unavailable and no approved live professionals. Local response waits are not user-facing timings.",
+    "earlierPartnerSignInShell": {
+      "source": "connected-release.json earlier release capture, not this full-loop run",
+      "n": 20,
+      "medianMs": 134.5,
+      "p95Ms": 715,
+      "scope": "Signed-out production partner sign-in shell, warm desktop Chrome; excludes login/MFA and private casework."
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "repository": "shiftsometimber/shift-core",
+  "commit": "60ecf85d61848d64ab2ea5ba9037176721171131",
+  "tree": "190e785040ce8481ad67721a5dd0882ad0199f27",
+  "scope": "Public repository snapshots for isolated acceptance; not a claim that the assembled production Core matches this checkout.",
+  "sha256": {
+    "acquisition-activation/model.mjs": "42050d54abd3d51add62f04c56d36cb0034d8b1d520b761f185bea1a984b1191",
+    "auth-delivery-v1.js": "e863ad9e481f2a63a67b3807dc2ac62f15b9c601e5f047d37f80721bd1f7b577",
+    "auth-email-verification-v1.js": "9a84626d0ac3c3741a30099dafce0c49ba469bf92274418eb7996c0d1a0fa66d",
+    "checkout-attempt-v1.mjs": "7e4faa40fea750e020472d79b982727b3ccca292518b5ed2d34caa397cc8c4df",
+    "frontend/medicine-front-door/treatment-assessment.html": "6c5e890f5491964f73732a255df45ce7bf09296923cdc15ea25a9bac57131a0c",
+    "frontend/medicine-front-door/treatment-assessment.js": "a791560e48758e8f7399b0cbd9ead6a09a00ae66b8ad477d014c83bd21c450ca",
+    "hq-mfa-readiness.mjs": "058af8508271dbcbd8661bc1bd5c1c7ae291b5b84238de5bf199773423b9a232",
+    "hq-purchaseability-v1.js": "4db492ba6a3309c2d1363550dd1034e76521c580e10f4a1e339f1e63d58c2268",
+    "medicine-commerce-v1.js": "2cb17a125ec421ab5247ff5ddcd66364b30ea05c05efc913c6d090a5a7da9e90",
+    "member-login-fastpath-v1.js": "3cf8a2d3c5e61a541f26a3ab0a1ab3f605c76ebea8505600eb5772fcf6bb685d",
+    "member-register-fastpath-v2.js": "b0317d28871fcad075227229a862f42690823bea312e764c05d5bc21c8d8a0e4",
+    "order-reference-v1.js": "5388fe3a33de6d5a774542ce66c79270f4fcbc843d84dd8fc980429f782b2185",
+    "package.json": "89c47db7851f89caec72da4f215ebc21cf1e294aeef3b45d2583562d846ab035",
+    "password-policy-v1.js": "33226fc3195a3b24a81365039cd057852549d184630344f15c87d0dac0940117",
+    "pharmacy-handover-v1.mjs": "2e91ecfe84cb72019c86eea40167bddea2cbc8d8402c1aee137776bcf906519f",
+    "preview/bootstrap.sql": "33676adfd8d5341a205c28e091d91a507a01e939f8a98570c1a24945985b09d8",
+    "transactional-email-v1.js": "ca91339e8b1eb432f4fb006dab8dedb805413a80422bbdd7de2e7cb5da875345",
+    "worker.js": "2e79b627e1f3fbc266755aee197dd02375f8cfc3469284c9469d847d9eadeb9e"
+  }
+}

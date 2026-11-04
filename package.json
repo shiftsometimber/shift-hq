@@ -1,1 +1,1 @@
-{"private":true,"scripts":{"dev":"node partner-portal/qa/server.mjs"}}
+{"private":true,"scripts":{"dev":"node partner-portal/qa/full-loop-server.mjs","qa:seeded":"node partner-portal/qa/server.mjs","qa:full-loop":"node partner-portal/qa/run-full-loop.mjs --continue"}}
