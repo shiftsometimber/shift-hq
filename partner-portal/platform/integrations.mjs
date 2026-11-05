@@ -119,15 +119,20 @@ export async function projectVerifiedEvents(env,orderNumber,sink){
  if(!sink||sink.mode!=='synthetic'||env.SSTRX_ENVIRONMENT!=='synthetic')fail(503,'approved_supplier_native_projection_required');
  const route=await row(env.DB,'SELECT * FROM rx_order_routes WHERE order_number=?',orderNumber);if(!route)fail(404,'route_not_found');
  const actions={accepted:{from:['received','query'],action:'accept'},clarification:{from:['received','accepted','preparing'],action:'query'},stock_unavailable:{from:['received','accepted','preparing'],action:'query'},rejected:{from:['received','query','accepted','preparing'],action:'reject'},dispensing:{from:['accepted'],action:'prepare'},dispensed:{from:['preparing'],action:'dispensed'},dispatched:{from:['preparing'],action:'dispatch'},delivered:{from:['dispatched','delivery_exception'],action:'delivered'},delivery_exception:{from:['dispatched'],action:'delivery_exception'},returned:{from:['dispatched','delivery_exception','delivered'],action:'returned'}};
- const {results:events=[]}=await env.DB.prepare("SELECT * FROM rx_integration_events WHERE order_number=? AND contract_id=? AND state='awaiting_projection' ORDER BY occurred_at,received_at,id LIMIT 100").bind(orderNumber,route.contract_id).all();
+ const canonical=env.SSTRX_CANONICAL_RECEIPTS_ENABLED==='true';
+ const {results:events=[]}=await env.DB.prepare("SELECT * FROM rx_integration_events WHERE order_number=? AND contract_id=? AND state='awaiting_projection' ORDER BY CASE WHEN ? THEN CAST(json_extract(event_json,'$.sourceRecordVersion') AS INTEGER) ELSE 0 END,occurred_at,received_at,id LIMIT 100").bind(orderNumber,route.contract_id,canonical?1:0).all();
+ let sourceVersion=canonical?Number((await row(env.DB,"SELECT MAX(CAST(json_extract(event_json,'$.sourceRecordVersion') AS INTEGER)) version FROM rx_integration_events WHERE order_number=? AND contract_id=? AND state='projected' AND json_extract(event_json,'$.prescriptionReference')=?",orderNumber,route.contract_id,route.prescription_id))?.version||0):0;
  let projected=0;for(let pass=0;pass<10;pass++){let progress=false;
-  for(const e of events){if(e.state!=='awaiting_projection')continue;const task=await row(env.DB,'SELECT state_json FROM partner_fulfilment WHERE order_number=? AND partner_id=?',orderNumber,route.pharmacy_org_id),s=task?JSON.parse(task.state_json):null,step=actions[e.kind];if(!s||!step)continue;
+  for(const e of events){if(e.state!=='awaiting_projection')continue;const task=await row(env.DB,'SELECT state_json FROM partner_fulfilment WHERE order_number=? AND partner_id=?',orderNumber,route.pharmacy_org_id),s=task?JSON.parse(task.state_json):null,data=JSON.parse(e.event_json),step=actions[e.kind];if(!s||canonical&&data.sourceRecordVersion!==sourceVersion+1)continue;
+   if(data.prescriptionReference&&data.prescriptionReference!==route.prescription_id)continue;
+   if(canonical&&e.kind==='received'){await env.DB.prepare("UPDATE rx_integration_events SET state='projected' WHERE id=? AND state='awaiting_projection'").bind(e.id).run();e.state='projected';sourceVersion=data.sourceRecordVersion;projected++;progress=true;continue;}
+   if(!step)continue;
    if(!step.from.includes(s.status)||e.kind==='dispensed'&&s.dispensedAt)continue;
    // Native action enforces authentic signature, current stock, version and professional scope.
-   const data=JSON.parse(e.event_json);if(data.prescriptionReference&&data.prescriptionReference!==route.prescription_id)continue;if(env.SSTRX_CANONICAL_RECEIPTS_ENABLED==='true'&&e.kind==='dispatched'&&!s.dispensedAt)continue;
+   if(canonical&&e.kind==='dispatched'&&!s.dispensedAt)continue;
    const r=await sink.apply({orderNumber,pharmacyOrgId:route.pharmacy_org_id,prescriptionId:route.prescription_id,version:s.version,action:step.action,eventReference:e.event_reference,occurredAt:e.occurred_at,tracking:data.tracking,message:data.memberMessage,stockUnavailable:e.kind==='stock_unavailable'});
    if(!r?.ok)continue;
-   await env.DB.prepare("UPDATE rx_integration_events SET state='projected' WHERE id=? AND state='awaiting_projection'").bind(e.id).run();e.state='projected';projected++;progress=true;
+   await env.DB.prepare("UPDATE rx_integration_events SET state='projected' WHERE id=? AND state='awaiting_projection'").bind(e.id).run();e.state='projected';if(canonical)sourceVersion=data.sourceRecordVersion;projected++;progress=true;
   }
   if(!progress)break;
  }
