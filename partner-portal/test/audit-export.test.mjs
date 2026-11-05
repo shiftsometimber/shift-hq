@@ -4,6 +4,7 @@ import {functionalDataset} from '../qa/functional-fixtures.mjs';
 import {ensureAuditSchema,sealRecord} from '../platform/audit-export.mjs';
 import {RECORD} from './fixture.mjs';
 import {digest} from '../platform/domain.mjs';
+import memberService from '../service/member-service.mjs';
 const j=async(r,status=200)=>{const d=await r.json();assert.equal(r.status,status,JSON.stringify(d));return d};
 async function setup(){const f=await functionalDataset('E');f.env.SSTRX_AUDIT_V3_ENABLED='true';await ensureAuditSchema(f.DB);return {...f,export:(actor=3)=>f.hq('/platform/exports/'+RECORD,actor,{purpose:'FICTIONAL acceptance review'}),verify:(checkpoint,actor=3)=>f.hq('/platform/audit-proof/'+RECORD,actor,{checkpoint})};}
 test('RX-AUD1 native clinical views and changes append scoped metadata and independently verifiable seals',async()=>{
@@ -39,4 +40,10 @@ test('RX-AUD5 changed or missing evidence bytes and altered immutable assessment
   if(corruption==='snapshot'){f.sql.exec('DROP TRIGGER rx_immutable_clinical_member_versions_update');f.sql.prepare("UPDATE clinical_member_versions SET answers_json=json_set(answers_json,'$.weightKg',999)").run();}
   await j(await f.export(),corruption==='missing'?503:409);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_export_receipts').get().n,1);
  }finally{f.close();}}
+});
+test('RX-AUD6 member clinical export uses the existing owned session, omits commercial/internal details and refuses another member or a revoked session',async()=>{
+ const f=await setup();try{const request=token=>memberService.fetch(new Request('https://my-timber.app/v1/member/clinical-records/'+RECORD+'/verified-export',{method:'POST',headers:{Origin:'https://my-timber.app',Cookie:'sst_session='+token,'Content-Type':'application/json'},body:JSON.stringify({purpose:'FICTIONAL personal clinical copy'})}),f.env,{});
+  const exported=await j(await request(f.memberToken));assert.equal(exported.content.scope,'member');assert.equal(await digest(exported.content),exported.contentDigest);assert(exported.content.evidenceObjectsVerified>=3);assert.equal(exported.content.finance,undefined);assert(exported.content.audit.every(e=>e.detail===undefined&&!e.sourceTable.startsWith('rx_finance')));assert(exported.content.documents[0].cryptographicDocumentBindingVerified);
+  await j(await request(f.otherToken),404);f.sql.prepare('UPDATE user_sessions SET revoked_at=? WHERE user_id=42').run(new Date().toISOString());await j(await request(f.memberToken),401);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_export_receipts').get().n,1);
+ }finally{f.close();}
 });

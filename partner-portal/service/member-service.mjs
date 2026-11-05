@@ -10,6 +10,9 @@ import {readObject} from '../platform/domain.mjs';
 import {linkPaidOrder} from '../platform/intake.mjs';
 import {ensureFunctionalSchema} from '../platform/functional-casework.mjs';
 import {memberInformationRoute} from '../platform/member-information.mjs';
+import {ensureRefundSchema} from '../platform/refunds.mjs';
+import {ensureLifecycleSchema} from '../platform/prescription-lifecycle.mjs';
+import {exportRecord} from '../platform/audit-export.mjs';
 export default {async fetch(request,env,ctx){
  if(env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return original.fetch(request,env,ctx);
  if(env.SSTRX_FUNCTIONAL_V3_ENABLED==='true')await ensureFunctionalSchema(env.DB);
@@ -30,6 +33,8 @@ export default {async fetch(request,env,ctx){
   if(admitted){
    const information=await memberInformationRoute(request,withSharedOutbox(env),actor,original);if(information)return completeSharedResponse(information,request,env);
    await ensurePlatformSchema(env.DB);
+   const exportPath=path.match(/^\/v1\/member\/clinical-records\/([a-f0-9-]{36})\/verified-export$/i);
+   if(exportPath){const respond=(b,status=200)=>Response.json(b,{status,headers:{'Cache-Control':'no-store, private','Access-Control-Allow-Origin':origin||'https://my-timber.app','Access-Control-Allow-Credentials':'true','Vary':'Origin','X-Robots-Tag':'noindex, nofollow','X-Content-Type-Options':'nosniff'}});try{if(request.method!=='POST')return respond({error:'method_not_allowed'},405);if(env.SSTRX_FUNCTIONAL_V3_ENABLED!=='true')return respond({error:'verified_export_not_open'},404);const b=await readObject(request,2000);await ensureRefundSchema(env.DB);await ensureLifecycleSchema(env.DB);const a={member:true,id:actor.id,sessionHash:await sessionHash(request,env,actor.id)};return respond(await exportRecord(env,a,exportPath[1],b.purpose));}catch(e){return respond({error:e.status?e.message:'verified_export_unavailable'},e.status||503);}}
    if(env.SSTRX_PAID_RECORD_LINK_ENABLED==='true'&&path==='/v1/member/clinical-records'&&request.method==='GET'){
     const {results=[]}=await env.DB.prepare("SELECT order_number FROM medicine_orders WHERE user_id=? AND status='paid' ORDER BY id DESC LIMIT 50").bind(actor.id).all();
     for(const order of results)await linkPaidOrder(env,order.order_number,actor.id);
