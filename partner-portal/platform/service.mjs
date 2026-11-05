@@ -1,3 +1,4 @@
+import {passwordSignInAllowed} from '../password-signin.mjs';
 import {listConversations,readConversation,sendSecureMessage,markConversationRead,messageAlertDrafts} from './messages.mjs';
 import {createDiagnosticOrder} from './diagnostics.mjs';
 import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition,newStaff} from '../service/clinical-kernel.mjs';
@@ -11,10 +12,10 @@ const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control
 const all=async q=>(await q.all()).results||[];
 const input=request=>readObject(request);
 export async function platformActor(request,env){
- const identity=await existingHqIdentity(request,env);if(identity.response)return {response:identity.response};const u=identity.user;if(!u?.mfaEnabled)fail(403,'mfa_required');
+ const identity=await existingHqIdentity(request,env);if(identity.response)return {response:identity.response};const u=identity.user;if(!u?.mfaEnabled&&!passwordSignInAllowed(env,u))fail(403,'mfa_required');
  const token=(request.headers.get('Cookie')||'').match(/(?:^|;\s*)sst_hq_session=([^;]+)/)?.[1];if(!token)fail(401,'session_required');
  const {digest}=await import('./domain.mjs');const sessionHash=await digest(token);
- if(['owner','admin','operations','support'].includes(u.role))return {id:u.id,user:u,role:u.role,mfa:true,sessionHash,internal:true,commercial:['owner','admin'].includes(u.role)};
+ if(['owner','admin','operations','support'].includes(u.role))return {id:u.id,user:u,role:u.role,mfa:u.mfaEnabled===true,sessionHash,internal:true,commercial:['owner','admin'].includes(u.role)};
  if(u.role!=='clinical')fail(403,'platform_role_required');
  const r=await env.DB.prepare('SELECT state_json FROM partner_staff WHERE hq_user_id=?').bind(u.id).first(),staff=r?JSON.parse(r.state_json):null;
  if(!staff||staff.status!=='active'||!credentialsCurrent(staff,at())){

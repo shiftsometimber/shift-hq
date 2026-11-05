@@ -1,3 +1,4 @@
+import {passwordSignInAllowed} from './password-signin.mjs';
 import {homePage,joinedDemoPage,partnerHqPage,unavailablePage,CSS,CLIENT,portalHeader} from './ui.mjs';
 import {HOST as LEGACY_HOST,ORIGIN as LEGACY_ORIGIN,SESSION_COOKIE,MFA_COOKIE,SETUP_COOKIE,seal as sealBase,unseal as unsealBase,cookieValue,setCookie,upstreamSession} from './session.mjs';
 import {allowedPath,validProfessional,destination as originalDestination} from './policy.mjs';
@@ -30,7 +31,7 @@ async function auth(env, token) {
   const identityResponse=await env.HQ_AUTH.fetch(new Request(API+'/me',{headers:authHeaders(token),redirect:'manual'}));
   if(!identityResponse.ok)return null;
   const identity=await identityResponse.json();
-  if(identity?.user?.mfaEnabled!==true)return null;
+  if(identity?.user?.mfaEnabled!==true&&!(ORIGIN==='https://sstrx.shiftsometimber.co.uk'&&passwordSignInAllowed(env,identity?.user)))return null;
   if(ORIGIN==='https://sstrx.shiftsometimber.co.uk'&&['owner','admin','operations','support'].includes(identity.user.role))return {identity,staff:{kind:'oversight',hqUserId:identity.user.id,role:identity.user.role,status:'active'}};
   if(identity.user.role!=='clinical')return null;
   const staffResponse=await env.CLINICAL.fetch(new Request(API+'/clinical/partners/me',{headers:authHeaders(token),redirect:'manual'}));
@@ -90,6 +91,7 @@ async function login(request,env,verify) {
       if(admin){
         const r=await env.HQ_AUTH.fetch(new Request(API+'/me',{headers:authHeaders(s.token),redirect:'manual'}));
         const u=r.ok?(await r.json())?.user:null;
+        if(passwordSignInAllowed(env,u))return finishLogin(response,env);
         if(u?.status==='active'&&['owner','admin','operations','support'].includes(u.role)&&u.mfaEnabled===false){
           const value=await seal({token:s.token,authority:'hq',hqUserId:u.id},env.PORTAL_SESSION_KEY,'setup',300);
           return json({mfaSetupRequired:true},200,{'Set-Cookie':setCookie(SETUP_COOKIE,value,300)});
@@ -179,7 +181,7 @@ async function handle(request,env) {
     }
     if(!enabled(env))return closed();
     const own=await session(request,env);if(!own?.staff)return clearCookies(json({message:'Please sign in with your active partner account.'},401));
-    if(path==='/api/identity'&&request.method==='GET')return json({user:{id:own.identity.user.id,role:own.identity.user.role,name:own.staff.details?.name||own.staff.name||own.identity.user.name,mfaEnabled:true},partner:{kind:own.staff.kind,orgId:own.staff.orgId}});
+    if(path==='/api/identity'&&request.method==='GET')return json({user:{id:own.identity.user.id,role:own.identity.user.role,name:own.staff.details?.name||own.staff.name||own.identity.user.name,mfaEnabled:own.identity.user.mfaEnabled===true},partner:{kind:own.staff.kind,orgId:own.staff.orgId}});
     if(!allowedPath(path,request.method,own.staff.kind))return json({message:'This function is outside your partner workspace.'},403);
     // Only contract query parameters reach the authority. No actor, org or role override.
     const search=new URLSearchParams();for(const name of ['view','cursor',...(path.startsWith('/api/clinical/platform')?['q']:[])])if(url.searchParams.has(name))search.set(name,url.searchParams.get(name));
