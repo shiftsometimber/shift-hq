@@ -58,8 +58,8 @@ for(const [engine,type]of [['chromium',chromium],['webkit',webkit]]){
    if(path==='/v1/me')return Response.json({user:{id:42,email:'james.my-shift@example.test',firstName:'James'},expiresAt:new Date(Date.now()+86400000).toISOString()});
    if(path==='/v1/member/details'){const a=await authenticate(req,f.env);if(!a)return Response.json({error:'sign_in_required'},{status:401});if(req.method!=='GET')return Response.json({error:'canonical_profile_writes_not_exercised_by_fixture'},{status:503});return Response.json({ok:true,revision:'synthetic-profile-1',gpLookupConfigured:false,details:{firstName:a.first_name,lastName:a.last_name,email:a.email,address1:'1 Fictional Road',town:'Fictional Town',postcode:'AA1 1AA'}});}
    if(path==='/v1/member/details/delivery'){if(req.method!=='GET')return Response.json({error:'canonical_delivery_writes_not_exercised_by_fixture'},{status:503});return Response.json({ok:true,revision:'synthetic-delivery-1',delivery:{useHome:true},home:{recipient:'James Example',address1:'1 Fictional Road',town:'Fictional Town',postcode:'AA1 1AA'}});}
-   if(path==='/v1/commerce/orders')return Response.json({orders:[]});
-   if(path==='/v1/treatment/orders')return Response.json({orders:[]});
+   if(path==='/v1/commerce/orders')return Response.json({ok:true,orders:[]});
+   if(path==='/v1/treatment/orders')return Response.json({ok:true,orders:[]});
    if(path.startsWith('/v1/member/treatment/week'))return Response.json({week:{context:{progress:[]}}});
    if(path==='/qa/captured-reset'){resetCaptures++;return Response.json({ok:true,message:'FICTIONAL reset request captured. No email was sent.'});}
    if(path==='/v1/consents'){if(req.method==='POST'){const b=await req.json();if(b.type!=='my_shift_health_tracking'||b.granted!==false)return Response.json({error:'unexpected_fixture_mutation'},{status:400});trackingConsent=false;}return Response.json({ok:true,consents:[{id:1,consent_type:'my_shift_health_tracking',consent_version:'synthetic-approved-notice',granted:trackingConsent?1:0}]});}
