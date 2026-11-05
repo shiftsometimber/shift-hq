@@ -1,3 +1,4 @@
+import {memberInbox} from '../platform/member-inbox.mjs';
 import {listConversations,readConversation,sendSecureMessage,markConversationRead} from '../platform/messages.mjs';
 import {MEMBER_MESSAGE_CLIENT} from '../platform/messages-ui.mjs';
 import original,{authenticate,sessionHash} from './member-kernel.mjs';
@@ -8,6 +9,7 @@ import {readObject} from '../platform/domain.mjs';
 import {linkPaidOrder} from '../platform/intake.mjs';
 export default {async fetch(request,env,ctx){
  if(env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return original.fetch(request,env,ctx);
+ const inbox=await memberInbox(request,env);if(inbox)return inbox;
  const path=new URL(request.url).pathname;
  if(env.SSTRX_SECURE_MESSAGES_ENABLED==='true'&&path==='/assets/clinical-records/client.mjs'&&request.method==='GET'){
   const response=await original.fetch(request,env,ctx);if(!response.ok)return response;return new Response(await response.text()+MEMBER_MESSAGE_CLIENT,{status:response.status,headers:response.headers});
