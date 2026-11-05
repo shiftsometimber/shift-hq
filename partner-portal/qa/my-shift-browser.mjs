@@ -22,7 +22,7 @@ for(const [engine,type]of [['chromium',chromium],['webkit',webkit]]){
  const checks={};const errors=[];let videoStart=0;let resetCaptures=0,trackingConsent=true;const screenshots=[];
  const check=(name,details)=>{checks[name]={pass:true,videoMs:videoStart?Math.round(performance.now()-videoStart):null,...details};};
  const snap=async(page,name)=>{const file=engine+'-'+name+'.png';await page.screenshot({path:directory+'/'+file,fullPage:true});screenshots.push(file);return file;};
- const contextCookies=(token,domain='shiftsometimber.co.uk',name='sst_session')=>[{name,value:token,domain,path:'/',httpOnly:true,secure:true,sameSite:'Lax'}];
+ const contextCookies=(token,domain='shiftsometimber.co.uk',name='sst_session')=>[{name,value:token,url:'https://'+domain+'/',httpOnly:true,secure:true,sameSite:'Lax'}];
  const original={async fetch(request){const u=new URL(request.url);if(u.pathname==='/member/my-shift'||u.pathname==='/member/settings')return new Response(retained.html,{headers:{'Content-Type':'text/html'}});if(retained.styles[u.pathname])return new Response(retained.styles[u.pathname],{headers:{'Content-Type':'text/css'}});if(retained.scripts[u.pathname])return new Response(retained.scripts[u.pathname],{headers:{'Content-Type':'text/javascript'}});return new Response('Not found',{status:404});}};
  const env={...f.env,MY_SHIFT_MEMBER:{fetch:r=>member.fetch(r,f.env,{})}},bridge=wrapMemberInboxNavigation(original);
  const harness=retained.retainedFactory+'\n'+repairAccountBoundary(retained.legacyLoader).replace('async function B(D)','async function openRetained(D)')+`
