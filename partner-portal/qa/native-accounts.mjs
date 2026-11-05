@@ -24,7 +24,7 @@ export async function nativeAccounts(){
  const owner=await json(await api('/v1/hq/me',undefined,ownerSession));if(!owner.user.mfaEnabled)throw Error('Native MFA state absent');
  secrets.set('member',{email:memberEmail,password:memberPassword});secrets.set('owner',{email,password,totpSecret:setup.secret});
  const actors={owner:{user:owner.user,session:ownerSession}};
- for(const [kind,role] of [['governor','owner'],['clinician','clinical'],['dispenser','clinical']]){
+ for(const [kind,role] of [['governor','owner'],['clinician','clinical'],['dispenser','clinical'],['otherDispenser','clinical'],['clinicalAdmin','clinical'],['pharmacyAdmin','clinical'],['support','support'],['operations','operations']]){
   const email='full-loop-'+kind+'-20261104@example.test',password=randomBytes(24).toString('base64url')+'aA7!';
   await json(await api('/v1/hq/users',{email,password,name:'TEST Full Loop '+kind,role},ownerSession),201);
   const first=await api('/v1/hq/auth/login',{email,password});await json(first);let session=first.headers.getSetCookie().find(s=>s.startsWith('sst_hq_session=')).split(';')[0];

@@ -3,8 +3,10 @@ import {createHash} from 'node:crypto';
 export async function buildKernel(){
  const file=new URL('./vendor/clinical-portal-20261024.mjs',import.meta.url),original=await fs.readFile(file,'utf8');
  if(createHash('sha256').update(original).digest('hex')!=='b7bd886a5357222af1717f053959d608094dd32f07c072440166bf4998f5d3c5')throw Error('Clinical baseline changed; reconcile before building.');
- let source="import {deliveryFromAssessment,requireDelivery} from './fulfilment-delivery.mjs';\n"+original;
+ let source="import {hasOpenSupplyHold,requireNoSupplyHold} from '../platform/supply-holds.mjs';\nimport {signingOrigin,rememberSigningOrigin,challengeOrigin,paidClinicalOrder} from '../platform/signing.mjs';\nimport {deliveryFromAssessment,requireDelivery} from './fulfilment-delivery.mjs';\n"+original;
  const once=(before,after)=>{if(source.split(before).length!==2)throw Error('Clinical adaptation anchor changed: '+before.slice(0,80));source=source.replace(before,after);};
+ once('async function internalPrescriptionCurrent(env, order) {','async function internalPrescriptionCurrent(env, order) {\n  if(await hasOpenSupplyHold(env,order.orderNumber))return false;');
+ once('const b = await readJson(request), current =','const b = await readJson(request); if(["accept","prepare","dispatch"].includes(b.action))await requireNoSupplyHold(env,f.orderNumber); const current =');
  once('var RP_ID = "hq.shiftsometimber.co.uk";','var RP_ID = "partner.shiftsometimber.co.uk";');
  once('var RP_ORIGIN = "https://hq.shiftsometimber.co.uk";','var RP_ORIGIN = "https://partner.shiftsometimber.co.uk";');
  // Match the real catalogue CHECK constraints; no out-of-stock/archived item is admitted.
@@ -29,7 +31,21 @@ export async function buildKernel(){
  once('const client = clientData(proof.clientDataJSON, "webauthn.get", challenge), auth = unb64(proof.authenticatorData, 6e3), { flags, counter } = await authenticator(auth, false);',`let origin = RP_ORIGIN;
   if(historical){try{origin=JSON.parse(new TextDecoder().decode(unb64(proof.clientDataJSON,6e3))).origin;}catch{fail(422,"invalid_signing_client_data");}if(!["https://partner.shiftsometimber.co.uk","https://hq.shiftsometimber.co.uk"].includes(origin))fail(403,"signing_origin_or_challenge_mismatch");}
   const client = clientData(proof.clientDataJSON, "webauthn.get", challenge,origin), auth = unb64(proof.authenticatorData, 6e3), { flags, counter } = await authenticator(auth, false,new URL(origin).hostname);`);
- source+='\nexport {prescriptionHqRoute, partnerRoute, hqClinicalRoute, commissioningRoute, notificationManagementRoute, internalDispensingAdapters, credentialsCurrent, currentPartner, permission, authCondition, caseView, caseAction, memberPrescription, memberFulfilment, memberView, memberTracking, verifyRegistration, verifyAssertion, careFields, careChecks, CARE_HANDOVER_VERSION};\n';
+ // Bind newly created WebAuthn challenges to their actual browser origin.
+ once('async function newChallenge(env, context, kind, key = null, document = null) {','async function newChallenge(env, context, kind, key = null, document = null, portalOrigin = RP_ORIGIN) {\n  if(kind===\'sign\')await requireNoSupplyHold(env,context.record.order_number);');
+ once('return { id, challenge, expiresAt: expires, rpId: RP_ID,','await rememberSigningOrigin(env.DB,id,portalOrigin);\n  return { id, challenge, expiresAt: expires, rpId: new URL(portalOrigin).hostname,');
+ once('await newChallenge(env, context, "register")','await newChallenge(env, context, "register",null,null,signingOrigin(request))');
+ once('await newChallenge(env, context, "sign", key, doc)','await newChallenge(env, context, "sign", key, doc,signingOrigin(request))');
+ once('async function verifyRegistration(proof, challenge) {','async function verifyRegistration(proof, challenge, portalOrigin = RP_ORIGIN) {');
+ once('clientData(proof.clientDataJSON, "webauthn.create", challenge);','clientData(proof.clientDataJSON, "webauthn.create", challenge,portalOrigin);');
+ once('await authenticator(bytes, true)','await authenticator(bytes, true,new URL(portalOrigin).hostname)');
+ once('await verifyRegistration(b.proof, c.challenge)','await verifyRegistration(b.proof, c.challenge,await challengeOrigin(env.DB,c.id,signingOrigin(request)))');
+ once('{ historical = false } = {}) {','{ historical = false, portalOrigin = RP_ORIGIN } = {}) {');
+ once('let origin = RP_ORIGIN;','let origin = portalOrigin;');
+ once('await verifyAssertion(b.proof, c.challenge, key, actor2.id)','await verifyAssertion(b.proof, c.challenge, key, actor2.id,{portalOrigin:await challengeOrigin(env.DB,c.id,signingOrigin(request))})');
+ once('if(!["https://partner.shiftsometimber.co.uk","https://hq.shiftsometimber.co.uk"].includes(origin))','if(!["https://partner.shiftsometimber.co.uk","https://hq.shiftsometimber.co.uk","https://sstrx.shiftsometimber.co.uk"].includes(origin))');
+ once('const paid = ["paid", "succeeded", "completed", "fulfilled"].includes(order.status) && /^cs_live_/.test(order.stripe_checkout_session_id || "");','const paid = paidClinicalOrder(env,order);');
+ source+='\nexport {newStaff,internalPrescriptionDocument,internalPrescriptionCurrent,prescriptionHqRoute, partnerRoute, hqClinicalRoute, commissioningRoute, notificationManagementRoute, internalDispensingAdapters, credentialsCurrent, currentPartner, permission, authCondition, caseView, caseAction, memberPrescription, memberFulfilment, memberView, memberTracking, verifyRegistration, verifyAssertion, careFields, careChecks, CARE_HANDOVER_VERSION};\n';
  await fs.writeFile(new URL('./clinical-kernel.mjs',import.meta.url),source);
  return {baseline:'f65e4594-fd83-49d4-b20d-f43fcee88e1c',sha256:createHash('sha256').update(source).digest('hex')};
 }

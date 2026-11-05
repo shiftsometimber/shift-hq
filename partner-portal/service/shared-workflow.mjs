@@ -1,5 +1,6 @@
 import {applyPrescriptionEvent} from './vendor/core-prescription-workflow-v1.mjs';
 import {ensureSharedSchema} from './schema.mjs';
+import {guardedSupplyStatement} from '../platform/supply-holds.mjs';
 const stamp=()=>new Date().toISOString();
 const safeError=e=>String(e?.error||e?.message||'shared_order_sync_failed').slice(0,180);
 const row=(DB,sql,...args)=>DB.prepare(sql).bind(...args).first();
@@ -7,11 +8,12 @@ function trackedStatement(native,sql,args=[]){return {native,sql,args,bind(...va
 // The outbox insert shares the ORIGINAL clinical/fulfilment transaction. A failed
 // append rolls the action back. Projection retries reuse the Core event ledger.
 export function withSharedOutbox(env){
- if(env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return env;
+ const shared=env.SHARED_ORDER_WORKFLOW_ENABLED==='true';
+ if(!shared&&env.SSTRX_PLATFORM_ENABLED!=='true')return env;
  const DB=env.DB;
- const facade={prepare(sql){return trackedStatement(DB.prepare(sql),sql)},async batch(statements){
+ const facade={__sstrxBaseDB:DB.__sstrxBaseDB||DB,prepare(sql){return trackedStatement(DB.prepare(sql),sql)},async batch(statements){
   const extra=[],orders=new Set();
-  for(const s of statements){
+  for(const s of shared?statements:[]){
    let table,key,recordId,orderNumber;
    if(/^INSERT INTO clinical_case_events\b/.test(s.sql)){table='clinical_case_events';key=s.args[0];recordId=s.args[1];}
    else if(/^INSERT INTO clinical_prescription_events\b/.test(s.sql)){table='clinical_prescription_events';key=s.args[0];recordId=s.args[1];}
@@ -32,7 +34,7 @@ export function withSharedOutbox(env){
     WHERE ${filter} AND EXISTS(SELECT 1 FROM ${table} WHERE id=?)`).bind(table+':'+key,table,key,stamp(),value,key));
   }
   for(const orderNumber of orders){const result=await drainSharedWorkflow({...env,DB},{orderNumber});if(result.pending)throw Object.assign(Error('shared_order_sync_pending'),{status:503});}
-  return DB.batch([...statements.map(s=>s.native||s),...extra]);
+  return DB.batch([...statements.map(s=>guardedSupplyStatement(env,DB,s)),...extra]);
  }};
  return {...env,DB:facade};
 }
@@ -95,6 +97,8 @@ export async function completeSharedResponse(response,request,env){
  let orderNumber=fulfilment?.[1];
  if(record){const linked=await env.DB.prepare('SELECT order_number FROM clinical_member_records WHERE id=?').bind(record[1]).first();orderNumber=linked?.order_number;}
  if(!orderNumber)return response;
+ await captureClinicalFollowup(env,orderNumber);
  const outcome=await drainSharedWorkflow(env,{orderNumber}),headers=new Headers(response.headers);headers.set('X-Shift-Shared-Order-Sync',outcome.pending?'pending':'complete');
  return new Response(response.body,{status:response.status,headers});
 }
+import {captureClinicalFollowup} from '../platform/followups.mjs';

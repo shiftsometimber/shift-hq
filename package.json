@@ -1,1 +1,13 @@
-{"private":true,"scripts":{"dev":"node partner-portal/qa/full-loop-server.mjs","qa:seeded":"node partner-portal/qa/server.mjs","qa:full-loop":"node partner-portal/qa/run-full-loop.mjs --continue"}}
+{
+  "private": true,
+  "scripts": {
+    "dev": "node partner-portal/qa/sstrx-server.mjs",
+    "qa:seeded": "node partner-portal/qa/server.mjs",
+    "qa:full-loop": "node partner-portal/qa/run-full-loop.mjs --continue",
+    "test:sstrx": "node partner-portal/service/build-kernel.mjs && node partner-portal/service/build-member-kernel.mjs && node partner-portal/build-sstrx.mjs && node --test partner-portal/test/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1",
+    "playwright": "1.58.2"
+  }
+}

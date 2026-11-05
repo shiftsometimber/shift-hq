@@ -1,0 +1,175 @@
+{
+  "date": "2026-11-04",
+  "meaning": "Verified means an explicit first-party published claim or direct supplier correspondence was inspected, NOT an independent supplier implementation test. Partially evidenced means a narrower claim/process is evidenced but its technical completeness is not. Unknown means the reviewed evidence does not establish it. No vendor sandbox/live connection was tested.",
+  "sources": {
+    "LoopRX": [
+      "https://www.looprx.io/",
+      "https://www.looprx.io/partners",
+      "https://www.looprx.io/terms-of-service"
+    ],
+    "OneScript": [
+      "https://onescript.co.uk/",
+      "https://onescript.co.uk/faqs"
+    ],
+    "Primed": [
+      "https://www.primedpharmacy.com/",
+      "Shannon Townsend, 4 November 2026 10:13:52 UTC and 28 October 2026 09:41:44 UTC, original Outlook correspondence inspected."
+    ]
+  },
+  "rows": [
+    {
+      "capability": "Clinic onboarding",
+      "sstRx": "Implemented; live approval outstanding",
+      "looprx": "Partially evidenced",
+      "onescript": "Verified",
+      "primedRx": "Verified"
+    },
+    {
+      "capability": "Prescriber onboarding",
+      "sstRx": "Native activation, MFA and independent checks tested",
+      "looprx": "Partially evidenced",
+      "onescript": "Partially evidenced",
+      "primedRx": "Verified"
+    },
+    {
+      "capability": "User roles and access",
+      "sstRx": "Eight requested roles plus independent governor tested",
+      "looprx": "Partially evidenced",
+      "onescript": "Partially evidenced",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "Clinical assessment",
+      "sstRx": "Native questionnaire and clarification tested; provider approval outstanding",
+      "looprx": "Verified",
+      "onescript": "Partially evidenced",
+      "primedRx": "Unknown"
+    },
+    {
+      "capability": "Identity verification",
+      "sstRx": "Evidence and explicit professional verification; no automatic ID connection",
+      "looprx": "Partially evidenced",
+      "onescript": "Unknown",
+      "primedRx": "Unknown"
+    },
+    {
+      "capability": "Prescription signing",
+      "sstRx": "ES256 WebAuthn tested; approved clinical/legal route outstanding",
+      "looprx": "Verified",
+      "onescript": "Partially evidenced",
+      "primedRx": "Unknown"
+    },
+    {
+      "capability": "Medicine/formulary catalogue",
+      "sstRx": "Existing catalogue retained; eight-category service framework",
+      "looprx": "Partially evidenced",
+      "onescript": "Verified",
+      "primedRx": "Verified"
+    },
+    {
+      "capability": "Multiple pharmacies",
+      "sstRx": "Native destinations plus immutable contract snapshots tested",
+      "looprx": "Unknown",
+      "onescript": "Unknown",
+      "primedRx": "Unknown"
+    },
+    {
+      "capability": "Prescription routing",
+      "sstRx": "Native signed destination and supplier-switch test passed",
+      "looprx": "Verified",
+      "onescript": "Verified",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "Pharmacy acceptance/rejection",
+      "sstRx": "Native pharmacy actions tested",
+      "looprx": "Partially evidenced",
+      "onescript": "Partially evidenced",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "Stock and availability",
+      "sstRx": "Existing fresh-stock guard tested; no live supplier stock feed",
+      "looprx": "Unknown",
+      "onescript": "Partially evidenced",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "Dispensing status",
+      "sstRx": "Native manual and synthetic verified-event projection tested",
+      "looprx": "Verified",
+      "onescript": "Verified",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "Delivery tracking",
+      "sstRx": "Native carrier references tested; no real courier connection",
+      "looprx": "Verified",
+      "onescript": "Verified",
+      "primedRx": "Verified"
+    },
+    {
+      "capability": "Repeat prescribing",
+      "sstRx": "Fresh checkout, assessment, signature and fulfilment tested",
+      "looprx": "Verified",
+      "onescript": "Partially evidenced",
+      "primedRx": "Verified"
+    },
+    {
+      "capability": "Notifications",
+      "sstRx": "Draft/review controls retained; no external clinical delivery proved",
+      "looprx": "Verified",
+      "onescript": "Partially evidenced",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "Payment and refunds",
+      "sstRx": "Native test callbacks retained; fee/refund review and ledger tested",
+      "looprx": "Partially evidenced",
+      "onescript": "Partially evidenced",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "Commercial reconciliation",
+      "sstRx": "Quoted vs receipted costs, settlement and variance tested",
+      "looprx": "Partially evidenced",
+      "onescript": "Partially evidenced",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "API/webhook connectivity",
+      "sstRx": "Neutral contract layer; real vendor adapters held on genuine contracts",
+      "looprx": "Unknown",
+      "onescript": "Verified",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "Operational reporting",
+      "sstRx": "Scoped current counts, bounded coverage and source failure states",
+      "looprx": "Verified",
+      "onescript": "Verified",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "Audit history",
+      "sstRx": "Native and additive events tested; historical records retained",
+      "looprx": "Verified",
+      "onescript": "Partially evidenced",
+      "primedRx": "Unknown"
+    },
+    {
+      "capability": "Multi-organisation access",
+      "sstRx": "Clinic A/B, pharmacy A/B and administrator boundaries tested",
+      "looprx": "Unknown",
+      "onescript": "Partially evidenced",
+      "primedRx": "Partially evidenced"
+    },
+    {
+      "capability": "Supplier switching",
+      "sstRx": "New synthetic order fulfilled by B; A history unchanged and inaccessible to B",
+      "looprx": "Unknown",
+      "onescript": "Unknown",
+      "primedRx": "Unknown"
+    }
+  ]
+}

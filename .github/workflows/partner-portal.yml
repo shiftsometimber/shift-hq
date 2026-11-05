@@ -8,13 +8,30 @@ permissions:
   contents: read
 jobs:
   isolation:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node partner-portal/service/build-kernel.mjs && node partner-portal/service/build-member-kernel.mjs
+      - run: node partner-portal/build-sstrx.mjs
       - run: node --test partner-portal/test/*.test.mjs
       - run: node --test hq-operations.test.cjs radar-source-review-logic.test.mjs radar-source-intake.test.mjs
       - run: node --check hq-partner-desk.js && node --check hq-management.js && node partner-portal/build.mjs && node --check .partner-qa/worker.bundle.mjs
+      - run: node partner-portal/qa/build-native-auth.mjs && node partner-portal/qa/full-loop-scenario.mjs --sstrx
+      - run: npx playwright install --with-deps chromium webkit
+      - run: node partner-portal/qa/browser-acceptance.mjs
+      - run: node partner-portal/qa/measure-api.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sstrx-acceptance-${{ github.sha }}
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            .partner-qa/*.bundle.mjs
+            .partner-qa/full-loop/report.json
+            .partner-qa/browser/acceptance.json
+            .partner-qa/api-performance.json

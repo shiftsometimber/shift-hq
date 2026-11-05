@@ -1,0 +1,25 @@
+{
+  "purpose": "Read-only serving baseline and exact software rollback targets; no production change made by the SST Rx candidate",
+  "recordedDate": "2026-11-04",
+  "existingPartnerBranch": "18cc47ce7afc6a2d27b2e2c55977e7c357e61cf9",
+  "coreMainInspected": "60ecf85d61848d64ab2ea5ba9037176721171131",
+  "sharedPrescriptionPr": {"number":1450,"state":"open","source":"ff6840baa077f2feacf212f4b1d5517529d342ac","previousDeploymentReceiptRetained":true},
+  "workers": {
+    "shift-partner-portal": {"deployment":"7ffcd961-4499-4d55-9ddd-86e78ead18ed","version":"c8702eb0-2320-470c-bb1b-210fd2715e17"},
+    "shift-hq-clinical-portal": {"deployment":"30a5658c-77a7-4b9c-a399-3551b9d7dfd0","version":"ecc8585e-ddbb-445e-936b-d9c3d2f4b631"},
+    "shift-clinical-records": {"deployment":"b790ce5a-bf4a-4f67-a763-c9a11b14c308","version":"47214224-d09b-451e-830c-8eaa672af1cb"},
+    "shift-hq": {"deployment":"c38c6a16-9830-4ec1-972c-9d02ba9ff129","version":"0fa4f773-4dc2-414b-babf-f72ca9a3f039"}
+  },
+  "preserved": {
+    "databaseId":"88f40aed-cb23-4372-8c94-8a73f48bc847",
+    "clinicalBucket":"shift-clinical-member-records",
+    "hqV111GitBlob":"082a1bf557cf8ec57279db9b155a4a7fc5010b42",
+    "sessionSecretBinding":"PORTAL_SESSION_KEY",
+    "coreAuthenticationBinding":"HQ_AUTH -> shift-core",
+    "allExistingRouteOwnership":true
+  },
+  "readOnlyAggregates":{"activeProfessionals":0,"approvedOrganisations":0,"pendingOrderProjections":0},
+  "schemaReadSha256":"d72ee2c50417e66c5a50d7f986e16703a334f59c64d34688b7bdf55a89597789",
+  "domains":{"sstrx.shiftsometimber.co.uk":"DNS lookup failed","sstrx.co.uk":"DNS lookup failed","zones":"both active","dnsRecordApi":"403 Forbidden"},
+  "rollbackRules":["Freshly compare the current deployment, source and bindings before an approved promotion; stop on concurrent drift.","Restore only the versions and owned routes actually changed by this release, after checking ownership.","Close the new SST Rx admission flag first if access behaviour is uncertain; preserve the existing partner address.","Preserve D1/R2, historical prescriptions/orders and additive audit/outbox/extension tables. Never roll back patient or financial data.","Do not roll back or redeploy Core/public/My Timber components that this candidate does not own."]
+}

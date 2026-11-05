@@ -2,6 +2,10 @@ import original,{existingHqIdentity,partnerRoute,prescriptionHqRoute,hqClinicalR
 import {ensureSharedSchema} from './schema.mjs';
 import {withSharedOutbox,drainSharedWorkflow,completeSharedResponse} from './shared-workflow.mjs';
 import {hqDeskRoute} from './hq-desk.mjs';
+import {platformRoute} from '../platform/service.mjs';
+import {linkOutstandingPaidOrders} from '../platform/intake.mjs';
+import {ensurePlatformSchema} from '../platform/schema.mjs';
+import {publicAccessRequest} from '../platform/access-requests.mjs';
 const API='/v1/hq/clinical';
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private','Access-Control-Allow-Origin':'https://hq.shiftsometimber.co.uk','Access-Control-Allow-Credentials':'true','Vary':'Origin'}});
 export default {
@@ -9,6 +13,8 @@ export default {
   const url=new URL(request.url);
   if(url.hostname!=='api.shiftsometimber.co.uk'||!url.pathname.startsWith(API))return original.fetch(request,env,ctx);
   try{
+   if(url.pathname===API+'/access-requests')return publicAccessRequest(request,env);
+   if(env.SSTRX_PLATFORM_ENABLED==='true'){await ensureSharedSchema(env.DB);await ensurePlatformSchema(env.DB);const platform=await platformRoute(request,env);if(platform)return platform;}
    const desk=await hqDeskRoute(request,env);if(desk)return desk;
    // Onboarding exposes only the current professional's activation state, never cases.
    if(url.pathname===API+'/partners/enrolment'&&request.method==='GET'){
@@ -29,5 +35,5 @@ export default {
    return completeSharedResponse(await hqClinicalRoute(request,run,existingHqIdentity),request,env);
   }catch{return json({error:'clinical_service_unavailable'},503);}
  },
- async scheduled(event,env,ctx){if(env.SHARED_ORDER_WORKFLOW_ENABLED==='true')ctx.waitUntil(drainSharedWorkflow(env));}
+ async scheduled(event,env,ctx){if(env.SHARED_ORDER_WORKFLOW_ENABLED==='true')ctx.waitUntil(drainSharedWorkflow(env));if(env.SSTRX_PAID_RECORD_LINK_ENABLED==='true')ctx.waitUntil(linkOutstandingPaidOrders(env));}
 };

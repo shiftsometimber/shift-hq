@@ -1,12 +1,3 @@
-import fs from 'node:fs/promises';
-const root=new URL('.',import.meta.url),output=new URL('../.partner-qa/worker.bundle.mjs',import.meta.url);
-const names=['ui.mjs','session.mjs','policy.mjs','hq-client.mjs','worker.mjs'];
-const source=[];
-for(const name of names){
-  let code=await fs.readFile(new URL(name,root),'utf8');
-  code=code.replace(/^import .*;\r?\n/gm,'').replace(/^export (?!default)/gm,'');
-  source.push('// partner-portal/'+name+'\n'+code);
-}
-await fs.mkdir(new URL('.',output),{recursive:true});
-await fs.writeFile(output,source.join('\n'));
-console.log('Partner Worker bundle prepared. No dependencies or business data included.');
+import {build} from 'esbuild';
+await build({entryPoints:[new URL('worker.mjs',import.meta.url).pathname],bundle:true,format:'esm',target:'es2022',outfile:new URL('../.partner-qa/worker.bundle.mjs',import.meta.url).pathname});
+console.log('Existing partner gateway bundle prepared with its original module boundaries.');
