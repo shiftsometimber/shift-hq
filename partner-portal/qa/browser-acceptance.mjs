@@ -7,10 +7,10 @@ const out=new URL('../../.partner-qa/browser/',import.meta.url);await fs.mkdir(o
 const stats=values=>{const a=[...values].sort((a,b)=>a-b);return {n:a.length,medianMs:(a[(a.length-1)>>1]+a[a.length>>1])/2,p95Ms:a[Math.ceil(a.length*.95)-1],samplesMs:values}};
 const report={scope:'Isolated hosted localhost QA, fictional SQLite records and test authority. Actual Chromium/WebKit engines; not Safari-device, production auth/cookies or supplier acceptance.',engines:[]};
 for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
- const port=name==='chromium'?4178:4179,base='http://127.0.0.1:'+port,server=spawn(process.execPath,['partner-portal/qa/sstrx-server.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','pipe']});let browser;
+ const port=name==='chromium'?4178:4179,base='http://127.0.0.1:'+port,server=spawn(process.execPath,['partner-portal/qa/sstrx-server.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','pipe']});let browser,page;const errors=[];
  try{
   await new Promise((resolve,reject)=>{server.stdout.on('data',b=>{if(String(b).includes('acceptance ready'))resolve()});server.once('error',reject);server.once('exit',code=>reject(Error('QA server stopped '+code)));setTimeout(()=>reject(Error('QA server did not become ready')),15000).unref()});
-  browser=await engine.launch({headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000}});await context.route('**/*',route=>{const u=new URL(route.request().url());return u.origin===base||['data:','blob:'].includes(u.protocol)?route.continue():route.abort()});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  browser=await engine.launch({headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000}});await context.route('**/*',route=>{const u=new URL(route.request().url());return u.origin===base||['data:','blob:'].includes(u.protocol)?route.continue():route.abort()});page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
   const measured={engine:name,layouts:[],pageErrors:errors};
   for(const [key,path]of [['before','/baseline'],['after','/']]){const samples=[];for(let i=0;i<20;i++){await page.goto(base+path);await page.waitForFunction(()=>document.documentElement.dataset.partnerShellMs);samples.push(Number(await page.locator('html').getAttribute('data-partner-shell-ms')))}measured[key+'SignInShell']=stats(samples)}
   await page.goto(base+'/qa/enter/clinician');await page.getByRole('button',{name:'Open',exact:true}).waitFor();let documents=0;page.on('request',r=>{if(r.resourceType()==='document')documents++});
@@ -32,7 +32,7 @@ for(const [name,engine]of [['chromium',chromium],['webkit',webkit]]){
   await page.goto(base+'/qa/enter/clinician');await page.getByRole('button',{name:'Open',exact:true}).waitFor();
   await context.request.get(base+'/qa/revoke');await page.getByRole('button',{name:'Refresh view',exact:true}).click();await page.getByRole('link',{name:'Return to sign-in',exact:true}).waitFor();assert.equal(await page.getByText('TEST-SHARED-1042',{exact:true}).count(),0);assert.equal(await page.locator('#rx-native').textContent(),'');measured.expiryClearsPrivateContent=true;
   assert.deepEqual(errors,[]);measured.result='PASS';report.engines.push(measured);
- }catch(error){report.engines.push({engine:name,result:'FAIL',error:error.message});throw error;}
+ }catch(error){report.engines.push({engine:name,result:'FAIL',error:error.message,pageErrors:errors,url:page?.url(),body:page?await page.locator('body').innerText().catch(()=>'unavailable'):null});if(page)await page.screenshot({path:new URL('failure-'+name+'.png',out).pathname,fullPage:true}).catch(()=>{});throw error;}
  finally{await browser?.close();server.kill();await fs.writeFile(new URL('acceptance.json',out),JSON.stringify(report,null,2)+'\n');}
 }
 console.log(JSON.stringify(report));
