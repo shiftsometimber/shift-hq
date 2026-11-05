@@ -1,11 +1,17 @@
 // Additive extensions in the SAME existing clinical/order D1. No patient copy.
 const ready=new WeakMap();
 export async function ensurePlatformSchema(DB){
+ // Request-scoped transaction facades share the same underlying D1 schema cache.
+ DB=DB.__sstrxBaseDB||DB;
  if(ready.has(DB))return ready.get(DB);
  const task=(async()=>{for(const sql of statements)await DB.prepare(sql).run()})();ready.set(DB,task);
  try{await task}catch(e){ready.delete(DB);throw e}
 }
 export const statements=[
+ `CREATE TABLE IF NOT EXISTS rx_access_requests(id TEXT PRIMARY KEY,duplicate_key TEXT NOT NULL,payload_digest TEXT NOT NULL,details_json TEXT NOT NULL,status TEXT NOT NULL,version INTEGER NOT NULL,reviewed_by INTEGER,review_note TEXT,onboarding_staff_id TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)`,
+ `CREATE UNIQUE INDEX IF NOT EXISTS rx_one_open_access_request ON rx_access_requests(duplicate_key) WHERE status IN ('pending','needs_information','approved_for_onboarding','onboarding_started')`,
+ `CREATE INDEX IF NOT EXISTS rx_access_request_queue ON rx_access_requests(status,created_at)`,
+ `CREATE TABLE IF NOT EXISTS rx_access_request_limits(id TEXT PRIMARY KEY,attempts INTEGER NOT NULL,expires_at INTEGER NOT NULL)`,
  `CREATE TABLE IF NOT EXISTS rx_action_claims(record_id TEXT NOT NULL REFERENCES clinical_member_records(id),source_key TEXT NOT NULL,owner_user_id INTEGER NOT NULL,version INTEGER NOT NULL,acknowledged_at TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(record_id,source_key))`,
  `CREATE TABLE IF NOT EXISTS rx_supply_holds(id TEXT PRIMARY KEY,order_number TEXT NOT NULL,kind TEXT NOT NULL,org_id TEXT,opened_by INTEGER NOT NULL,state TEXT NOT NULL,version INTEGER NOT NULL,source_reference TEXT NOT NULL,review_reference TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)`,
  `CREATE INDEX IF NOT EXISTS rx_open_supply_holds ON rx_supply_holds(order_number,state)`,
