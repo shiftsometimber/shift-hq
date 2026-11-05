@@ -1,5 +1,5 @@
 import {createDiagnosticOrder} from './diagnostics.mjs';
-import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition} from '../service/clinical-kernel.mjs';
+import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition,newStaff} from '../service/clinical-kernel.mjs';
 import {ensurePlatformSchema} from './schema.mjs';
 import {SERVICES,API_VERSION,fail,text,economicsTerms,reconcileEconomics,commissioning,nextAction,declineRefund,EXPENSE_KINDS,readObject} from './domain.mjs';
 import {ADAPTERS,selectFutureSupplier,captureOrderRoute,queueSubmission,submitJob,reconcileJob} from './integrations.mjs';
@@ -58,6 +58,25 @@ export async function platformRoute(request,env){
   const a=await platformActor(request,env);if(a.response)return a.response;await ensurePlatformSchema(env.DB);
   const p=url.pathname.slice(BASE.length).split('/').filter(Boolean);
   if(p[0]==='identity'&&p.length===1&&request.method==='GET')return json({staff:a.staff||null,organisationId:a.orgId||null,role:a.staff?.kind||a.role});
+  if(p[0]==='access-requests'){
+   if(!a.internal||!['owner','admin','operations'].includes(a.role))fail(403,'internal_access_reviewer_required');
+   if(request.method==='GET'&&p.length===1){const list=await all(env.DB.prepare("SELECT * FROM rx_access_requests ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'needs_information' THEN 1 WHEN 'approved_for_onboarding' THEN 2 ELSE 3 END,created_at DESC LIMIT 101"));return json({requests:list.slice(0,100).map(r=>({...r,details:JSON.parse(r.details_json),details_json:undefined,duplicate_key:undefined,payload_digest:undefined,contactDetailsVerified:false})),hasMore:list.length>100,canApprove:a.commercial,organisations:await all(env.DB.prepare("SELECT id,json_extract(state_json,'$.name') name,json_extract(state_json,'$.kind') kind FROM partner_organisations WHERE json_extract(state_json,'$.status') IN ('pending','approved') ORDER BY name")),notificationsSent:false});}
+   if(request.method==='POST'&&p.length===3&&['review','onboarding'].includes(p[2])){
+    if(!a.commercial)fail(403,'owner_access_approval_required');const b=await input(request),row=await env.DB.prepare('SELECT * FROM rx_access_requests WHERE id=?').bind(p[1]).first();if(!row)fail(404,'access_request_not_found');if(row.version!==b.version)fail(409,'access_request_changed');const date=at(),g=authCondition(a,date);
+    if(p[2]==='review'){
+     if(!['approved_for_onboarding','declined','needs_information'].includes(b.decision)||!['pending','needs_information'].includes(row.status))fail(409,'request_not_awaiting_review');text(b.reviewNote,1000);
+     const changes=await env.DB.batch([env.DB.prepare(`UPDATE rx_access_requests SET status=?,version=version+1,reviewed_by=?,review_note=?,updated_at=? WHERE id=? AND version=? AND status IN ('pending','needs_information') AND ${g.sql}`).bind(b.decision,a.id,b.reviewNote,date,row.id,b.version,...g.args),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,NULL,'access_request',?,'reviewed',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),row.id,JSON.stringify({decision:b.decision}),date)]);if(changes[0].meta.changes!==1)fail(409,'request_or_access_changed');return json({status:b.decision,version:b.version+1,accessGranted:false,notificationsSent:false});
+    }
+    if(row.status!=='approved_for_onboarding')fail(409,'approved_request_required');const details=JSON.parse(row.details_json),kind=details.requestedRole==='clinician'?'clinician':details.requestedRole==='pharmacy_operator'?'dispensing':null;if(!kind)fail(409,'administrator_identity_and_membership_setup_required');
+    const org=await env.DB.prepare('SELECT state_json FROM partner_organisations WHERE id=?').bind(b.orgId).first();if(!org)fail(422,'existing_organisation_required');const o=JSON.parse(org.state_json);if(o.kind!==(kind==='clinician'?'clinical':'pharmacy')||!['pending','approved'].includes(o.status))fail(422,'matching_organisation_required');
+    const id=crypto.randomUUID(),staff=newStaff({kind,orgId:b.orgId,name:details.fullName,email:details.workEmail},id,date),changes=await env.DB.batch([
+     env.DB.prepare(`INSERT INTO partner_staff SELECT ?,NULL,NULL,?,?,0,?,? WHERE ${g.sql} AND EXISTS(SELECT 1 FROM rx_access_requests WHERE id=? AND version=? AND status='approved_for_onboarding') AND EXISTS(SELECT 1 FROM partner_organisations WHERE id=? AND state_json=?)`).bind(id,kind,b.orgId,JSON.stringify(staff),date,...g.args,row.id,b.version,b.orgId,org.state_json),
+     env.DB.prepare("UPDATE rx_access_requests SET status='onboarding_started',onboarding_staff_id=?,version=version+1,updated_at=? WHERE id=? AND version=? AND changes()=1").bind(id,date,row.id,b.version),
+     env.DB.prepare("INSERT INTO partner_audit SELECT ?,'staff',?,0,?,'application_created',?,? WHERE changes()=1").bind(crypto.randomUUID(),id,String(a.id),JSON.stringify({source:'approved_sst_rx_request',requestId:row.id}),date)
+    ]);if(changes[0].meta.changes!==1)fail(409,'request_or_access_changed');return json({staffId:id,status:'draft',accessGranted:false,credentialsCreated:false,notificationsSent:false},201);
+   }
+   fail(404,'not_found');
+  }
   if(p[0]==='memberships'){
    if(!a.orgAdmin&&!a.commercial)fail(403,'organisation_admin_required');
    if(request.method==='GET')return json({memberships:await all(env.DB.prepare(a.commercial?'SELECT hq_user_id,org_id,role,status,version FROM rx_org_memberships ORDER BY org_id,hq_user_id LIMIT 200':'SELECT hq_user_id,org_id,role,status,version FROM rx_org_memberships WHERE org_id=? ORDER BY hq_user_id LIMIT 200').bind(...a.commercial?[]:[a.orgId]))});
