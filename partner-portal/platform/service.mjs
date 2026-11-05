@@ -1,4 +1,6 @@
 import {passwordSignInAllowed} from '../password-signin.mjs';
+import {functionalCaseRoute} from './functional-case-routes.mjs';
+import {refundRoute} from './refunds.mjs';
 import {listConversations,readConversation,sendSecureMessage,markConversationRead,messageAlertDrafts} from './messages.mjs';
 import {createDiagnosticOrder} from './diagnostics.mjs';
 import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition,newStaff} from '../service/clinical-kernel.mjs';
@@ -59,6 +61,8 @@ export async function platformRoute(request,env){
   if(!['GET','POST'].includes(request.method))fail(405,'method_not_allowed');
   const a=await platformActor(request,env);if(a.response)return a.response;await ensurePlatformSchema(env.DB);
   const p=url.pathname.slice(BASE.length).split('/').filter(Boolean);
+  const functionalCase=await functionalCaseRoute(request,env,a,p);if(functionalCase)return json(functionalCase);
+  const refunds=await refundRoute(request,env,a,p);if(refunds)return json(refunds);
   if(p[0]==='identity'&&p.length===1&&request.method==='GET')return json({staff:a.staff||null,organisationId:a.orgId||null,role:a.staff?.kind||a.role});
   if(p[0]==='messages'){
    if(env.SSTRX_SECURE_MESSAGES_ENABLED!=='true')fail(503,'secure_messages_not_open');

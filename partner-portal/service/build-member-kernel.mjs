@@ -8,7 +8,10 @@ export async function buildMemberKernel(){
  source=source.replace(origins,'new Set(["https://shiftsometimber.co.uk", "https://www.shiftsometimber.co.uk", "https://my-timber.app"])');
  // The member acceptance guard must read the same catalogue states as the prescriber.
  source=source.replaceAll('!["active", "published"].includes(variant.status)','!["available", "active", "published"].includes(variant.status)').replaceAll("v.status IN ('active','published')","v.status IN ('available','active','published')");
- source="import {paidClinicalOrder} from '../platform/signing.mjs';\n"+source;
+ source="import {informationStatements} from '../platform/functional-casework.mjs';\nimport {paidClinicalOrder} from '../platform/signing.mjs';\n"+source;
+ const information='  statements.push(...notificationEventStatements(env, record, { id, kind, source: "case", sourceId: id, at: date }));';
+ if(source.split(information).length!==2)throw Error('Member information transaction anchor changed');
+ source=source.replace(information,'  statements.push(...await informationStatements(env,record,actor,reviewer,b,id,kind,assessment,date));\n'+information);
  const anchor='const paid = ["paid", "succeeded", "completed", "fulfilled"].includes(order.status) && /^cs_live_/.test(order.stripe_checkout_session_id || "");';
  if(source.split(anchor).length!==2)throw Error('Member payment gate changed');source=source.replace(anchor,'const paid = paidClinicalOrder(env,order);');
  source+='\nexport {authenticate,sessionHash,memberPrescription,memberFulfilment,memberView,memberTracking};\n';

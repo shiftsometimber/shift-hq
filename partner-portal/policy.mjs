@@ -2,6 +2,8 @@
 // for professional checks, organisation approval, assignments, consent and grants.
 const uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
 export function allowedPath(path, method, kind) {
+  if(kind==='oversight'&&['GET','POST'].includes(method)&&/^\/api\/clinical\/platform\/(?:refunds(?:\/[a-f0-9-]{36}(?:\/(?:approve|submit))?)?|reconciliation)$/.test(path))return true;
+  if(kind==='clinician'&&['GET','POST'].includes(method)&&/^\/api\/clinical\/platform\/cases\/[a-f0-9-]{36}(?:\/(?:verification|information)(?:\/[a-f0-9-]{36}\/acknowledge)?)?$/.test(path))return true;
   if(['clinician','dispensing'].includes(kind)&&['GET','POST'].includes(method)&&/^\/api\/clinical\/platform\/messages(?:\/[a-f0-9-]{36}(?:\/read)?)?$/.test(path))return true;
   if(['clinician','dispensing'].includes(kind)&&method==='POST'&&path==='/api/clinical/platform/responsibility')return true;
   if(['clinician','dispensing'].includes(kind)&&['GET','POST'].includes(method)&&/^\/api\/clinical\/platform\/supply-holds\/[A-Za-z0-9_-]{1,100}$/.test(path))return true;

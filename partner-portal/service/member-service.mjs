@@ -8,8 +8,10 @@ import {withSharedOutbox,completeSharedResponse} from './shared-workflow.mjs';
 import {ensurePlatformSchema} from '../platform/schema.mjs';
 import {readObject} from '../platform/domain.mjs';
 import {linkPaidOrder} from '../platform/intake.mjs';
+import {ensureFunctionalSchema} from '../platform/functional-casework.mjs';
 export default {async fetch(request,env,ctx){
  if(env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return original.fetch(request,env,ctx);
+ if(env.SSTRX_FUNCTIONAL_V3_ENABLED==='true')await ensureFunctionalSchema(env.DB);
  const myShift=await myShiftRoutes(request,env);if(myShift)return myShift;
  const inbox=await memberInbox(request,env);if(inbox)return inbox;
  const path=new URL(request.url).pathname;

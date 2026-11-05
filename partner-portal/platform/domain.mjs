@@ -25,7 +25,7 @@ export function economicsTerms(input){
 }
 export function reconcileEconomics(terms,entries=[]){
  const sum=kind=>entries.filter(e=>e.kind===kind).reduce((a,e)=>a+e.amount_pence,0),unknown=COST_KEYS.filter(k=>terms.costs[k]==null);
- const refund=sum('refund'),adjustment=sum('adjustment_credit'),netSale=terms.sellingPence-terms.outputTaxPence-refund-adjustment;
+ const refund=sum('refund')-sum('refund_reversal'),adjustment=sum('adjustment_credit'),netSale=terms.sellingPence-terms.outputTaxPence-refund-adjustment;
  const revenue=terms.model==='pharmacy_collects_commission'?terms.commissionPence:terms.model==='separate_clinical_pharmacy'?terms.clinicalRevenuePence:netSale;
  const cost=unknown.length?null:COST_KEYS.reduce((a,k)=>a+terms.costs[k],0);
  const contribution=revenue==null||cost==null?null:revenue-cost;

@@ -7,6 +7,8 @@ import {linkOutstandingPaidOrders} from '../platform/intake.mjs';
 import {ensurePlatformSchema} from '../platform/schema.mjs';
 import {publicAccessRequest} from '../platform/access-requests.mjs';
 import {hqMyShiftSupport} from '../platform/my-shift-support.mjs';
+import {ensureFunctionalSchema} from '../platform/functional-casework.mjs';
+import {stripeRefundWebhook} from '../platform/refunds.mjs';
 const API='/v1/hq/clinical';
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private','Access-Control-Allow-Origin':'https://hq.shiftsometimber.co.uk','Access-Control-Allow-Credentials':'true','Vary':'Origin'}});
 export default {
@@ -14,6 +16,8 @@ export default {
   const url=new URL(request.url);
   if(url.hostname!=='api.shiftsometimber.co.uk'||!url.pathname.startsWith(API))return original.fetch(request,env,ctx);
   try{
+   if(url.pathname===API+'/platform/processor/refunds')return stripeRefundWebhook(request,env);
+   if(env.SSTRX_FUNCTIONAL_V3_ENABLED==='true')await ensureFunctionalSchema(env.DB);
    if(url.pathname===API+'/access-requests')return publicAccessRequest(request,env);
    const support=await hqMyShiftSupport(request,env);if(support)return support;
    if(env.SSTRX_PLATFORM_ENABLED==='true'){await ensureSharedSchema(env.DB);await ensurePlatformSchema(env.DB);const platform=await platformRoute(request,env);if(platform)return platform;}
