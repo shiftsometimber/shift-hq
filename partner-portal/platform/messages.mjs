@@ -7,7 +7,7 @@ const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}
 const columns='t.id,t.record_id,t.order_number,t.org_id,t.channel,t.status,t.version,t.created_at,t.updated_at';
 function guard(a,date){return a.member?{sql:"EXISTS(SELECT 1 FROM user_sessions s JOIN users u ON u.id=s.user_id JOIN user_auth v ON v.user_id=u.id WHERE s.user_id=? AND s.token_hash=? AND s.revoked_at IS NULL AND julianday(s.expires_at)>julianday(?) AND v.email_verified=1)",args:[a.id,a.sessionHash,date]}:authCondition(a,date);}
 function scope(a){
- if(a.member)return {sql:'t.member_id=?',args:[a.id],body:true};
+ if(a.member)return {sql:'t.member_id=? AND EXISTS(SELECT 1 FROM clinical_member_records r WHERE r.id=t.record_id AND r.user_id=?)',args:[a.id,a.id],body:true};
  if(a.internal)return {sql:'1=1',args:[],body:false};
  if(a.orgAdmin)return {sql:'t.org_id=?',args:[a.orgId],body:false};
  if(a.staff?.kind==='clinician'&&permission(a.staff,'weight_management','review',now()))return {sql:"t.channel='clinical' AND t.org_id=? AND EXISTS(SELECT 1 FROM clinical_member_records r JOIN clinical_case_assignments x ON x.record_id=r.id WHERE r.id=t.record_id AND r.review_sharing=1 AND x.hq_user_id=? AND x.active=1 AND x.expires_at>?)",args:[a.orgId,a.id,now()],body:true};
@@ -64,7 +64,7 @@ export async function sendSecureMessage(env,a,id,b){
  if(a.member)for(const staff of assigned.professionals)statements.push(alertStatement(env,'member:'+b.clientReference+':'+staff.id,'professional',staff.id,'member_message',t.id,version,date));
  else{
   statements.push(alertStatement(env,'professional:'+b.clientReference,'member',String(t.member_id),'member_message',t.id,version,date));
-  const event='secure-message:'+b.clientReference;statements.push(env.DB.prepare("INSERT OR IGNORE INTO clinical_notification_events SELECT ?,?,?,?,'secure_message','You have a secure message','Sign in to My Timber to read and reply securely.',?,? WHERE EXISTS(SELECT 1 FROM rx_messages WHERE id=? AND thread_id=?)").bind(event,t.member_id,t.record_id,t.order_number,'/member/treatment-records?record='+t.record_id,date,b.clientReference,t.id));
+  const event='secure-message:'+b.clientReference;statements.push(env.DB.prepare("INSERT OR IGNORE INTO clinical_notification_events SELECT ?,?,?,?,'secure_message','You have a secure message','Sign in to My Timber to read and reply securely.',?,? WHERE EXISTS(SELECT 1 FROM rx_messages WHERE id=? AND thread_id=?)").bind(event,t.member_id,t.record_id,t.order_number,'/member/messages',date,b.clientReference,t.id));
   statements.push(env.DB.prepare("INSERT OR IGNORE INTO clinical_notification_channels SELECT ?,'app','awaiting_approval',NULL,NULL,? WHERE EXISTS(SELECT 1 FROM clinical_notification_events WHERE id=?)").bind(event,date,event));
  }
  statements.push(alertStatement(env,'owner:'+b.clientReference,'hq_owner',null,'member_message',t.id,version,date));
@@ -83,7 +83,7 @@ export async function messageAlertDrafts(env,a){
   if(alert.recipient_kind==='professional'){const r=await env.DB.prepare('SELECT state_json FROM partner_staff WHERE id=?').bind(alert.recipient_id).first();if(r){const staff=JSON.parse(r.state_json);if(staff.status==='active'&&credentialsCurrent(staff,now())){try{await currentPartner(env,staff);recipients=[staff.details.email]}catch{}}}}
   if(alert.recipient_kind==='hq_owner')recipients=(await rows(env.DB.prepare("SELECT email FROM hq_users WHERE role='owner' AND status='active' AND mfa_enabled=1"))).map(r=>r.email);
   recipients=recipients.filter(e=>typeof e==='string'&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
-  const link=alert.recipient_kind==='member'?'https://shiftsometimber.co.uk/member/treatment-records':alert.recipient_kind==='professional'?'https://sstrx.shiftsometimber.co.uk/workspace/messages':'https://hq.shiftsometimber.co.uk/';
+  const link=alert.recipient_kind==='member'?'https://shiftsometimber.co.uk/member/messages':alert.recipient_kind==='professional'?'https://sstrx.shiftsometimber.co.uk/workspace/messages':'https://hq.shiftsometimber.co.uk/';
   drafts.push({id:alert.id,to:recipients,cc:[],subject:alert.recipient_kind==='hq_owner'?'A secure conversation needs attention':'You have a secure message',body:'There is a new secure message or conversation update. Sign in to read it and check whether a response is needed.\n\n'+link,attachments:[],source:alert.source,createdAt:alert.created_at,recipientVerificationRequired:true,approvalRequired:true,sent:false});
  }
  return {drafts,notificationsSent:false,sendAvailable:false};
