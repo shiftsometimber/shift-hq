@@ -2,6 +2,7 @@ import {caseView,caseAction,permission} from '../service/clinical-kernel.mjs';
 import {withSharedOutbox,completeSharedResponse} from '../service/shared-workflow.mjs';
 import {fail,readObject} from './domain.mjs';
 import {verificationSummary,recordVerification,informationList,acknowledgeInformation,appendReadAudit} from './functional-casework.mjs';
+import {lifecycleList,memberLifecycle} from './prescription-lifecycle.mjs';
 export async function functionalCaseRoute(request,env,a,parts){
  if(parts[0]!=='cases')return null;
  if(env.SSTRX_FUNCTIONAL_V3_ENABLED!=='true')fail(404,'functional_casework_not_open');
@@ -12,7 +13,7 @@ export async function functionalCaseRoute(request,env,a,parts){
  if(request.method==='GET'&&parts.length===2){
   let gates;try{const g=await verificationSummary(env,record,a.orgId,latest.version);gates={protocolVersion:g.protocol.version,requirements:g.requirements,ready:g.ready};}catch(e){if(e.status!==409)throw e;gates={ready:false,requirements:[],blocker:e.message};}
   await appendReadAudit(env,a,record,'assigned_clinical_review');
-  return {record:{id:record.id,orderReference:record.order_number,memberId:record.user_id,assessmentVersion:latest.version,revision:record.revision},patient:{name:JSON.parse(latest.answers_json).fullName||'Member'},answerFields:Object.keys(JSON.parse(latest.answers_json)).sort(),workflow:await caseView(env,record,true),gates,informationRequests:await informationList(env,record,true),notificationsSent:false};
+  return {record:{id:record.id,orderReference:record.order_number,memberId:record.user_id,assessmentVersion:latest.version,revision:record.revision},patient:{name:JSON.parse(latest.answers_json).fullName||'Member'},answerFields:Object.keys(JSON.parse(latest.answers_json)).sort(),workflow:await caseView(env,record,true),gates,informationRequests:await informationList(env,record,true),lifecycleRequests:(await lifecycleList(env,record.id)).map(memberLifecycle),financeReviewOwners:(await env.DB.prepare("SELECT id,name FROM hq_users WHERE status='active' AND role IN ('owner','admin','operations') ORDER BY name").all()).results,notificationsSent:false};
  }
  const b=await readObject(request);
  if(request.method==='POST'&&parts[2]==='verification'&&parts.length===3)return recordVerification(env,a,record,b);

@@ -14,7 +14,7 @@ export const REFUND_SCHEMA=[
 ];
 const ready=new WeakMap();
 export async function ensureRefundSchema(DB){DB=DB.__sstrxBaseDB||DB;if(ready.has(DB))return ready.get(DB);const p=(async()=>{for(const s of REFUND_SCHEMA)await DB.prepare(s).run()})();ready.set(DB,p);try{await p}catch(e){ready.delete(DB);throw e}}
-function financeGuard(env,a){
+export function financeGuard(env,a){
  if(a.mfa)return authCondition(a,at());
  if(!passwordSignInAllowed(env,a.user))fail(403,'finance_authentication_required');
  return {sql:"EXISTS(SELECT 1 FROM hq_sessions s JOIN hq_users u ON u.id=s.hq_user_id WHERE s.hq_user_id=? AND s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>? AND u.status='active' AND u.role=? AND u.email=? AND u.mfa_enabled=0 AND julianday('now')<julianday(?))",args:[a.id,a.sessionHash,at(),a.role,a.user.email,env.SSTRX_PASSWORD_SIGNIN_UNTIL]};
@@ -55,7 +55,7 @@ export async function refundRoute(request,env,a,parts){
   if(variance)commands.push(env.DB.prepare("INSERT INTO rx_finance_exceptions SELECT ?,?,'reconciliation_variance','open',?,?,?,? WHERE EXISTS(SELECT 1 FROM rx_reconciliation_runs WHERE id=?)").bind('recon:'+id,b.orderReference||'ALL',b.ownerUserId,b.dueAt,JSON.stringify({variancePence:variance,sourceReference:b.sourceReference}),date,id));
   const result=await env.DB.batch(commands);if(result[0].meta.changes!==1)fail(409,'finance_access_changed');return {id,state:variance?'variance':'matched',variancePence:variance};
  }
- if(request.method==='GET'&&parts.length===1)return {refunds:(await rows(env.DB.prepare('SELECT * FROM rx_refunds ORDER BY updated_at DESC LIMIT 200'))).map(publicRefund),approvalLimitPence:auth.limit};
+ if(request.method==='GET'&&parts.length===1)return {refunds:(await rows(env.DB.prepare('SELECT * FROM rx_refunds ORDER BY updated_at DESC LIMIT 200'))).map(publicRefund),approvalLimitPence:auth.limit,fullCommercial:a.commercial,replacementWork:a.commercial?await rows(env.DB.prepare("SELECT l.id,l.record_id recordId,l.order_number orderReference,l.kind,l.version,l.due_at dueAt FROM rx_prescription_lifecycle l LEFT JOIN rx_lifecycle_funding f ON f.lifecycle_id=l.id WHERE l.state='acknowledged' AND f.lifecycle_id IS NULL ORDER BY l.due_at")):[]};
  if(request.method==='POST'&&parts.length===1){
   const b=await readObject(request);text(b.clientReference);text(b.reason,500);text(b.termsReference,300);pence(b.amountPence);if(!b.amountPence)fail(422,'positive_refund_amount_required');
   const order=await env.DB.prepare('SELECT * FROM medicine_orders WHERE order_number=?').bind(b.orderReference).first();if(!order||!['paid','succeeded','completed','fulfilled'].includes(order.status))fail(409,'paid_order_required');if(order.currency!=='GBP')fail(422,'supported_order_currency_required');

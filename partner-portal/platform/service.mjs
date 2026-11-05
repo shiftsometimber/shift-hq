@@ -1,6 +1,8 @@
 import {passwordSignInAllowed} from '../password-signin.mjs';
 import {functionalCaseRoute} from './functional-case-routes.mjs';
 import {refundRoute} from './refunds.mjs';
+import {lifecycleRoute} from './prescription-lifecycle.mjs';
+import {auditExportRoute} from './audit-export.mjs';
 import {listConversations,readConversation,sendSecureMessage,markConversationRead,messageAlertDrafts} from './messages.mjs';
 import {createDiagnosticOrder} from './diagnostics.mjs';
 import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition,newStaff} from '../service/clinical-kernel.mjs';
@@ -51,7 +53,7 @@ export async function overview(env,a,search=""){
  const records=await coordinateRecords(env,a,source.slice(0,200).map(r=>({...r,url:(a.staff?.kind==='dispensing'?'/workspace/dispensing#':'/workspace/clinical#')+r.recordId})));
  const counts={};for(const r of records)counts[r.action.kind]=(counts[r.action.kind]||0)+1;
  const config=a.orgId?await all(env.DB.prepare('SELECT service,config_json,version,updated_at FROM rx_service_config WHERE org_id=?').bind(a.orgId)):[];
- return {apiVersion:API_VERSION,observedAt:at(),source:'existing_clinical_order_and_fulfilment_records',memberExperienceCandidate:env.MY_SHIFT_REDESIGN_ENABLED==='true',role:a.staff?.kind||a.role,records,counts,coordination:{unowned:records.filter(r=>r.action.unowned).length,overdue:records.filter(r=>r.action.overdue).length,deadlineNotConfigured:records.filter(r=>r.action.deadlineState==='not_configured').length,held:records.filter(r=>r.openHolds).length,notificationsSent:false},coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),commercialAvailable:a.commercial};
+ return {apiVersion:API_VERSION,observedAt:at(),sessionExpiresAt:(await env.DB.prepare('SELECT expires_at FROM hq_sessions WHERE hq_user_id=? AND token_hash=? AND revoked_at IS NULL').bind(a.id,a.sessionHash).first())?.expires_at||null,source:'existing_clinical_order_and_fulfilment_records',memberExperienceCandidate:env.MY_SHIFT_REDESIGN_ENABLED==='true',role:a.staff?.kind||a.role,records,counts,coordination:{unowned:records.filter(r=>r.action.unowned).length,overdue:records.filter(r=>r.action.overdue).length,deadlineNotConfigured:records.filter(r=>r.action.deadlineState==='not_configured').length,held:records.filter(r=>r.openHolds).length,notificationsSent:false},coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),commercialAvailable:a.commercial};
 }
 export async function platformRoute(request,env){
  const url=new URL(request.url);if(url.pathname!==BASE&&!url.pathname.startsWith(BASE+'/'))return null;
@@ -63,6 +65,8 @@ export async function platformRoute(request,env){
   const p=url.pathname.slice(BASE.length).split('/').filter(Boolean);
   const functionalCase=await functionalCaseRoute(request,env,a,p);if(functionalCase)return json(functionalCase);
   const refunds=await refundRoute(request,env,a,p);if(refunds)return json(refunds);
+  const lifecycle=await lifecycleRoute(request,env,a,p);if(lifecycle)return json(lifecycle);
+  const auditExport=await auditExportRoute(request,env,a,p);if(auditExport)return json(auditExport);
   if(p[0]==='identity'&&p.length===1&&request.method==='GET')return json({staff:a.staff||null,organisationId:a.orgId||null,role:a.staff?.kind||a.role});
   if(p[0]==='messages'){
    if(env.SSTRX_SECURE_MESSAGES_ENABLED!=='true')fail(503,'secure_messages_not_open');
