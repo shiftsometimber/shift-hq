@@ -4,6 +4,7 @@ import {join,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {buildMemberNavigation} from './build-member-navigation.mjs';
 const [action,directory,authority]=process.argv.slice(2),root=resolve(directory||'.'),repo=resolve(new URL('..',import.meta.url).pathname);
 if(!['upload','promote','verify','rollback'].includes(action))throw Error('Use upload, promote, verify or rollback with an existing snapshot directory.');
 if(['promote','rollback'].includes(action)&&authority!=='--authorised-member-release')throw Error('Explicit member release authority required.');
@@ -33,7 +34,7 @@ if(action==='upload'){
    for(const m of manifest)modules.push({...m,bytes:await fs.readFile(join(root,w,'modules',m.name))});
    main='member-messages-entry.mjs';if(modules.some(m=>m.name===main))throw Error('Inbox wrapper already exists.');
    modules.push({name:main,type:'application/javascript+module',bytes:Buffer.from(`import original from './${priorMain}';export * from './${priorMain}';import {wrapMemberInboxNavigation} from './member-messages-navigation.mjs';export default wrapMemberInboxNavigation(original);`)});
-   modules.push({name:'member-messages-navigation.mjs',type:'application/javascript+module',bytes:await fs.readFile(join(repo,'partner-portal/platform/member-entry.mjs'))});
+   modules.push({name:'member-messages-navigation.mjs',type:'application/javascript+module',bytes:await buildMemberNavigation()});
   }
   const s=settings[w],bindings=s.bindings.filter(b=>!['secret_text','secret_key'].includes(b.type)&&b.name!=='SSTRX_MEMBER_INBOX_RELEASE');bindings.push({name:'SSTRX_MEMBER_INBOX_RELEASE',type:'plain_text',text:sha});
   const metadata={main_module:main,bindings,keep_bindings:['secret_text','secret_key'],compatibility_date:s.compatibility_date,compatibility_flags:s.compatibility_flags||[],annotations:{'workers/message':'Authorised shared member inbox '+sha.slice(0,12),'workers/commit_sha':sha}};

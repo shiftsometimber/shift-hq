@@ -29,14 +29,15 @@ async function target(env,a,recordId,channel){
 }
 export async function listConversations(env,a){
  const s=scope(a),readKind=a.member?'member':a.internal?'hq':'professional';
- const threads=await rows(env.DB.prepare(`SELECT ${columns},COALESCE(z.version,0) read_version,json_extract(o.state_json,'$.name') organisation FROM rx_message_threads t LEFT JOIN rx_message_reads z ON z.thread_id=t.id AND z.actor_kind=? AND z.actor_id=? LEFT JOIN partner_organisations o ON o.id=t.org_id WHERE ${s.sql} ORDER BY t.updated_at DESC,t.id LIMIT 101`).bind(readKind,a.id,...s.args));
- return {threads:threads.slice(0,100).map(t=>({...t,unread:t.version>t.read_version})),hasMore:threads.length>100,contentAvailable:s.body,metadataOnly:!s.body,notificationsSent:false};
+ const threads=await rows(env.DB.prepare(`SELECT ${columns},COALESCE(z.version,0) read_version,json_extract(o.state_json,'$.name') organisation,EXISTS(SELECT 1 FROM rx_messages m WHERE m.thread_id=t.id AND m.version>COALESCE(z.version,0) AND m.actor_kind=?) incoming_unread FROM rx_message_threads t LEFT JOIN rx_message_reads z ON z.thread_id=t.id AND z.actor_kind=? AND z.actor_id=? LEFT JOIN partner_organisations o ON o.id=t.org_id WHERE ${s.sql} ORDER BY t.updated_at DESC,t.id LIMIT 101`).bind(a.member?'professional':'member',readKind,a.id,...s.args));
+ return {threads:threads.slice(0,100).map(({incoming_unread,...t})=>({...t,unread:s.body?!!incoming_unread:t.version>t.read_version})),hasMore:threads.length>100,contentAvailable:s.body,metadataOnly:!s.body,notificationsSent:false};
 }
 async function visible(env,a,id,body=false){const s=scope(a);if(body&&!s.body)fail(403,'message_content_restricted_to_member_and_care_team');const t=await env.DB.prepare(`SELECT t.* FROM rx_message_threads t WHERE t.id=? AND ${s.sql}`).bind(id,...s.args).first();if(!t)fail(404,'conversation_not_found');return t;}
 export async function readConversation(env,a,id){
  const t=await visible(env,a,id,true),s=scope(a),g=guard(a,now());
  const messages=await rows(env.DB.prepare(`SELECT m.version,m.actor_kind,m.author_label,m.body,m.created_at FROM rx_messages m WHERE m.thread_id=? AND EXISTS(SELECT 1 FROM rx_message_threads t WHERE t.id=m.thread_id AND ${s.sql}) AND ${g.sql} ORDER BY m.version`).bind(id,...s.args,...g.args));
- return {thread:{id:t.id,record_id:t.record_id,order_number:t.order_number,channel:t.channel,version:t.version,status:t.status},messages,notificationsSent:false};
+ const organisation=await env.DB.prepare('SELECT state_json FROM partner_organisations WHERE id=?').bind(t.org_id).first();
+ return {thread:{id:t.id,record_id:t.record_id,order_number:t.order_number,channel:t.channel,version:t.version,status:t.status,recipient:(t.channel==='clinical'?'Clinical team':'Dispensing pharmacy')+(organisation?' · '+JSON.parse(organisation.state_json).name:'')},messages,notificationsSent:false};
 }
 export async function markConversationRead(env,a,id,b){
  const t=await visible(env,a,id),s=scope(a),date=now(),g=guard(a,date);if(!Number.isInteger(b.version)||b.version<1||b.version>t.version)fail(422,'observed_version_required');

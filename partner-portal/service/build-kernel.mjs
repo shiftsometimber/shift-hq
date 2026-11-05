@@ -6,7 +6,18 @@ export async function buildKernel(){
  let source="import {hasOpenSupplyHold,requireNoSupplyHold} from '../platform/supply-holds.mjs';\nimport {signingOrigin,rememberSigningOrigin,challengeOrigin,paidClinicalOrder} from '../platform/signing.mjs';\nimport {deliveryFromAssessment,requireDelivery} from './fulfilment-delivery.mjs';\n"+original;
  const once=(before,after)=>{if(source.split(before).length!==2)throw Error('Clinical adaptation anchor changed: '+before.slice(0,80));source=source.replace(before,after);};
  once('async function internalPrescriptionCurrent(env, order) {','async function internalPrescriptionCurrent(env, order) {\n  if(await hasOpenSupplyHold(env,order.orderNumber))return false;');
- once('const b = await readJson(request), current =','const b = await readJson(request); if(["accept","prepare","dispatch"].includes(b.action))await requireNoSupplyHold(env,f.orderNumber); const current =');
+ once('const b = await readJson(request), current =','const b = await readJson(request); if((b.action==="dispensed"||b.trackingUnavailable===true)&&env.MY_SHIFT_REDESIGN_ENABLED!=="true")fail2(503,"dispensing_extension_not_open"); if(["accept","prepare","dispensed","dispatch"].includes(b.action))await requireNoSupplyHold(env,f.orderNumber); const current =');
+ // Add a real dispensing receipt without treating "preparing" as dispensed.
+ // Existing permission, current signed prescription, stock and write guards apply.
+ once('prepare: "prepare", dispatch: "dispatch", delivered:', 'prepare: "prepare", dispensed: "prepare", dispatch: "dispatch", delivered:');
+ once('prepare: ["accepted"], dispatch: ["preparing"], delivered:', 'prepare: ["accepted"], dispensed: ["preparing"], dispatch: ["preparing"], delivered:');
+ once('prepare: "preparing", dispatch: "dispatched", delivered:', 'prepare: "preparing", dispensed: "preparing", dispatch: "dispatched", delivered:');
+ const supply='["accept", "prepare", "dispatch"].includes(b.action)',stock='["prepare", "dispatch"].includes(b.action)';
+ if(source.split(supply).length!==3||source.split(stock).length!==3)throw Error('Dispensing gate anchors changed');
+ source=source.replaceAll(supply,'["accept", "prepare", "dispensed", "dispatch"].includes(b.action)').replaceAll(stock,'["prepare", "dispensed", "dispatch"].includes(b.action)');
+ once('const s = structuredClone(original), detail = {};','const s = structuredClone(original), detail = {};\n  if(b.action==="dispensed"){if(original.dispensedAt)fail2(409,"dispensing_already_confirmed");s.dispensedAt=now4;detail.dispensingConfirmed=true;}');
+ const tracking='if (b.action === "dispatch") {\n    if (!Object.hasOwn(CARRIERS, b.carrier)';
+ once(tracking,'if (b.action === "dispatch" && b.trackingUnavailable===true) {\n    requireDelivery(s.delivery);if(b.trackingNumber)fail2(422,"tracking_presence_conflict");\n    detail.noTrackingReason=text2(b.noTrackingReason,300);s.tracking=null;\n  } else if (b.action === "dispatch") {\n    if (!Object.hasOwn(CARRIERS, b.carrier)');
  once('var RP_ID = "hq.shiftsometimber.co.uk";','var RP_ID = "partner.shiftsometimber.co.uk";');
  once('var RP_ORIGIN = "https://hq.shiftsometimber.co.uk";','var RP_ORIGIN = "https://partner.shiftsometimber.co.uk";');
  // Match the real catalogue CHECK constraints; no out-of-stock/archived item is admitted.

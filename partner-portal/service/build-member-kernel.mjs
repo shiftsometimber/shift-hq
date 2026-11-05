@@ -11,7 +11,7 @@ export async function buildMemberKernel(){
  source="import {paidClinicalOrder} from '../platform/signing.mjs';\n"+source;
  const anchor='const paid = ["paid", "succeeded", "completed", "fulfilled"].includes(order.status) && /^cs_live_/.test(order.stripe_checkout_session_id || "");';
  if(source.split(anchor).length!==2)throw Error('Member payment gate changed');source=source.replace(anchor,'const paid = paidClinicalOrder(env,order);');
- source+='\nexport {authenticate,sessionHash};\n';
+ source+='\nexport {authenticate,sessionHash,memberPrescription,memberFulfilment,memberView,memberTracking};\n';
  await fs.writeFile(new URL('./member-kernel.mjs',import.meta.url),source);
 }
 if(process.argv[1]&&new URL(import.meta.url).pathname===process.argv[1])await buildMemberKernel();

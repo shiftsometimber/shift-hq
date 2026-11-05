@@ -32,6 +32,7 @@ export async function memberInbox(request,env){
   if(!['GET','POST'].includes(request.method)||(page||card)&&request.method!=='GET')fail(405,'method_not_allowed');
   const actor=await authenticate(request,env);if(!actor){if(page)return new Response('<!doctype html><html lang="en-GB"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · My Timber</title><h1>Your messages are private</h1><p><a href="/member/login">Sign in to My Timber</a> to read and reply.</p></html>',{status:401,headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});fail(401,'sign_in_required');}
   if(Number(actor.email_verified)!==1)fail(403,'verified_account_required');
+  const expected=request.headers.get('X-My-Timber-Expected-Account');if(expected&&expected!==String(actor.id))fail(409,'account_changed');
   if(page)return new Response(MEMBER_INBOX_HTML,{headers:{...headers,'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"}});
   await ensurePlatformSchema(env.DB);
   if(card)return reply(await memberCareCard(env,actor));
@@ -43,7 +44,7 @@ export async function memberInbox(request,env){
    if(parts[0])return reply(await readConversation(env,a,parts[0]));
    const result=await listConversations(env,a);
    const {results:records=[]}=await env.DB.prepare('SELECT id recordId,order_number orderNumber FROM clinical_member_records WHERE user_id=? ORDER BY updated_at DESC LIMIT 100').bind(actor.id).all();
-   return reply({...result,records});
+   return reply({...result,records,memberId:actor.id});
   }
   const b=await readObject(request,6500);
   return reply(parts[1]?await markConversationRead(env,a,parts[0],b):await sendSecureMessage(env,a,parts[0]||null,b),201);

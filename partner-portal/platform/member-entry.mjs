@@ -1,3 +1,4 @@
+import {routeMyShiftExperience} from './my-shift-experience.mjs';
 // One shared member shortcut: both native wrappers load this live web surface.
 export function installMemberMessages(){
  if(document.getElementById('mt-secure-messages-script'))return;
@@ -35,6 +36,7 @@ export function installMemberMessages(){
 export const MEMBER_ENTRY_CLIENT='('+installMemberMessages.toString()+')();';
 export function wrapMemberInboxNavigation(original){
  return {...original,async fetch(request,env,ctx){
+  const candidate=await routeMyShiftExperience(request,env,ctx,original);if(candidate)return candidate;
   const response=await original.fetch(request,env,ctx),url=new URL(request.url);
   if(url.origin!=='https://shiftsometimber.co.uk'||!url.pathname.startsWith('/member/')||request.method!=='GET'||response.status!==200||!(response.headers.get('Content-Type')||'').includes('text/html'))return response;
   const before=await response.text();

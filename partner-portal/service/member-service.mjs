@@ -1,4 +1,5 @@
 import {memberInbox} from '../platform/member-inbox.mjs';
+import {myShiftRoutes} from '../platform/my-shift-routes.mjs';
 import {listConversations,readConversation,sendSecureMessage,markConversationRead} from '../platform/messages.mjs';
 import {MEMBER_MESSAGE_CLIENT} from '../platform/messages-ui.mjs';
 import original,{authenticate,sessionHash} from './member-kernel.mjs';
@@ -9,6 +10,7 @@ import {readObject} from '../platform/domain.mjs';
 import {linkPaidOrder} from '../platform/intake.mjs';
 export default {async fetch(request,env,ctx){
  if(env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return original.fetch(request,env,ctx);
+ const myShift=await myShiftRoutes(request,env);if(myShift)return myShift;
  const inbox=await memberInbox(request,env);if(inbox)return inbox;
  const path=new URL(request.url).pathname;
  if(env.SSTRX_SECURE_MESSAGES_ENABLED==='true'&&path==='/assets/clinical-records/client.mjs'&&request.method==='GET'){
@@ -20,6 +22,7 @@ export default {async fetch(request,env,ctx){
   const origin=request.headers.get('Origin');
   if(origin&&!origins.includes(origin)||request.method==='POST'&&!origins.includes(origin))return Response.json({error:'origin_not_allowed'},{status:403});
   const actor=await authenticate(request,env);
+  const expected=request.headers.get('X-My-Timber-Expected-Account');if(actor&&expected&&expected!==String(actor.id))return Response.json({error:'account_changed'},{status:409,headers:{'Cache-Control':'no-store, private'}});
   const admitted=actor&&Number(actor.email_verified)===1&&(env.CLINICAL_REVIEW_READY==='true'||env.CLINICAL_TEST_MEMBER_EMAIL&&actor.email.toLowerCase()===env.CLINICAL_TEST_MEMBER_EMAIL.toLowerCase())&&env.CLINICAL_MEMBER_RECORDS_ENABLED==='true'&&env.CLINICAL_PRIVATE_FILES;
   if(admitted){
    await ensurePlatformSchema(env.DB);

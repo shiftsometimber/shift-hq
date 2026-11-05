@@ -6,6 +6,7 @@ import {platformRoute} from '../platform/service.mjs';
 import {linkOutstandingPaidOrders} from '../platform/intake.mjs';
 import {ensurePlatformSchema} from '../platform/schema.mjs';
 import {publicAccessRequest} from '../platform/access-requests.mjs';
+import {hqMyShiftSupport} from '../platform/my-shift-support.mjs';
 const API='/v1/hq/clinical';
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private','Access-Control-Allow-Origin':'https://hq.shiftsometimber.co.uk','Access-Control-Allow-Credentials':'true','Vary':'Origin'}});
 export default {
@@ -14,6 +15,7 @@ export default {
   if(url.hostname!=='api.shiftsometimber.co.uk'||!url.pathname.startsWith(API))return original.fetch(request,env,ctx);
   try{
    if(url.pathname===API+'/access-requests')return publicAccessRequest(request,env);
+   const support=await hqMyShiftSupport(request,env);if(support)return support;
    if(env.SSTRX_PLATFORM_ENABLED==='true'){await ensureSharedSchema(env.DB);await ensurePlatformSchema(env.DB);const platform=await platformRoute(request,env);if(platform)return platform;}
    const desk=await hqDeskRoute(request,env);if(desk)return desk;
    // Onboarding exposes only the current professional's activation state, never cases.
