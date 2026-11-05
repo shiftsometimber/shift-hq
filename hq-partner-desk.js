@@ -1,5 +1,6 @@
 /* Connected partner operations. Internal messages only; no external sender. */
 window.installPartnerDeskHQ=()=>{
+ window.installMyShiftSupportHQ?.();
  if(document.getElementById('partnerdesk'))return;
  const nav=document.querySelector('aside nav'),main=document.querySelector('main'),node=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
  const group=[...nav.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Partners & fulfilment');
@@ -54,4 +55,26 @@ window.installPartnerDeskHQ=()=>{
  setInterval(()=>{if(document.hidden||!current())return;refreshBadge();if(section.classList.contains('active'))load();},60000);
  document.getElementById('logoutBtn')?.addEventListener('click',clear);window.addEventListener('pagehide',clear);
  new MutationObserver(()=>{if(!current())clear();else refreshBadge();}).observe($('hqUserChip'),{childList:true,subtree:true});refreshBadge();
+};
+
+// Member support remains in the existing support_tickets queue. This panel is
+// admitted only by the existing HQ identity and the candidate's explicit flag.
+window.installMyShiftSupportHQ=async()=>{
+ if(document.getElementById('myShiftSupportHQ')||!S.me||!['owner','admin','operations','support'].includes(S.me.role))return;
+ const principal=S.me.id,role=S.me.role,base='/v1/hq/clinical/platform/my-shift-support';let current=true,version=0;
+ const allowed=()=>current&&S.me?.id===principal&&S.me?.role===role;
+ const node=(tag,text)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
+ let data;try{data=await call(base);}catch{return;}if(!allowed()||document.getElementById('myShiftSupportHQ'))return;
+ const section=node('section');section.id='myShiftSupportHQ';section.className='view';section.hidden=true;
+ const nav=node('button','Member messages');nav.type='button';nav.dataset.view='myShiftSupportHQ';document.querySelector('aside nav').append(nav);document.querySelector('main').append(section);
+ const heading=node('h2','My Shift · Member support'),notice=node('p'),list=node('div'),detail=node('div'),refresh=node('button','Refresh member messages');refresh.type='button';section.append(heading,node('p','Account, order and everyday support. Clinical conversations stay with the assigned care team. Replies here appear in the member’s My Shift inbox; no email or push is sent.'),refresh,notice,list,detail);
+ function clear(){current=false;version++;section.replaceChildren();nav.remove();}
+ document.getElementById('logoutBtn')?.addEventListener('click',clear);window.addEventListener('pagehide',clear,{once:true});
+ function show(){if(!allowed())return clear();for(const v of document.querySelectorAll('.view')){v.classList.remove('active');}section.hidden=false;section.classList.add('active');document.getElementById('title').textContent='Member messages';}
+ function draw(){if(!allowed())return clear();list.replaceChildren();for(const t of data.tickets){const b=node('button','SHIFT-'+t.memberId+' · '+t.reference+' · '+t.status.replaceAll('_',' '));b.type='button';b.className='pd-thread';b.onclick=()=>open(t.reference);list.append(b);}if(!data.tickets.length)list.append(node('p','No member support conversations yet.'));}
+ async function load(){const captured=++version;try{const d=await call(base);if(!allowed()||captured!==version)return;data=d;draw();notice.textContent='Member support checked.';}catch{if(allowed())notice.textContent='Member messages could not be checked. Please try again.';}}
+ function open(reference){const t=data.tickets.find(t=>t.reference===reference);if(!t||!allowed())return;detail.replaceChildren(node('h3','Reply to member SHIFT-'+t.memberId));for(const m of t.messages){const c=node('article');c.className='pd-order';c.append(node('strong',m.author),node('p',m.body),node('small',new Date(m.at).toLocaleString('en-GB',{timeZone:'Europe/London'})));detail.append(c);}const form=node('form'),label=node('label','Secure reply to SHIFT-'+t.memberId),input=node('textarea'),send=node('button','Send member reply');input.required=true;input.maxLength=4000;input.rows=4;input.setAttribute('aria-label','Secure reply to SHIFT-'+t.memberId);label.append(input);send.type='submit';form.append(label,send);detail.append(form);let pending;
+  form.onsubmit=async e=>{e.preventDefault();if(!allowed()||!form.reportValidity()||send.disabled)return;send.disabled=true;pending=pending||{version:t.version,clientReference:crypto.randomUUID(),message:input.value.trim()};try{await call(base+'/'+encodeURIComponent(reference),{method:'POST',body:JSON.stringify(pending)});if(!allowed())return;await load();open(reference);notice.textContent='Reply saved in the member’s secure inbox. External notifications have not been sent.';}catch{if(allowed()){notice.textContent='The reply could not be confirmed. Refresh the conversation before trying again.';send.disabled=false;}}};
+ }
+ nav.onclick=()=>{show();load();};refresh.onclick=load;draw();
 };

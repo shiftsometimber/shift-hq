@@ -4,6 +4,7 @@ import {join,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {buildMemberNavigation} from './build-member-navigation.mjs';
 const [action,directory,authority]=process.argv.slice(2),root=resolve(directory||'.'),repo=resolve(new URL('..',import.meta.url).pathname);
 if(!['upload','promote','verify','rollback'].includes(action))throw Error('Unknown release action');
 if(['promote','rollback'].includes(action)&&authority!=='--authorised-member-release')throw Error('Explicit member release authority required');
@@ -20,7 +21,7 @@ if(action==='upload'){
  const modules=[];for(const m of manifest)modules.push({...m,bytes:await fs.readFile(join(root,'modules',m.name))});
  const main='sst-member-message-entry.mjs';if(modules.some(m=>m.name===main))throw Error('Navigation extension already present');
  modules.push({name:main,type:'application/javascript+module',bytes:Buffer.from(`import original from './${prior}';export * from './${prior}';import {wrapMemberInboxNavigation} from './sst-member-message-navigation.mjs';export default wrapMemberInboxNavigation(original);`)});
- modules.push({name:'sst-member-message-navigation.mjs',type:'application/javascript+module',bytes:await fs.readFile(join(repo,'partner-portal/platform/member-entry.mjs'))});
+ modules.push({name:'sst-member-message-navigation.mjs',type:'application/javascript+module',bytes:await buildMemberNavigation()});
  const bindings=settings.bindings.filter(b=>!['secret_text','secret_key'].includes(b.type)&&b.name!=='SSTRX_NAVIGATION_RELEASE');bindings.push({name:'SSTRX_NAVIGATION_RELEASE',type:'plain_text',text:sha});
  const metadata={main_module:main,bindings,keep_bindings:['secret_text','secret_key'],compatibility_date:settings.compatibility_date,compatibility_flags:settings.compatibility_flags||[],annotations:{'workers/message':'Authorised member inbox shortcut '+sha.slice(0,12),'workers/commit_sha':sha}};
  for(const key of ['usage_model','limits','placement','observability','logpush','tail_consumers'])if(settings[key]!=null)metadata[key]=settings[key];
