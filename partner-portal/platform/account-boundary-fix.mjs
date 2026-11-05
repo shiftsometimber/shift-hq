@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {brotliCompressSync,constants} from 'node:zlib';
 const selector='#mtShopMain,#main-content,#previewMember,main';
 export function repairAccountBoundary(source){
  if(source.split(selector).length!==2)throw Error('Exact retained-content selector must occur once');
@@ -15,6 +16,12 @@ export function repairAccountBoundary(source){
 export function patchProgramme(source){
  const oldVersion='d1233652ca0fb4bbf266',uses=source.split(oldVersion).length-1;
  if(uses!==24)throw Error('Current native release version must be reconciled');
- const repaired=repairAccountBoundary(source),version=createHash('sha256').update(repaired+'account-boundary-v1').digest('hex').slice(0,20);
+ const repaired=repairAccountBoundary(source),version=createHash('sha256').update(repaired+'account-boundary-brotli-v2').digest('hex').slice(0,20);
  return {source:repaired.replaceAll(oldVersion,version),previousVersion:oldVersion,version,versionReferences:uses};
+}
+export function refreshNativeBrotli(source,client){
+ if(!client.includes('#my-shift,#mtShopMain')||!client.includes("saved?.dataset?.memberPage!=='my-shift'"))throw Error('Plain native client does not contain the qualified account fix');
+ const matches=[...source.matchAll(/\bbr="([A-Za-z0-9+/=]+)"/g)];if(matches.length!==1)throw Error('Exact native Brotli asset must be reconciled');
+ const encoded=brotliCompressSync(Buffer.from(client),{params:{[constants.BROTLI_PARAM_QUALITY]:11}}).toString('base64');
+ return source.replace(matches[0][0],'br="'+encoded+'"');
 }

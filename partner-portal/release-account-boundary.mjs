@@ -3,7 +3,9 @@ import {join,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {patchProgramme} from './platform/account-boundary-fix.mjs';
+import {pathToFileURL} from 'node:url';
+import {brotliDecompressSync} from 'node:zlib';
+import {patchProgramme,refreshNativeBrotli} from './platform/account-boundary-fix.mjs';
 const [action,directory,authority]=process.argv.slice(2),root=resolve(directory||'.'),repo=resolve(new URL('..',import.meta.url).pathname);
 if(!['upload','promote','verify','rollback'].includes(action))throw Error('Unknown release action');
 if(['promote','rollback'].includes(action)&&authority!=='--authorised-member-release')throw Error('Explicit member release authority required');
@@ -19,7 +21,15 @@ if(action==='upload'){
  const h=await read('headers.json'),main=Object.entries(h).find(([k])=>k.toLowerCase()==='cf-entrypoint')?.[1],manifest=await read('modules.json'),original='v7-release-20261103/programme.mjs';
  if(!main||!manifest.some(m=>m.name===main)||!manifest.some(m=>m.name===original))throw Error('Original programme source must be reconciled');
  const modules=[];let patch;
- for(const m of manifest){const old=await fs.readFile(join(root,'modules',m.name));let bytes=old;if(m.name===original){patch=patchProgramme(old.toString('utf8'));bytes=Buffer.from(patch.source);await fs.writeFile(join(root,'candidate-programme.mjs'),bytes);execFileSync(process.execPath,['--check',join(root,'candidate-programme.mjs')]);}modules.push({...m,bytes,beforeSha256:hash(old)});}
+ for(const m of manifest){const old=await fs.readFile(join(root,'modules',m.name));let bytes=old;if(m.name===original){
+  patch=patchProgramme(old.toString('utf8'));const candidate=join(root,'candidate-programme.mjs');await fs.writeFile(candidate,patch.source);execFileSync(process.execPath,['--check',candidate]);
+  const module=await import(pathToFileURL(candidate).href+'?plain='+hash(patch.source)),url='https://shiftsometimber.co.uk/assets/member-experience/v7-native.mjs?v='+patch.version;
+  const plain=await module.default.fetch(new Request(url,{headers:{'Accept-Encoding':'identity'}}),{},{});if(!plain.ok)throw Error('Plain candidate asset unavailable');const client=await plain.text();
+  patch.source=refreshNativeBrotli(patch.source,client);await fs.writeFile(candidate,patch.source);execFileSync(process.execPath,['--check',candidate]);
+  const encoded=await import(pathToFileURL(candidate).href+'?brotli='+hash(patch.source)),compressed=await encoded.default.fetch(new Request(url,{headers:{'Accept-Encoding':'br'}}),{},{});
+  if(!compressed.ok||compressed.headers.get('Content-Encoding')!=='br'||brotliDecompressSync(Buffer.from(await compressed.arrayBuffer())).toString('utf8')!==client)throw Error('Compressed and plain candidate clients differ');
+  bytes=Buffer.from(patch.source);
+ }modules.push({...m,bytes,beforeSha256:hash(old)});}
  const bindings=settings.bindings.filter(b=>!['secret_text','secret_key'].includes(b.type)&&b.name!=='MEMBER_ACCOUNT_BOUNDARY_RELEASE');bindings.push({name:'MEMBER_ACCOUNT_BOUNDARY_RELEASE',type:'plain_text',text:sha});
  const metadata={main_module:main,bindings,keep_bindings:['secret_text','secret_key'],compatibility_date:settings.compatibility_date,compatibility_flags:settings.compatibility_flags||[],annotations:{'workers/message':'Repair native account root and controls '+sha.slice(0,12),'workers/commit_sha':sha}};
  for(const key of ['usage_model','limits','placement','observability','logpush','tail_consumers'])if(settings[key]!=null)metadata[key]=settings[key];
