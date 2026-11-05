@@ -6,6 +6,8 @@ import {ensurePlatformSchema} from '../platform/schema.mjs';
 import {actionFor} from '../platform/coordination.mjs';
 import {syntheticLabEvent} from '../platform/diagnostics.mjs';
 import portal from '../sstrx-worker.mjs';
+import {withSharedOutbox} from '../service/shared-workflow.mjs';
+import {hasOpenSupplyHold} from '../platform/supply-holds.mjs';
 const json=async(r,status=200)=>{const d=await r.json();assert.equal(r.status,status,JSON.stringify(d));return d;};
 async function setup(){const f=await fixture();await ensurePlatformSchema(f.DB);f.env.SSTRX_PLATFORM_ENABLED='true';f.env.SSTRX_ENVIRONMENT='synthetic';f.portalEnv.SSTRX_PORTAL_ENABLED='true';return f;}
 async function signed(f){const r=await reviewAndPropose(f);await issue(f,r.cookie,r.proposal);return f.login('DSPTEST');}
@@ -70,4 +72,7 @@ test('SST Rx owner login uses its own MFA-bound session and an oversight-only wo
 });
 test('operational status never manufactures dispatch, delivery, a prescriber or a deadline',()=>{
  assert.equal(actionFor({assigned:true,clinicalStatus:'prescription_issued'}).code,'confirm_handover');assert.equal(actionFor({pharmacyStatus:'dispatched'}).code,'await_delivery');assert.equal(actionFor({pharmacyStatus:'delivered'}).responsibility,null);assert.equal(actionFor({syncPending:1,pharmacyStatus:'delivered'}).code,'reconcile_status');
+});
+test('fresh transactional requests reuse the existing D1 schema cache rather than running migrations during each supply check',async()=>{
+ const f=await setup();try{let migrations=0;const prepare=f.DB.prepare;f.DB.prepare=sql=>{if(/^CREATE /.test(sql))migrations++;return prepare(sql);};for(let i=0;i<4;i++)assert.equal(await hasOpenSupplyHold(withSharedOutbox(f.env),ORDER),false);assert.equal(migrations,0);}finally{f.close()}
 });
