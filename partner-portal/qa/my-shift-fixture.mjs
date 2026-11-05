@@ -10,6 +10,7 @@ export async function myShiftFixture(){
  const f=await fixture();Object.assign(f.env,{SSTRX_PLATFORM_ENABLED:'true',SSTRX_SECURE_MESSAGES_ENABLED:'true',MY_SHIFT_REDESIGN_ENABLED:'true'});await ensurePlatformSchema(f.env.DB);
  f.sql.exec("ALTER TABLE users ADD COLUMN created_at TEXT;CREATE TABLE support_tickets(id INTEGER PRIMARY KEY,reference TEXT UNIQUE,user_id INTEGER NOT NULL,subject TEXT NOT NULL,priority TEXT,status TEXT,body TEXT,assigned_hq_user_id INTEGER,created_at TEXT,updated_at TEXT,closed_at TEXT);");
  f.sql.prepare('UPDATE users SET first_name=?,last_name=?,email=?,created_at=? WHERE id=42').run('James','Example','james.my-shift@example.test','2026-09-01T10:00:00Z');
+ f.sql.prepare("UPDATE clinical_member_versions SET answers_json=json_set(answers_json,'$.fullName','James Example','$.email','james.my-shift@example.test') WHERE record_id=?").run(RECORD);
  const sha=async s=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,'0')).join('');
  const otherToken='fictional-other-member-session-0000000000',secondToken='fictional-james-other-device-000000000000';
  f.sql.prepare('INSERT INTO users(id,email,first_name,last_name,created_at) VALUES(99,?,?,?,?)').run('ben.my-shift@example.test','Ben','Example','2026-09-02T10:00:00Z');f.sql.exec('INSERT INTO user_auth VALUES(99,1)');
@@ -33,7 +34,7 @@ export async function signedRxFixture(f){
  return{clinician:c,pharmacy:await rxSession(f,'DSPTEST'),call};
 }
 export async function seedPastOrders(f){
- const now=new Date().toISOString();
+ const now=new Date(Date.now()-45*86400000).toISOString();
  for(const [id,ref,supplier]of [[2,'SST-PAST-A','pharmacy-org'],[3,'SST-PAST-B','other-pharmacy']]){
   const record='10000000-0000-4000-8000-00000000000'+id;
   f.sql.prepare(`INSERT INTO medicine_orders(id,order_number,user_id,email,medicine_id,variant_id,medicine_name,strength_label,unit_price_pence,total_pence,currency,status,clinical_status,updated_at) VALUES(?,?,42,'james.my-shift@example.test',1,11,'Synthetic fixture','Synthetic',100,100,'GBP','paid','fulfilled',?)`).run(id,ref,now);
