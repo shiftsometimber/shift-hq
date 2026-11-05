@@ -5,6 +5,10 @@ import compiledClinical from '../../.partner-qa/clinical.bundle.mjs';
 import compiledMember from '../../.partner-qa/member.bundle.mjs';
 import legacy from '../worker.mjs';
 import {fixture,RECORD} from './fixture.mjs';
+import fs from 'node:fs/promises';
+test('the exact HQ asset route serves only the retained browser module and cannot expose an HQ page or API',async()=>{
+ const source=await fs.readFile(new URL('../../hq-partner-desk.js',import.meta.url),'utf8'),r=await gateway.fetch(new Request('https://hq.shiftsometimber.co.uk/hq-partner-desk.js'),{});assert.equal(r.status,200);assert.equal(await r.text(),source);assert.match(r.headers.get('Content-Type'),/javascript/);for(const path of ['/index.html','/api/clinical/platform','/hq-partner-desk.js/anything'])assert.equal((await gateway.fetch(new Request('https://hq.shiftsometimber.co.uk'+path),{})).status,404);
+});
 test('compiled dual-origin gateway preserves existing partner pages and assets byte for byte',async()=>{
  const f=await fixture();try{for(const path of ['/','/robots.txt','/demo','/assets/partner-v1.css','/assets/partner-v1.js']){const request=new Request('https://partner.shiftsometimber.co.uk'+path),before=await legacy.fetch(request,f.portalEnv),after=await gateway.fetch(request,f.portalEnv);assert.equal(after.status,before.status,path);assert.equal(await after.text(),await before.text(),path);assert.equal(after.headers.get('Content-Security-Policy'),before.headers.get('Content-Security-Policy'));}}finally{f.close()}
 });
