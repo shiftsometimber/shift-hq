@@ -85,23 +85,54 @@ async function login(request,env,verify) {
   }
   if(!verify){
     const s=upstreamSession(response);
-    if(s){const r=await env.CLINICAL.fetch(new Request(API+'/clinical/partners/enrolment',{headers:authHeaders(s.token),redirect:'manual'}));const profile=r.ok?await r.json():null;
-      if(profile?.status==='credentials_pending'&&profile.mfaEnabled===false){const value=await seal({token:s.token},env.PORTAL_SESSION_KEY,'setup',300);return json({mfaSetupRequired:true},200,{'Set-Cookie':setCookie(SETUP_COOKIE,value,300)});}
+    if(s){
+      // Password verification permits enrolment only, never a workspace session.
+      if(admin){
+        const r=await env.HQ_AUTH.fetch(new Request(API+'/me',{headers:authHeaders(s.token),redirect:'manual'}));
+        const u=r.ok?(await r.json())?.user:null;
+        if(u?.status==='active'&&['owner','admin','operations','support'].includes(u.role)&&u.mfaEnabled===false){
+          const value=await seal({token:s.token,authority:'hq',hqUserId:u.id},env.PORTAL_SESSION_KEY,'setup',300);
+          return json({mfaSetupRequired:true},200,{'Set-Cookie':setCookie(SETUP_COOKIE,value,300)});
+        }
+      }else{
+        const r=await env.CLINICAL.fetch(new Request(API+'/clinical/partners/enrolment',{headers:authHeaders(s.token),redirect:'manual'}));
+        const profile=r.ok?await r.json():null;
+        if(profile?.status==='credentials_pending'&&profile.mfaEnabled===false){
+          const value=await seal({token:s.token,authority:'partner'},env.PORTAL_SESSION_KEY,'setup',300);
+          return json({mfaSetupRequired:true},200,{'Set-Cookie':setCookie(SETUP_COOKIE,value,300)});
+        }
+      }
+      await revokeSession(env,s.token);
     }
     return json({message:'Authenticator verification is required for partner access.'},403);
   }
   return finishLogin(response,env);
 }
+async function revokeSession(env,token){
+  try{return (await env.HQ_AUTH.fetch(new Request(API+'/auth/logout',{method:'POST',headers:authHeaders(token),redirect:'manual'}))).ok;}catch{return false;}
+}
 async function setupMfa(request,env,enable){
-  if(!enabled(env))return closed();const setup=await unseal(cookieValue(request,SETUP_COOKIE),env.PORTAL_SESSION_KEY,'setup');if(!setup?.token)return json({message:'Restart sign-in to set up your authenticator.'},401);
-  const check=await env.CLINICAL.fetch(new Request(API+'/clinical/partners/enrolment',{headers:authHeaders(setup.token),redirect:'manual'}));const p=check.ok?await check.json():null;
-  if(p?.status!=='credentials_pending'||p.mfaEnabled!==false)return clearCookies(json({message:'Authenticator setup requires your approved pending account.'},403));
+  if(!enabled(env))return closed();
+  const setup=await unseal(cookieValue(request,SETUP_COOKIE),env.PORTAL_SESSION_KEY,'setup');
+  if(!setup?.token)return clearCookies(json({message:'Restart sign-in to set up your authenticator.'},401));
+  let approved=false,activationPending=true;
+  if(setup.authority==='hq'&&ORIGIN==='https://sstrx.shiftsometimber.co.uk'){
+    const check=await env.HQ_AUTH.fetch(new Request(API+'/me',{headers:authHeaders(setup.token),redirect:'manual'}));
+    const u=check.ok?(await check.json())?.user:null;
+    approved=u?.id===setup.hqUserId&&u?.status==='active'&&['owner','admin','operations','support'].includes(u.role)&&u.mfaEnabled===false;
+    activationPending=false;
+  }else if(setup.authority===undefined||setup.authority==='partner'){
+    const check=await env.CLINICAL.fetch(new Request(API+'/clinical/partners/enrolment',{headers:authHeaders(setup.token),redirect:'manual'}));
+    const p=check.ok?await check.json():null;
+    approved=p?.status==='credentials_pending'&&p.mfaEnabled===false;
+  }
+  if(!approved){await revokeSession(env,setup.token);return clearCookies(json({message:'Authenticator setup requires your current approved account. Restart sign-in.'},403));}
   const b=await bodyJson(request);if(enable&&!/^\d{6}$/.test(b.code||''))return json({message:'Enter a valid six-digit code.'},422);
   const r=await env.HQ_AUTH.fetch(new Request(API+'/mfa/'+(enable?'enable':'setup'),{method:'POST',headers:{...authHeaders(setup.token),'Content-Type':'application/json'},body:JSON.stringify(enable?{code:b.code}:{}),redirect:'manual'}));
   if(!r.ok)return json({message:'Authenticator setup could not be verified. Please check the code.'},r.status===429?429:422);
   if(!enable){const data=await r.json();if(typeof data.secret!=='string'||data.secret.length>200)return json({message:'Authenticator setup is unavailable.'},503);return json({secret:data.secret});}
-  try{await env.HQ_AUTH.fetch(new Request(API+'/auth/logout',{method:'POST',headers:authHeaders(setup.token),redirect:'manual'}));}catch{}
-  return clearCookies(json({mfaEnabled:true,activationPending:true}));
+  await revokeSession(env,setup.token);
+  return clearCookies(json({mfaEnabled:true,activationPending}));
 }
 async function upstreamPage(env,path){const response=await env.CLINICAL.fetch(new Request(UPSTREAM_ORIGIN+path));if(!response.ok)throw Error('workspace_template_unavailable');return response.text();}
 async function workspace(env,kind,demo,professionalKind=kind) {
@@ -123,8 +154,9 @@ async function handle(request,env) {
   if(!['GET','HEAD','POST'].includes(request.method))return respond('Method not allowed',405,'text/plain',{'Allow':'GET, HEAD, POST'});
   if(request.method==='POST' && (request.headers.get('Origin')!==ORIGIN||request.headers.get('Sec-Fetch-Site')==='cross-site'))return json({message:'Same-origin request required.'},403);
   if(path==='/api/logout'&&request.method==='POST'){
-    const own=await unseal(cookieValue(request,SESSION_COOKIE),env.PORTAL_SESSION_KEY,'session');let ok=true;
-    if(own?.token){try{ok=(await env.HQ_AUTH.fetch(new Request(API+'/auth/logout',{method:'POST',headers:authHeaders(own.token),redirect:'manual'}))).ok;}catch{ok=false;}}
+    const own=await unseal(cookieValue(request,SESSION_COOKIE),env.PORTAL_SESSION_KEY,'session');
+    const setup=await unseal(cookieValue(request,SETUP_COOKIE),env.PORTAL_SESSION_KEY,'setup');let ok=true;
+    for(const token of new Set([own?.token,setup?.token].filter(Boolean)))if(!await revokeSession(env,token))ok=false;
     return clearCookies(json({localSessionCleared:true,...!ok?{message:'This browser has signed out. Server sign-out could not be confirmed.'}:{}},ok?200:503));
   }
   if(path.startsWith('/api/')){
