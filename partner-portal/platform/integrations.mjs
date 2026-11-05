@@ -110,21 +110,22 @@ export async function receiveVerifiedEvent(env,contractId,raw,proof){
  const hash=await digest(raw),existing=await row(env.DB,'SELECT * FROM rx_integration_events WHERE contract_id=? AND event_reference=?',contractId,e.eventReference);
  if(existing){if(existing.payload_digest!==hash)fail(409,'webhook_replay_content_changed');return {duplicate:true,state:existing.state};}
  // Ordered projection is separate: store factual source without manufacturing skipped receipt/dispatch stages.
- const safe={kind:e.kind,tracking:e.tracking||null,remoteReference:e.remoteReference||null,...env.SSTRX_CANONICAL_RECEIPTS_ENABLED==='true'?{schemaVersion:e.schemaVersion,sourceRecordVersion:e.sourceRecordVersion,prescriptionReference:e.prescriptionReference,caseReference:e.caseReference,idempotencyKey:e.idempotencyKey,memberMessage:typeof e.memberMessage==='string'?text(e.memberMessage,1000):null}: {}};
+ if(env.SSTRX_CANONICAL_RECEIPTS_ENABLED==='true'&&['clarification','rejected','stock_unavailable','delivered','delivery_exception','returned'].includes(e.kind))text(e.memberMessage,1000);
+ const safe={kind:e.kind,tracking:e.tracking||null,remoteReference:e.remoteReference||null,...env.SSTRX_CANONICAL_RECEIPTS_ENABLED==='true'?{schemaVersion:e.schemaVersion,sourceRecordVersion:e.sourceRecordVersion,prescriptionReference:e.prescriptionReference,caseReference:e.caseReference,idempotencyKey:e.idempotencyKey,pharmacyOrgId:route.pharmacy_org_id,memberMessage:typeof e.memberMessage==='string'?text(e.memberMessage,1000):null}: {}};
  await env.DB.prepare("INSERT INTO rx_integration_events VALUES(?,?,?,?,?,?,?,?,?,?,'awaiting_projection')").bind(crypto.randomUUID(),contractId,e.eventReference,e.orderReference,e.kind,e.occurredAt,now(),hash,adapter.id,JSON.stringify(safe)).run();
  return {accepted:true,state:'awaiting_projection',mode:adapter.mode};
 }
 export async function projectVerifiedEvents(env,orderNumber,sink){
  if(!sink||sink.mode!=='synthetic'||env.SSTRX_ENVIRONMENT!=='synthetic')fail(503,'approved_supplier_native_projection_required');
  const route=await row(env.DB,'SELECT * FROM rx_order_routes WHERE order_number=?',orderNumber);if(!route)fail(404,'route_not_found');
- const stages={received:0,accepted:1,preparing:2,dispatched:3,delivered:4},actions={accepted:{from:0,action:'accept'},dispensing:{from:1,action:'prepare'},dispensed:{from:2,action:'dispensed'},dispatched:{from:2,action:'dispatch'},delivered:{from:3,action:'delivered'}};
+ const actions={accepted:{from:['received','query'],action:'accept'},clarification:{from:['received','accepted','preparing'],action:'query'},stock_unavailable:{from:['received','accepted','preparing'],action:'query'},rejected:{from:['received','query','accepted','preparing'],action:'reject'},dispensing:{from:['accepted'],action:'prepare'},dispensed:{from:['preparing'],action:'dispensed'},dispatched:{from:['preparing'],action:'dispatch'},delivered:{from:['dispatched','delivery_exception'],action:'delivered'},delivery_exception:{from:['dispatched'],action:'delivery_exception'},returned:{from:['dispatched','delivery_exception','delivered'],action:'returned'}};
  const {results:events=[]}=await env.DB.prepare("SELECT * FROM rx_integration_events WHERE order_number=? AND contract_id=? AND state='awaiting_projection' ORDER BY occurred_at,received_at,id LIMIT 100").bind(orderNumber,route.contract_id).all();
- let projected=0;for(let pass=0;pass<5;pass++){let progress=false;
+ let projected=0;for(let pass=0;pass<10;pass++){let progress=false;
   for(const e of events){if(e.state!=='awaiting_projection')continue;const task=await row(env.DB,'SELECT state_json FROM partner_fulfilment WHERE order_number=? AND partner_id=?',orderNumber,route.pharmacy_org_id),s=task?JSON.parse(task.state_json):null,step=actions[e.kind];if(!s||!step)continue;
-   const stage=stages[s.status];if(stage!==step.from||e.kind==='dispensed'&&s.dispensedAt)continue;
+   if(!step.from.includes(s.status)||e.kind==='dispensed'&&s.dispensedAt)continue;
    // Native action enforces authentic signature, current stock, version and professional scope.
    const data=JSON.parse(e.event_json);if(data.prescriptionReference&&data.prescriptionReference!==route.prescription_id)continue;if(env.SSTRX_CANONICAL_RECEIPTS_ENABLED==='true'&&e.kind==='dispatched'&&!s.dispensedAt)continue;
-   const r=await sink.apply({orderNumber,pharmacyOrgId:route.pharmacy_org_id,prescriptionId:route.prescription_id,version:s.version,action:step.action,eventReference:e.event_reference,occurredAt:e.occurred_at,tracking:data.tracking});
+   const r=await sink.apply({orderNumber,pharmacyOrgId:route.pharmacy_org_id,prescriptionId:route.prescription_id,version:s.version,action:step.action,eventReference:e.event_reference,occurredAt:e.occurred_at,tracking:data.tracking,message:data.memberMessage,stockUnavailable:e.kind==='stock_unavailable'});
    if(!r?.ok)continue;
    await env.DB.prepare("UPDATE rx_integration_events SET state='projected' WHERE id=? AND state='awaiting_projection'").bind(e.id).run();e.state='projected';projected++;progress=true;
   }

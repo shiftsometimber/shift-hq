@@ -1,10 +1,13 @@
 import test from 'node:test';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import assert from 'node:assert/strict';
 import {fixture,ORDER} from './fixture.mjs';
 import {ensurePlatformSchema} from '../platform/schema.mjs';
 import {ensureRefundSchema,applyRefundReceipt,stripeRefundWebhook,memberRefunds} from '../platform/refunds.mjs';
 import {digest,economicsTerms,reconcileEconomics} from '../platform/domain.mjs';
 const json=async(r,status=200)=>{const b=await r.json();assert.equal(r.status,status,JSON.stringify(b));return b};
+async function retainFinance(f,name){if(!process.env.SSTRX_QA_EVIDENCE_DIR)return;const dir=path.join(process.env.SSTRX_QA_EVIDENCE_DIR,'finance');await fs.mkdir(dir,{recursive:true});await fs.writeFile(path.join(dir,name+'.json'),JSON.stringify({scope:'SYNTHETIC RECEIPTS ONLY; no actual payment or refund',member:await memberRefunds(f.env,42),refunds:f.sql.prepare('SELECT * FROM rx_refunds').all(),processorReceipts:f.sql.prepare('SELECT * FROM rx_refund_receipts').all(),events:f.sql.prepare('SELECT * FROM rx_refund_events ORDER BY version').all(),ledger:f.sql.prepare('SELECT * FROM rx_finance_entries ORDER BY created_at').all(),exceptions:f.sql.prepare('SELECT * FROM rx_finance_exceptions').all(),economics:reconcileEconomics(f.terms,f.sql.prepare('SELECT * FROM rx_finance_entries').all())},null,2));}
 async function setup(){
  const f=await fixture();Object.assign(f.env,{SSTRX_PLATFORM_ENABLED:'true',SSTRX_FUNCTIONAL_V3_ENABLED:'true',SSTRX_ENVIRONMENT:'synthetic',SSTRX_REFUND_TEST_EXECUTION_ENABLED:'true'});await ensurePlatformSchema(f.DB);await ensureRefundSchema(f.DB);
  f.sql.prepare("UPDATE medicine_orders SET stripe_payment_intent_id='pi_FICTIONAL_ONLY',unit_price_pence=10000,total_pence=10000 WHERE order_number=?").run(ORDER);
@@ -27,6 +30,7 @@ test('RX-RF1 requested and submitted refunds cannot be shown as completed; verif
   await applyRefundReceipt(f.env,receipt('evt_FICTIONAL_1'),'verified_stripe_webhook');assert.equal((await memberRefunds(f.env,42))[0].state,'completed');
   assert.deepEqual(await applyRefundReceipt(f.env,receipt('evt_FICTIONAL_1'),'verified_stripe_webhook'),{duplicate:true});assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM rx_finance_entries WHERE kind='refund'").get().n,1);
   await assert.rejects(applyRefundReceipt(f.env,{...receipt('evt_FICTIONAL_1'),created:1},'verified_stripe_webhook'),/processor_event_conflict/);
+  await retainFinance(f,'verified-completed-refund');
  }finally{f.close();}
 });
 test('RX-RF2 unknown processor outcome retries with the original key and never issues a second financial instruction',async()=>{
@@ -51,6 +55,7 @@ test('RX-RF4 a bank return after success reverses contribution and creates an ow
   assert.equal((await memberRefunds(f.env,42))[0].state,'failed');const exception=f.sql.prepare("SELECT * FROM rx_finance_exceptions WHERE kind='refund_failed'").get();assert.equal(exception.owner_user_id,1);assert.equal(exception.state,'open');assert(exception.due_at);
   const entries=f.sql.prepare('SELECT * FROM rx_finance_entries').all();assert.equal(reconcileEconomics(f.terms,entries).refundPence,0);
   assert.deepEqual(await applyRefundReceipt(f.env,receipt('evt_FICTIONAL_OLD','succeeded',Math.floor(Date.now()/1000)),'verified_stripe_webhook'),{stale:true});
+  await retainFinance(f,'refund-returned-and-reversed');
  }finally{f.close();}
 });
 test('RX-RF5 processor signature and environment gates prevent unsigned or live callbacks and real refund execution',async()=>{

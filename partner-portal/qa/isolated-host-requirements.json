@@ -1,0 +1,24 @@
+{
+  "release": "SST Rx functional v3",
+  "purpose": "Private hosted acceptance with fictional users, orders and provider/payment simulators only",
+  "productionDeploymentAuthorised": false,
+  "productionResourcesForbidden": ["shift-partner-portal", "shift-hq-clinical-portal", "shift-core", "88f40aed-cb23-4372-8c94-8a73f48bc847"],
+  "requiredIsolatedBindings": [
+    {"name":"RX_GATEWAY", "kind":"Worker", "proposedName":"sstrx-functional-v3-qa", "status":"NOT PROVISIONED"},
+    {"name":"CLINICAL", "kind":"Worker service", "proposedName":"sstrx-functional-v3-qa-clinical", "status":"NOT PROVISIONED"},
+    {"name":"HQ_AUTH", "kind":"native test identity service", "proposedName":"sstrx-functional-v3-qa-core", "status":"NOT PROVISIONED"},
+    {"name":"DB", "kind":"D1", "proposedName":"sstrx-functional-v3-qa-db", "status":"NOT PROVISIONED"},
+    {"name":"CLINICAL_PRIVATE_FILES", "kind":"private object storage", "proposedName":"sstrx-functional-v3-qa-files", "status":"NOT PROVISIONED"}
+  ],
+  "requirements": [
+    "Confirm private hostnames and existing access control for named reviewers; no public role-switching fixture.",
+    "Use new isolated resource identifiers. Never run wrangler.sstrx-candidate.jsonc for QA because it names production services.",
+    "Use existing identity implementation and shared records in this isolated test stack; no separate Rx member-account implementation.",
+    "No real credentials, patient data, real prescription, Stripe live key, supplier transport or outbound messaging binding.",
+    "Record candidate hash and measured domains; gather Chromium and WebKit raw samples before any acceptance claim.",
+    "Record physical iPhone/PWA and Android wrapper results; a 390 px browser frame is not a device result.",
+    "Any cost, plan change, external message or real provider test submission requires its separate explicit approval."
+  ],
+  "actionNeeded": "Supply or authorise the exact isolated resource identifiers, private hostnames and reviewer access. If new resources or cost are needed, present the exact provisioning/cost request before applying it.",
+  "notAnAutoReviewRequest": true
+}

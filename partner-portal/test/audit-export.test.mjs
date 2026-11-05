@@ -32,3 +32,11 @@ test('RX-AUD4 raw signed-document corruption fails export verification even if a
   await j(await f.export());f.sql.exec('DROP TRIGGER rx_immutable_clinical_prescription_signatures_update');f.sql.prepare("UPDATE clinical_prescription_signatures SET document_json=json_set(document_json,'$.treatment.dose','FORGED')").run();await j(await f.export(),503);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_export_receipts').get().n,1);
  }finally{f.close();}
 });
+test('RX-AUD5 changed or missing evidence bytes and altered immutable assessment snapshots cannot produce a successful export receipt',async()=>{
+ for(const corruption of ['bytes','missing','snapshot']){const f=await setup();try{await j(await f.export());
+  if(corruption==='bytes')f.env.CLINICAL_PRIVATE_FILES={get:async()=>({body:new Uint8Array([7,8,9])})};
+  if(corruption==='missing')f.env.CLINICAL_PRIVATE_FILES={get:async()=>null};
+  if(corruption==='snapshot'){f.sql.exec('DROP TRIGGER rx_immutable_clinical_member_versions_update');f.sql.prepare("UPDATE clinical_member_versions SET answers_json=json_set(answers_json,'$.weightKg',999)").run();}
+  await j(await f.export(),corruption==='missing'?503:409);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_export_receipts').get().n,1);
+ }finally{f.close();}}
+});

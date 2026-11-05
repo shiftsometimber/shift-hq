@@ -1,4 +1,6 @@
 import memberService from '../service/member-service.mjs';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {functionalDataset} from '../qa/functional-fixtures.mjs';
@@ -8,6 +10,11 @@ import portal from '../sstrx-worker.mjs';
 import {captureOrderRoute,queueSubmission,submitJob,receiveVerifiedEvent,isolatedSyntheticAdapter} from '../platform/integrations.mjs';
 const ORIGIN='https://sstrx.shiftsometimber.co.uk';
 const j=async(r,status=200)=>{const b=await r.json();assert.equal(r.status,status,JSON.stringify(b));return b;};
+async function retainEvidence(f,name){
+ if(!process.env.SSTRX_QA_EVIDENCE_DIR)return;const dir=path.join(process.env.SSTRX_QA_EVIDENCE_DIR,name);await fs.mkdir(dir,{recursive:true});
+ for(const [role,actor]of [['clinical',3],['owner',1],['pharmacy',4]]){const exported=await j(await f.hq('/platform/exports/'+RECORD,actor,{purpose:'FICTIONAL acceptance evidence '+name}));await fs.writeFile(path.join(dir,role+'-verified-export.json'),JSON.stringify(exported,null,2));}
+ await fs.writeFile(path.join(dir,'linked-records.json'),JSON.stringify({scope:'SYNTHETIC ONLY; no actual prescription, payment, supplier order or patient change',member:await j(await f.callMemberSnapshot()),hq:await j(await f.hq('/platform',1)),lifecycle:f.sql.prepare('SELECT * FROM rx_prescription_lifecycle').all(),supplyHistory:f.sql.prepare('SELECT * FROM rx_supply_history').all(),fulfilment:JSON.parse(f.sql.prepare('SELECT state_json FROM partner_fulfilment').get().state_json),financeTasks:f.sql.prepare('SELECT * FROM clinical_prescription_finance_tasks').all(),financeReviews:f.sql.prepare('SELECT * FROM rx_lifecycle_finance_reviews').all(),funding:f.sql.prepare('SELECT * FROM rx_lifecycle_funding').all(),nativeOrderCount:f.sql.prepare('SELECT COUNT(*) n FROM medicine_orders').get().n,signatureCount:f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_signatures').get().n},null,2));
+}
 async function setup(code='E'){
  const f=await functionalDataset(code),date=new Date().toISOString();
  for(const org of ['clinical-org','pharmacy-org']){const row=f.sql.prepare('SELECT * FROM rx_service_config WHERE org_id=?').get(org),config=row?JSON.parse(row.config_json):{};config.lifecycleProtocol={version:1,approvalReference:'FICTIONAL-'+org+'-WITHDRAWAL-POLICY',freshSignatureForReplacement:true,dispositions:['not_supplied','physically_returned','quarantined_before_dispatch']};f.sql.prepare("INSERT INTO rx_service_config VALUES(?,'weight_management',?,?,?) ON CONFLICT(org_id,service) DO UPDATE SET version=excluded.version,config_json=excluded.config_json").run(org,(row?.version||0)+1,JSON.stringify(config),date);}
@@ -38,6 +45,15 @@ test('RX-SG2 a signed cancellation holds supply until an assigned pharmacy ackno
   const ack=await j(await f.ack(requested));assert.equal(ack.state,'closed');assert.equal(f.state().status,'cancelled');assert.equal(JSON.parse(f.sql.prepare('SELECT state_json FROM partner_fulfilment').get().state_json).status,'cancelled');assert.equal(f.orderRow().clinical_status,'cancelled');
   assert.deepEqual(f.sql.prepare('SELECT * FROM clinical_prescription_signatures').get(),original);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_versions').get().n,4);
   assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM clinical_prescription_finance_tasks WHERE kind='cancellation_review'").get().n,1);assert((await j(await f.ack(requested))).duplicate);
+  await retainEvidence(f,'signed-cancellation');
+ }finally{f.close();}
+});
+test('RX-LC7 withdrawal finance remains owned and due until an explicit terms-based outcome; other roles and unconfirmed refunds cannot close it',async()=>{
+ const f=await setup();try{const request=await j(await f.request()),closed=await j(await f.ack(request));let work=(await j(await f.hq('/platform',1))).records[0];assert.equal(work.action.code,'withdrawal_payment_review');assert.equal(work.action.owner.userId,1);assert.equal(work.action.dueAt,f.command.dueAt);
+  const command={version:closed.version,outcome:'no_refund_due',termsReference:'FICTIONAL-ACCEPTED-NO-REFUND-TERMS',approvalReference:'FICTIONAL-OWNER-REVIEW',reason:'FICTIONAL signed policy acceptance test only'};
+  await j(await f.call('/'+request.id+'/financial-resolution',command,6),403);await j(await f.call('/'+request.id+'/financial-resolution',{...command,outcome:'processor_refund_completed',refundId:'UNCONFIRMED'},1),409);
+  let finances=await j(await f.hq('/platform/refunds',1));assert.equal(finances.withdrawalFinanceWork.length,1);await j(await f.call('/'+request.id+'/financial-resolution',command,1));assert((await j(await f.call('/'+request.id+'/financial-resolution',command,1))).duplicate);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_lifecycle_finance_reviews').get().n,1);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_refunds').get().n,0);assert.equal(f.sql.prepare("SELECT status FROM clinical_prescription_finance_tasks WHERE id=?").get('lifecycle-finance:'+request.id).status,'reviewed');assert.equal((await j(await f.hq('/platform/refunds',1))).withdrawalFinanceWork.length,0);assert.notEqual((await j(await f.hq('/platform',1))).records[0].action.code,'withdrawal_payment_review');
+  const audit=await j(await f.hq('/platform/exports/'+RECORD,1,{purpose:'FICTIONAL withdrawal finance verification'}));assert(audit.content.audit.some(e=>e.action==='withdrawal_finance_reviewed'&&e.actorId==='1'));
  }finally{f.close();}
 });
 test('RX-C3 signed amendment requires pharmacy withdrawal, a fresh decision, member agreement and a new verified signature; original history survives',async()=>{
@@ -47,6 +63,7 @@ test('RX-C3 signed amendment requires pharmacy withdrawal, a fresh decision, mem
   await freshReview(f);const result=await replacementSignature(f);assert.equal(result.signed.pharmacyTaskCreated,true);assert.notEqual(f.state().prescriptionId,f.original.prescriptionId);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_signatures').get().n,2);
   assert.deepEqual(f.sql.prepare('SELECT document_json,digest FROM clinical_prescription_signatures WHERE id=?').get(f.original.prescriptionId),old);const history=f.sql.prepare('SELECT * FROM rx_supply_history').get();assert.equal(history.prescription_id,f.original.prescriptionId);assert.equal(JSON.parse(history.fulfilment_json).status,'cancelled');assert.equal(f.orderRow().prescription_reference,f.state().prescriptionId);assert.equal(f.orderRow().clinical_status,'sent_to_pharmacy');
   await j(await f.partner('/prescriptions/'+RECORD+'/sign',result.cookie,result.body),409);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_signatures').get().n,2);
+  await retainEvidence(f,'signed-amendment');
  }finally{f.close();}
 });
 test('RX-DL2 replacement after dispatch requires a documented pharmacy return and creates a linked new supply with independent state',async()=>{
@@ -55,6 +72,9 @@ test('RX-DL2 replacement after dispatch requires a documented pharmacy return an
   await j(await f.ack(r,{disposition:'physically_returned'}));await freshReview(f);await replacementSignature(f,'FICTIONAL REPLACEMENT SUPPLY DIRECTIONS');
   const supply=JSON.parse(f.sql.prepare('SELECT state_json FROM partner_fulfilment').get().state_json);assert.equal(supply.status,'received');assert.equal(supply.tracking,undefined);assert.equal(supply.prescriptionId,f.state().prescriptionId);assert.notEqual(supply.prescriptionId,f.original.prescriptionId);
   const history=f.sql.prepare('SELECT * FROM rx_supply_history').get();assert.equal(JSON.parse(history.fulfilment_json).status,'returned');assert.equal(f.sql.prepare('SELECT new_prescription_id FROM rx_prescription_lifecycle').get().new_prescription_id,supply.prescriptionId);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM medicine_orders').get().n,1);const member=await j(await f.callMemberSnapshot());assert.equal(member.orders[0].timeline.find(s=>s.key==='dispensed').complete,false);assert.equal(member.orders[0].timeline.find(s=>s.key==='dispatched').complete,false);assert.equal(member.orders[0].supplyHistory.length,1);
+  const pharmacy=await f.login('DSPTEST');for(const action of ['accept','prepare','dispensed','dispatch','delivered']){const current=JSON.parse(f.sql.prepare('SELECT state_json FROM partner_fulfilment').get().state_json);await j(await f.partner('/partners/fulfilment/'+f.order+'/action',pharmacy,{version:current.version,action,...action==='dispatch'?{carrier:'dpd',trackingNumber:'FICTIONAL-REPLACEMENT-ONLY'}:{},...action==='delivered'?{message:'FICTIONAL replacement delivery confirmed'}:{}}));}
+  const delivered=await j(await f.callMemberSnapshot());assert.equal(delivered.orders[0].status,'delivered');assert.equal(delivered.orders[0].timeline.find(s=>s.key==='dispensed').complete,true);assert.equal(delivered.orders[0].timeline.find(s=>s.key==='dispatched').complete,true);assert.equal(delivered.orders[0].supplyHistory.length,1);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM medicine_orders').get().n,1);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_signatures').get().n,2);assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM rx_refunds").get().n,0);
+  await retainEvidence(f,'linked-replacement-delivered');
  }finally{f.close();}
 });
 test('RX-LC4 unrelated roles, stale versions, changed protocols and missing release authorisation cannot change signed records',async()=>{
