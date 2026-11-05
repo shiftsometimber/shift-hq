@@ -1,0 +1,32 @@
+// The same small client is mounted inside the retained member and Rx workspaces.
+function sstMountSecureMessages(host,options){
+ const generation=String(Number(host.dataset.generation||0)+1);host.dataset.generation=generation;
+ const active=()=>host.isConnected&&host.dataset.generation===generation&&options.current();
+ const node=(tag,value)=>{const n=document.createElement(tag);if(value!==undefined)n.textContent=value;return n;};
+ const notice=node('p');notice.setAttribute('role','status');const list=node('div'),detail=node('div');
+ host.replaceChildren(node('h2','Secure messages'),node('p',options.member?'Private conversations with the care teams assigned to your record. Messages are not monitored continuously.':'Member conversations for your assigned work. Clinical content stays with the member and authorised care team.'),notice,list,detail);
+ async function call(path='',body){const r=await fetch(options.url+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});if(!active())throw Error('View changed');if(r.status===401||r.status===403){list.replaceChildren();detail.replaceChildren();throw Error('Your session or access has ended. Sign in again.');}const d=await r.json();if(!r.ok)throw Error(String(d.error||'Secure messages are unavailable').replaceAll('_',' '));return d;}
+ function field(form,label,tag='textarea'){const wrap=node('label',label),input=node(tag);input.setAttribute('aria-label',label);input.required=true;if(tag==='textarea'){input.maxLength=4000;input.rows=4;}wrap.append(input);form.append(wrap);return input;}
+ function editor(thread){
+  const form=node('form');let record,channel;if(!thread){
+   record=field(form,'Record for secure conversation','select');record.append(new Option('Choose an assigned record',''));for(const r of options.records())record.append(new Option(r.orderNumber||r.recordId,r.recordId));
+   channel=field(form,'Care team','select');channel.append(new Option('Choose a care team',''));for(const [id,title]of options.member?[['clinical','Clinical team'],['pharmacy','Dispensing pharmacy']]:[[options.channel(),options.channel()==='clinical'?'Clinical team':'Dispensing pharmacy']])channel.append(new Option(title,id));
+  }
+  const message=field(form,'Secure message'),send=node('button','Send secure message');send.type='submit';form.append(send);const requestId=()=>{const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;const h=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20);};let pending;
+  form.onsubmit=async e=>{e.preventDefault();if(!form.reportValidity()||send.disabled)return;send.disabled=true;pending=pending||{clientReference:requestId(),message:message.value,...thread?{version:thread.version}:{recordId:record.value,channel:channel.value}};
+   try{const d=await call(thread?'/'+thread.id:'',pending);if(!active())return;notice.textContent='Secure message recorded. Email alerts are awaiting approval.';await load();await open(d.id);}catch(e){if(active()){notice.textContent=e.message;send.disabled=false;}}
+  };return form;
+ }
+ async function open(id){try{const d=await call('/'+id);if(!active())return;detail.replaceChildren(node('h3','Conversation · '+d.thread.order_number));for(const m of d.messages){const article=node('article');article.className='fulfilment-card';article.append(node('strong',m.author_label),node('p',new Date(m.created_at).toLocaleString('en-GB',{timeZone:'Europe/London'})),node('p',m.body));detail.append(article);}detail.append(editor(d.thread));await call('/'+id+'/read',{version:d.thread.version});await load();if(active())document.dispatchEvent(new Event('sstrx-message-change'));}catch(e){if(active())notice.textContent=e.message;}}
+ async function load(){try{const d=await call();if(!active())return;list.replaceChildren();for(const t of d.threads){const b=node('button',(t.unread?'Unread · ':'')+(t.organisation||t.channel)+' · '+t.order_number+' · '+t.status.replaceAll('_',' '));b.type='button';b.onclick=()=>open(t.id);list.append(b);}if(!d.threads.length)list.append(node('p','No secure conversations for this record or assigned work.'));if(d.hasMore)list.append(node('p','Showing the latest 100 conversations.'));const start=node('button','Start a secure conversation');start.type='button';start.onclick=()=>detail.replaceChildren(editor());list.append(start);}catch(e){if(active())notice.textContent=e.message;}}
+ load();const timer=setInterval(()=>{if(!active()){clearInterval(timer);return;}if(!document.hidden)load();},60000);return {refresh:load};
+}
+export const SECURE_MESSAGE_CLIENT='\n'+sstMountSecureMessages.toString()+'\n';
+export const MEMBER_MESSAGE_CLIENT=SECURE_MESSAGE_CLIENT+`
+const sstOriginalMemberRender=render;
+render=function(){sstOriginalMemberRender();if(review||stopped||!current?.record?.id)return;const recordId=current.record.id,host=node('section');host.className='fulfilment-card';root.append(host);sstMountSecureMessages(host,{member:true,url:apiRoot+'/'+recordId+'/messages',current:()=>!stopped&&current?.record?.id===recordId,records:()=>[{recordId,orderNumber:current.record.order_number}],channel:()=>null});};
+`;
+export const RX_MESSAGE_CLIENT=SECURE_MESSAGE_CLIENT+`
+function sstRxMessages(){if(!rxData||!['clinician','dispensing'].includes(document.body.dataset.rxKind))return;let host=document.getElementById('rx-secure-conversations');if(!host){host=rxNode('section');host.id='rx-secure-conversations';host.className='rx-count';rx$('rx-messages').prepend(host);}const epoch=rxEpoch;sstMountSecureMessages(host,{member:false,url:'/api/clinical/platform/messages',current:()=>rxEpoch===epoch&&!!rxData,records:()=>rxData.records,channel:()=>document.body.dataset.rxKind==='clinician'?'clinical':'pharmacy'});}
+const sstMessageHeading=document.getElementById('rx-heading');if(sstMessageHeading)new MutationObserver(()=>{if(rxView==='messages')sstRxMessages();}).observe(sstMessageHeading,{childList:true,subtree:true});document.addEventListener('sstrx-message-change',()=>{if(rxView==='messages'&&rxData)rx$('rx-notice').textContent='Conversation updated.';});if(rxView==='messages')sstRxMessages();
+`;

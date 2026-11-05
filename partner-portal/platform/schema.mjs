@@ -8,6 +8,12 @@ export async function ensurePlatformSchema(DB){
  try{await task}catch(e){ready.delete(DB);throw e}
 }
 export const statements=[
+ `CREATE TABLE IF NOT EXISTS rx_message_threads(id TEXT PRIMARY KEY,record_id TEXT NOT NULL REFERENCES clinical_member_records(id),order_number TEXT NOT NULL,member_id INTEGER NOT NULL,org_id TEXT NOT NULL REFERENCES partner_organisations(id),channel TEXT NOT NULL,status TEXT NOT NULL,version INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(record_id,org_id,channel))`,
+ `CREATE TABLE IF NOT EXISTS rx_messages(id TEXT PRIMARY KEY,thread_id TEXT NOT NULL REFERENCES rx_message_threads(id),version INTEGER NOT NULL,actor_kind TEXT NOT NULL,actor_id INTEGER NOT NULL,author_label TEXT NOT NULL,body TEXT NOT NULL,payload_digest TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(thread_id,version))`,
+ `CREATE TABLE IF NOT EXISTS rx_message_reads(thread_id TEXT NOT NULL REFERENCES rx_message_threads(id),actor_kind TEXT NOT NULL,actor_id INTEGER NOT NULL,version INTEGER NOT NULL,read_at TEXT NOT NULL,PRIMARY KEY(thread_id,actor_kind,actor_id))`,
+ `CREATE INDEX IF NOT EXISTS rx_message_inbox ON rx_message_threads(member_id,org_id,updated_at)`,
+ `CREATE TABLE IF NOT EXISTS rx_message_alerts(id TEXT PRIMARY KEY,recipient_kind TEXT NOT NULL,recipient_id TEXT,source TEXT NOT NULL,source_id TEXT NOT NULL,source_version INTEGER NOT NULL,status TEXT NOT NULL,draft_id TEXT,created_at TEXT NOT NULL)`,
+
  `CREATE TABLE IF NOT EXISTS rx_access_requests(id TEXT PRIMARY KEY,duplicate_key TEXT NOT NULL,payload_digest TEXT NOT NULL,details_json TEXT NOT NULL,status TEXT NOT NULL,version INTEGER NOT NULL,reviewed_by INTEGER,review_note TEXT,onboarding_staff_id TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)`,
  `CREATE UNIQUE INDEX IF NOT EXISTS rx_one_open_access_request ON rx_access_requests(duplicate_key) WHERE status IN ('pending','needs_information','approved_for_onboarding','onboarding_started')`,
  `CREATE INDEX IF NOT EXISTS rx_access_request_queue ON rx_access_requests(status,created_at)`,

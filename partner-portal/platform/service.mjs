@@ -1,3 +1,4 @@
+import {listConversations,readConversation,sendSecureMessage,markConversationRead,messageAlertDrafts} from './messages.mjs';
 import {createDiagnosticOrder} from './diagnostics.mjs';
 import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition,newStaff} from '../service/clinical-kernel.mjs';
 import {ensurePlatformSchema} from './schema.mjs';
@@ -58,6 +59,19 @@ export async function platformRoute(request,env){
   const a=await platformActor(request,env);if(a.response)return a.response;await ensurePlatformSchema(env.DB);
   const p=url.pathname.slice(BASE.length).split('/').filter(Boolean);
   if(p[0]==='identity'&&p.length===1&&request.method==='GET')return json({staff:a.staff||null,organisationId:a.orgId||null,role:a.staff?.kind||a.role});
+  if(p[0]==='messages'){
+   if(env.SSTRX_SECURE_MESSAGES_ENABLED!=='true')fail(503,'secure_messages_not_open');
+   if(request.method==='GET'&&p.length===1)return json(await listConversations(env,a));
+   if(request.method==='GET'&&p.length===2)return json(await readConversation(env,a,p[1]));
+   if(request.method==='POST'&&p.length===3&&p[2]==='read')return json(await markConversationRead(env,a,p[1],await input(request)));
+   if(request.method==='POST'&&p.length<=2)return json(await sendSecureMessage(env,a,p[1]||null,await input(request)),201);
+   fail(404,'not_found');
+  }
+  if(p[0]==='message-alerts'){
+   if(env.SSTRX_SECURE_MESSAGES_ENABLED!=='true')fail(503,'secure_messages_not_open');
+   if(request.method==='GET'&&p.length===1)return json(await messageAlertDrafts(env,a));
+   fail(404,'not_found');
+  }
   if(p[0]==='access-requests'){
    if(!a.internal||!['owner','admin','operations'].includes(a.role))fail(403,'internal_access_reviewer_required');
    if(request.method==='GET'&&p.length===1){const list=await all(env.DB.prepare("SELECT * FROM rx_access_requests ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'needs_information' THEN 1 WHEN 'approved_for_onboarding' THEN 2 ELSE 3 END,created_at DESC LIMIT 101"));return json({requests:list.slice(0,100).map(r=>({...r,details:JSON.parse(r.details_json),details_json:undefined,duplicate_key:undefined,payload_digest:undefined,contactDetailsVerified:false})),hasMore:list.length>100,canApprove:a.commercial,organisations:await all(env.DB.prepare("SELECT id,json_extract(state_json,'$.name') name,json_extract(state_json,'$.kind') kind FROM partner_organisations WHERE json_extract(state_json,'$.status') IN ('pending','approved') ORDER BY name")),notificationsSent:false});}

@@ -19,6 +19,7 @@ test('compiled clinical/member services preserve native auth, approved assignmen
  const f=await fixture();try{f.env.SSTRX_PLATFORM_ENABLED='true';const ctx={waitUntil(){}};
  const request=new Request('https://api.shiftsometimber.co.uk/v1/hq/clinical/partner-desk/assign',{method:'POST',headers:{Origin:'https://hq.shiftsometimber.co.uk',Cookie:'sst_hq_session='+f.tokens[1],'Content-Type':'application/json'},body:JSON.stringify({recordId:RECORD,staffUserId:3,active:true})});assert.equal((await compiledClinical.fetch(request,f.env,ctx)).status,200);
  const good=await compiledMember.fetch(new Request('https://api.shiftsometimber.co.uk/v1/member/clinical-records/'+RECORD,{headers:{Origin:'https://shiftsometimber.co.uk',Cookie:'sst_session='+f.memberToken}}),f.env,ctx);assert.equal(good.status,200);assert.equal((await good.json()).record.id,RECORD);
+ for(const origin of ['https://my-timber.app','https://invalid.example']){const r=await compiledMember.fetch(new Request('https://api.shiftsometimber.co.uk/v1/member/clinical-records/'+RECORD,{headers:{Origin:origin,Cookie:'sst_session='+f.memberToken}}),f.env,ctx);assert.equal(r.status,origin==='https://my-timber.app'?200:403);}
  assert.equal((await compiledMember.fetch(new Request('https://api.shiftsometimber.co.uk/v1/member/clinical-records/'+RECORD),f.env,ctx)).status,401);
  }finally{f.close()}
 });

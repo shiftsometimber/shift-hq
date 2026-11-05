@@ -1,13 +1,14 @@
+import memberService from '../../.partner-qa/member.bundle.mjs';
 // FICTIONAL LOCAL QA ONLY. Host-cookie translation is excluded from production.
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import {fixture} from '../test/fixture.mjs';
 import {reviewAndPropose,issue} from '../test/workflow-helpers.mjs';
-import portal from '../sstrx-worker.mjs';
+import portal from '../../.partner-qa/sstrx.bundle.mjs';
 import legacy from '../worker.mjs';
 import {ensurePlatformSchema} from '../platform/schema.mjs';
 const ORIGIN='https://sstrx.shiftsometimber.co.uk';
-const f=await fixture();Object.assign(f.env,{SSTRX_PLATFORM_ENABLED:'true',SSTRX_PAID_RECORD_LINK_ENABLED:'true',SSTRX_ENVIRONMENT:'synthetic',STRIPE_MODE:'test',SSTRX_TEST_SIGNING:'true'});f.env.SSTRX_ACCESS_REQUESTS_ENABLED='true';f.portalEnv.SSTRX_ACCESS_REQUESTS_ENABLED='true';f.env.SSTRX_ACCESS_REQUEST_KEY='SYNTHETIC-TRANSPORT-KEY-NOT-A-REAL-CREDENTIAL';f.portalEnv.SSTRX_ACCESS_REQUEST_KEY=f.env.SSTRX_ACCESS_REQUEST_KEY;f.portalEnv.SSTRX_PORTAL_ENABLED='true';await ensurePlatformSchema(f.DB);
+const f=await fixture();Object.assign(f.env,{SSTRX_SECURE_MESSAGES_ENABLED:'true',SSTRX_PLATFORM_ENABLED:'true',SSTRX_PAID_RECORD_LINK_ENABLED:'true',SSTRX_ENVIRONMENT:'synthetic',STRIPE_MODE:'test',SSTRX_TEST_SIGNING:'true'});f.env.SSTRX_ACCESS_REQUESTS_ENABLED='true';f.portalEnv.SSTRX_ACCESS_REQUESTS_ENABLED='true';f.env.SSTRX_ACCESS_REQUEST_KEY='SYNTHETIC-TRANSPORT-KEY-NOT-A-REAL-CREDENTIAL';f.portalEnv.SSTRX_ACCESS_REQUEST_KEY=f.env.SSTRX_ACCESS_REQUEST_KEY;f.portalEnv.SSTRX_PORTAL_ENABLED='true';await ensurePlatformSchema(f.DB);
 const review=await reviewAndPropose(f);await issue(f,review.cookie,review.proposal);
 async function seededSession(kind){const username=kind==='owner'?'fixture-1@example.test':kind==='pharmacy'?'DSPTEST':'CLNTEST';
  const h={Origin:ORIGIN,'CF-Connecting-IP':'203.0.113.42','Content-Type':'application/json'};
@@ -18,6 +19,8 @@ async function seededSession(kind){const username=kind==='owner'?'fixture-1@exam
 }
 http.createServer(async(req,res)=>{try{
  const url=new URL(req.url,'http://'+req.headers.host),body=[];for await(const p of req)body.push(p);
+ if(url.pathname==='/qa/member'){res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FICTIONAL My Timber treatment record</title><link rel="stylesheet" href="/assets/clinical-records/style.css"></head><body><p>FICTIONAL MEMBER ACCEPTANCE · No real patient or message</p><p id="notice" role="status"></p><main id="record"></main><script type="module" src="/assets/clinical-records/client.mjs"></script></body></html>');return;}
+ if(url.pathname.startsWith('/v1/member/clinical-records')||url.pathname.startsWith('/assets/clinical-records/')){const headers=new Headers({'Cookie':'sst_session='+f.memberToken,Origin:'https://my-timber.app','Content-Type':req.headers['content-type']||'application/json'});const response=await memberService.fetch(new Request('https://my-timber.app'+url.pathname+url.search,{method:req.method,headers,body:['GET','HEAD'].includes(req.method)?undefined:Buffer.concat(body)}),f.env,{});res.writeHead(response.status,{'Content-Type':response.headers.get('Content-Type')||'application/json'});res.end(Buffer.from(await response.arrayBuffer()));return;}
  if(url.pathname==='/qa/hq'){res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><html><head><meta charset="utf-8"><title>FICTIONAL HQ acceptance</title></head><body><p>FICTIONAL HQ ACCEPTANCE · No real accounts or external messages</p><aside><nav><details open><summary>Partners &amp; fulfilment</summary></details></nav></aside><h1 id="title">HQ</h1><span id="hqUserChip">Fictional owner</span><button id="logoutBtn">Sign out</button><div class="hq-quick-actions"></div><main></main><script src="/qa/hq-shell.js"></script><script src="/qa/hq-partner-desk.js"></script><script src="/qa/hq-start.js"></script></body></html>');return;}
  if(url.pathname==='/qa/hq-shell.js'){res.writeHead(200,{'Content-Type':'text/javascript'});res.end('var S={me:{id:1,role:"owner"}};var call=async(path,options={})=>{const r=await fetch("/qa/hq-api"+path,{...options,headers:{"Content-Type":"application/json"}});const d=await r.json();if(!r.ok)throw Object.assign(Error(d.error||"Fictional HQ request failed"),{status:r.status});return d;};');return;}
  if(url.pathname==='/qa/hq-partner-desk.js'){res.writeHead(200,{'Content-Type':'text/javascript'});res.end(await fs.readFile(new URL('../../hq-partner-desk.js',import.meta.url)));return;}

@@ -3,6 +3,9 @@ import {createHash} from 'node:crypto';
 export async function buildMemberKernel(){
  let source=await fs.readFile(new URL('./vendor/member-records-20261024.mjs',import.meta.url),'utf8');
  if(createHash('sha256').update(source).digest('hex')!=='8063d484b353ee59d2eaeb8606fe3d601009edfb2bca643dd25a15df652955d4')throw Error('Member clinical baseline changed');
+ const origins='new Set(["https://shiftsometimber.co.uk", "https://www.shiftsometimber.co.uk"])';
+ if(source.split(origins).length!==2)throw Error('Member origin boundary changed');
+ source=source.replace(origins,'new Set(["https://shiftsometimber.co.uk", "https://www.shiftsometimber.co.uk", "https://my-timber.app"])');
  // The member acceptance guard must read the same catalogue states as the prescriber.
  source=source.replaceAll('!["active", "published"].includes(variant.status)','!["available", "active", "published"].includes(variant.status)').replaceAll("v.status IN ('active','published')","v.status IN ('available','active','published')");
  source="import {paidClinicalOrder} from '../platform/signing.mjs';\n"+source;
