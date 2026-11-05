@@ -21,7 +21,9 @@ function sstMountSecureMessages(host,options){
  async function load(){try{const d=await call();if(!active())return;options.onList?.(d);list.replaceChildren();for(const t of d.threads){const b=node('button',(t.unread?'Unread · ':'')+(t.organisation||t.channel)+' · '+t.order_number+' · '+t.status.replaceAll('_',' '));b.type='button';b.onclick=()=>open(t.id);list.append(b);}if(!d.threads.length)list.append(node('p',options.inbox?'No secure messages yet. Conversations appear here when you and an assigned care team exchange messages.':'No secure conversations for this record or assigned work.'));if(d.hasMore)list.append(node('p','Showing the latest 100 conversations.'));if(options.inbox&&!options.records().length){list.append(node('p','You do not have a linked treatment record yet. Your messages will appear here once a care team is assigned.'));return;}const start=node('button','Start a secure conversation');start.type='button';start.onclick=()=>detail.replaceChildren(editor());list.append(start);}catch(e){if(active())notice.textContent=e.message;}}
  load();const timer=setInterval(()=>{if(!active()){clearInterval(timer);return;}if(!document.hidden)load();},60000);return {refresh:load,open};
 }
-export const SECURE_MESSAGE_CLIENT='\n'+sstMountSecureMessages.toString()+'\n';
+// Give serialised code a stable browser binding. Bundling may rename the source
+// function when another serialised client refers to the same global name.
+export const SECURE_MESSAGE_CLIENT='\nconst sstMountSecureMessages=('+sstMountSecureMessages.toString()+');\n';
 export const MEMBER_MESSAGE_CLIENT=SECURE_MESSAGE_CLIENT+`
 const sstOriginalMemberRender=render;
 render=function(){sstOriginalMemberRender();if(review||stopped||!current?.record?.id)return;const recordId=current.record.id,host=node('section');host.className='fulfilment-card';root.append(host);sstMountSecureMessages(host,{member:true,url:apiRoot+'/'+recordId+'/messages',current:()=>!stopped&&current?.record?.id===recordId,records:()=>[{recordId,orderNumber:current.record.order_number}],channel:()=>null});};
