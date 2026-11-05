@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
 import {homedir} from 'node:os';
 import {resolve,join} from 'node:path';
-import {createHash} from 'node:crypto';
+import {createHash,randomBytes} from 'node:crypto';
 const [action='inspect',directory,authorisation]=process.argv.slice(2);
 if(!directory)throw Error('An existing private snapshot directory is required.');
 if(!['inspect','upload','promote','domain','verify','rollback'].includes(action))throw Error('Unknown release action.');
@@ -20,7 +20,7 @@ async function api(path,method='GET',body){
  const d=await r.json();if(!r.ok||d.success!==true)throw Error('Cloudflare '+method+' failed: '+r.status+' '+JSON.stringify(d.errors));return d.result;
 }
 const path=w=>'/accounts/'+account+'/workers/scripts/'+w;
-const targets=[['shift-hq-clinical-portal','clinical',{SSTRX_PLATFORM_ENABLED:'true',SSTRX_PORTAL_ENABLED:'true',SSTRX_ENVIRONMENT:'production',SSTRX_TEST_SIGNING:'false',SSTRX_DIAGNOSTICS_ENABLED:'false',SSTRX_PAID_RECORD_LINK_ENABLED:'false'}],['shift-clinical-records','member',{SSTRX_PLATFORM_ENABLED:'true',SSTRX_PAID_RECORD_LINK_ENABLED:'true',SSTRX_ENVIRONMENT:'production'}],['shift-partner-portal','sstrx',{SSTRX_PORTAL_ENABLED:'true'}]];
+const targets=[['shift-hq-clinical-portal','clinical',{SSTRX_PLATFORM_ENABLED:'true',SSTRX_ACCESS_REQUESTS_ENABLED:'true',SSTRX_PORTAL_ENABLED:'true',SSTRX_ENVIRONMENT:'production',SSTRX_TEST_SIGNING:'false',SSTRX_DIAGNOSTICS_ENABLED:'false',SSTRX_PAID_RECORD_LINK_ENABLED:'false'}],['shift-clinical-records','member',{SSTRX_PLATFORM_ENABLED:'true',SSTRX_PAID_RECORD_LINK_ENABLED:'true',SSTRX_ENVIRONMENT:'production'}],['shift-partner-portal','sstrx',{SSTRX_PORTAL_ENABLED:'true',SSTRX_ACCESS_REQUESTS_ENABLED:'true'}]];
 const baseline={},settings={};for(const [w]of targets){baseline[w]=(await read(w+'-deployments.json')).result.deployments[0];settings[w]=(await read(w+'-settings.json')).result;}
 async function assertServing(expected){for(const [w]of targets){const live=(await api(path(w)+'/deployments')).deployments[0];if(live.id!==expected[w].id)throw Error('Concurrent deployment detected: '+w);}}
 if(action==='inspect'){
@@ -32,6 +32,7 @@ if(action==='upload'){
  const prior=await fs.readFile(join(root,'uploaded.json'),'utf8').then(JSON.parse).catch(()=>null);
  if(prior&&authorisation!=='--replace-owned-upload')throw Error('Upload receipt already exists; reconcile it instead of repeating.');
  if(prior&&(Object.keys(prior.workers).length!==targets.length||await fs.stat(join(root,'promoted.json')).then(()=>true).catch(()=>false)))throw Error('Cannot replace a partial or already promoted upload.');
+ const protectedWorkers=['shift-hq-clinical-portal','shift-partner-portal'],keyCount=protectedWorkers.filter(w=>settings[w].bindings.some(b=>b.name==='SSTRX_ACCESS_REQUEST_KEY')).length;if(keyCount===1)throw Error('Access-request transport binding needs reconciliation.');const accessKey=keyCount===0?randomBytes(32).toString('hex'):null;
  const uploaded={sourceCommit:sha,workers:{}};
  // Check all preconditions before creating any versions.
  for(const[w]of targets){const v=await api(path(w)+'/versions'),latest=v.items?.[0]?.id||v[0]?.id,expected=prior?.workers[w].version||baseline[w].versions[0].version_id;if(latest&&latest!==expected)throw Error('An unpublished version must be reconciled first: '+w);}
@@ -39,6 +40,7 @@ if(action==='upload'){
  for(const[w,bundle,flags]of targets){
   const source=await fs.readFile(join(repo,'.partner-qa',bundle+'.bundle.mjs'));const s=settings[w],map=new Map(s.bindings.filter(b=>!['secret_text','secret_key'].includes(b.type)).map(b=>[b.name,b]));
   for(const[name,text]of Object.entries({...flags,RELEASE_SOURCE_COMMIT:sha}))map.set(name,{name,type:'plain_text',text});
+  if(accessKey&&protectedWorkers.includes(w))map.set('SSTRX_ACCESS_REQUEST_KEY',{name:'SSTRX_ACCESS_REQUEST_KEY',type:'secret_text',text:accessKey});
   const metadata={main_module:'worker.mjs',bindings:[...map.values()],keep_bindings:['secret_text','secret_key'],compatibility_date:s.compatibility_date,compatibility_flags:s.compatibility_flags||[],annotations:{'workers/commit_sha':sha,'workers/message':'SST Rx authorised portal release '+sha.slice(0,12)}};
   for(const key of ['usage_model','limits','placement','observability','logpush','tail_consumers'])if(s[key]!=null)metadata[key]=s[key];
   const form=new FormData();form.set('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));form.set('worker.mjs',new Blob([source],{type:'application/javascript+module'}),'worker.mjs');
@@ -61,7 +63,7 @@ if(action==='domain'){
 if(action==='verify'){
  const uploaded=await read('uploaded.json'),promoted=await read('promoted.json');await assertServing(promoted.workers);const evidence={sourceCommit:sha,workers:{}};
  for(const[w]of targets){const s=await api(path(w)+'/settings'),before=settings[w];for(const binding of before.bindings){if(binding.name==='RELEASE_SOURCE_COMMIT')continue;const current=s.bindings.find(b=>b.name===binding.name);if(!current||JSON.stringify(current)!==JSON.stringify(binding))throw Error('An existing binding changed: '+w+' '+binding.name);}if(s.bindings.find(b=>b.name==='RELEASE_SOURCE_COMMIT')?.text!==sha)throw Error('Source provenance mismatch: '+w);
-  const r=await fetch('https://api.cloudflare.com/client/v4'+path(w)+'/content',{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw Error('Source verification unavailable: '+w);let source;if(r.headers.get('Content-Type')?.includes('multipart')){const form=await r.formData(),part=form.get('worker.mjs');if(!part)throw Error('Main module was not returned: '+w);source=Buffer.from(await part.arrayBuffer());}else source=Buffer.from(await r.arrayBuffer());if(hash(source)!==uploaded.workers[w].bundleSha256)throw Error('Serving source digest mismatch: '+w);evidence.workers[w]={...promoted.workers[w],sourceSha256:hash(source),preservedBindings:true};
+  const r=await fetch('https://api.cloudflare.com/client/v4'+path(w)+'/content/v2',{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw Error('Source verification unavailable: '+w);let source;if(r.headers.get('Content-Type')?.includes('multipart')){const form=await r.formData(),part=form.get('worker.mjs');if(!part)throw Error('Main module was not returned: '+w);source=Buffer.from(await part.arrayBuffer());}else source=Buffer.from(await r.arrayBuffer());if(hash(source)!==uploaded.workers[w].bundleSha256)throw Error('Serving source digest mismatch: '+w);evidence.workers[w]={...promoted.workers[w],sourceSha256:hash(source),preservedBindings:true};
  }
  const hq=await api('/accounts/'+account+'/workers/scripts/shift-hq/deployments'),old=(await read('shift-hq-deployments.json')).result.deployments[0];if(hq.deployments[0].id!==old.id)throw Error('HQ serving version changed unexpectedly');evidence.hqDeploymentPreserved=old.id;await fs.writeFile(join(root,'verification.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
 }
