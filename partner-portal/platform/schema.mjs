@@ -6,6 +6,10 @@ export async function ensurePlatformSchema(DB){
  try{await task}catch(e){ready.delete(DB);throw e}
 }
 export const statements=[
+ `CREATE TABLE IF NOT EXISTS rx_action_claims(record_id TEXT NOT NULL REFERENCES clinical_member_records(id),source_key TEXT NOT NULL,owner_user_id INTEGER NOT NULL,version INTEGER NOT NULL,acknowledged_at TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(record_id,source_key))`,
+ `CREATE TABLE IF NOT EXISTS rx_supply_holds(id TEXT PRIMARY KEY,order_number TEXT NOT NULL,kind TEXT NOT NULL,org_id TEXT,opened_by INTEGER NOT NULL,state TEXT NOT NULL,version INTEGER NOT NULL,source_reference TEXT NOT NULL,review_reference TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)`,
+ `CREATE INDEX IF NOT EXISTS rx_open_supply_holds ON rx_supply_holds(order_number,state)`,
+ `CREATE TABLE IF NOT EXISTS rx_diagnostic_alerts(order_id TEXT PRIMARY KEY REFERENCES rx_diagnostic_orders(id),priority TEXT NOT NULL,due_at TEXT NOT NULL,source_reference TEXT NOT NULL,acknowledged_by INTEGER,ack_reference TEXT,ack_at TEXT,version INTEGER NOT NULL)`,
  `CREATE TABLE IF NOT EXISTS rx_diagnostic_orders(id TEXT PRIMARY KEY,record_id TEXT NOT NULL REFERENCES clinical_member_records(id),org_id TEXT NOT NULL,member_id INTEGER NOT NULL,requested_by INTEGER NOT NULL,contract_id TEXT NOT NULL,client_reference TEXT NOT NULL UNIQUE,status TEXT NOT NULL,version INTEGER NOT NULL,request_json TEXT NOT NULL,result_key TEXT,result_digest TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)`,
  `CREATE TABLE IF NOT EXISTS rx_diagnostic_events(id TEXT PRIMARY KEY,order_id TEXT NOT NULL REFERENCES rx_diagnostic_orders(id),event_reference TEXT NOT NULL UNIQUE,kind TEXT NOT NULL,source_reference TEXT NOT NULL,occurred_at TEXT NOT NULL,created_at TEXT NOT NULL)`,
  `CREATE TABLE IF NOT EXISTS rx_signing_origins(challenge_id TEXT PRIMARY KEY,origin TEXT NOT NULL)`,

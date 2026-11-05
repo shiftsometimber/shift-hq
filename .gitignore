@@ -7,3 +7,4 @@ partner-portal/qa/native-core/auth-kernel.mjs
 partner-portal/qa/native-core/email-kernel.mjs
 
 node_modules/
+partner-portal/assets/hq-desk-data.mjs

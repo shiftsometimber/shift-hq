@@ -6,7 +6,7 @@ import {HQ_CLIENT} from './hq-client.mjs';
 export function createPortal(origin = LEGACY_ORIGIN) {
  if(![LEGACY_ORIGIN,'https://sstrx.shiftsometimber.co.uk'].includes(origin))throw Error('unsupported_portal_origin');
  const ORIGIN=origin,HOST=new URL(origin).hostname;
- const destination=staff=>['clinical_admin','pharmacy_admin'].includes(staff.kind)?'/workspace/overview':originalDestination(staff);
+ const destination=staff=>['clinical_admin','pharmacy_admin','oversight'].includes(staff.kind)?'/workspace/overview':originalDestination(staff);
  const seal=(payload,secret,audience,ttl=3600,now=Date.now())=>sealBase(payload,secret,audience,ttl,now,ORIGIN);
  const unseal=(value,secret,audience,now=Date.now())=>unsealBase(value,secret,audience,now,ORIGIN);
 const API='https://api.shiftsometimber.co.uk/v1/hq';
@@ -30,7 +30,9 @@ async function auth(env, token) {
   const identityResponse=await env.HQ_AUTH.fetch(new Request(API+'/me',{headers:authHeaders(token),redirect:'manual'}));
   if(!identityResponse.ok)return null;
   const identity=await identityResponse.json();
-  if(identity?.user?.role!=='clinical'||identity.user.mfaEnabled!==true)return null;
+  if(identity?.user?.mfaEnabled!==true)return null;
+  if(ORIGIN==='https://sstrx.shiftsometimber.co.uk'&&['owner','admin','operations','support'].includes(identity.user.role))return {identity,staff:{kind:'oversight',hqUserId:identity.user.id,role:identity.user.role,status:'active'}};
+  if(identity.user.role!=='clinical')return null;
   const staffResponse=await env.CLINICAL.fetch(new Request(API+'/clinical/partners/me',{headers:authHeaders(token),redirect:'manual'}));
   if(!staffResponse.ok){
     if(ORIGIN!=='https://sstrx.shiftsometimber.co.uk')return null;
@@ -145,7 +147,7 @@ async function handle(request,env) {
     }
     if(!enabled(env))return closed();
     const own=await session(request,env);if(!own?.staff)return clearCookies(json({message:'Please sign in with your active partner account.'},401));
-    if(path==='/api/identity'&&request.method==='GET')return json({user:{id:own.identity.user.id,role:'clinical',name:own.staff.details?.name||own.staff.name, mfaEnabled:true},partner:{kind:own.staff.kind,orgId:own.staff.orgId}});
+    if(path==='/api/identity'&&request.method==='GET')return json({user:{id:own.identity.user.id,role:own.identity.user.role,name:own.staff.details?.name||own.staff.name||own.identity.user.name,mfaEnabled:true},partner:{kind:own.staff.kind,orgId:own.staff.orgId}});
     if(!allowedPath(path,request.method,own.staff.kind))return json({message:'This function is outside your partner workspace.'},403);
     // Only contract query parameters reach the authority. No actor, org or role override.
     const search=new URLSearchParams();for(const name of ['view','cursor',...(path.startsWith('/api/clinical/platform')?['q']:[])])if(url.searchParams.has(name))search.set(name,url.searchParams.get(name));

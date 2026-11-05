@@ -3,8 +3,10 @@ import {createHash} from 'node:crypto';
 export async function buildKernel(){
  const file=new URL('./vendor/clinical-portal-20261024.mjs',import.meta.url),original=await fs.readFile(file,'utf8');
  if(createHash('sha256').update(original).digest('hex')!=='b7bd886a5357222af1717f053959d608094dd32f07c072440166bf4998f5d3c5')throw Error('Clinical baseline changed; reconcile before building.');
- let source="import {signingOrigin,rememberSigningOrigin,challengeOrigin,paidClinicalOrder} from '../platform/signing.mjs';\nimport {deliveryFromAssessment,requireDelivery} from './fulfilment-delivery.mjs';\n"+original;
+ let source="import {hasOpenSupplyHold,requireNoSupplyHold} from '../platform/supply-holds.mjs';\nimport {signingOrigin,rememberSigningOrigin,challengeOrigin,paidClinicalOrder} from '../platform/signing.mjs';\nimport {deliveryFromAssessment,requireDelivery} from './fulfilment-delivery.mjs';\n"+original;
  const once=(before,after)=>{if(source.split(before).length!==2)throw Error('Clinical adaptation anchor changed: '+before.slice(0,80));source=source.replace(before,after);};
+ once('async function internalPrescriptionCurrent(env, order) {','async function internalPrescriptionCurrent(env, order) {\n  if(await hasOpenSupplyHold(env,order.orderNumber))return false;');
+ once('const b = await readJson(request), current =','const b = await readJson(request); if(["accept","prepare","dispatch"].includes(b.action))await requireNoSupplyHold(env,f.orderNumber); const current =');
  once('var RP_ID = "hq.shiftsometimber.co.uk";','var RP_ID = "partner.shiftsometimber.co.uk";');
  once('var RP_ORIGIN = "https://hq.shiftsometimber.co.uk";','var RP_ORIGIN = "https://partner.shiftsometimber.co.uk";');
  // Match the real catalogue CHECK constraints; no out-of-stock/archived item is admitted.
@@ -30,7 +32,7 @@ export async function buildKernel(){
   if(historical){try{origin=JSON.parse(new TextDecoder().decode(unb64(proof.clientDataJSON,6e3))).origin;}catch{fail(422,"invalid_signing_client_data");}if(!["https://partner.shiftsometimber.co.uk","https://hq.shiftsometimber.co.uk"].includes(origin))fail(403,"signing_origin_or_challenge_mismatch");}
   const client = clientData(proof.clientDataJSON, "webauthn.get", challenge,origin), auth = unb64(proof.authenticatorData, 6e3), { flags, counter } = await authenticator(auth, false,new URL(origin).hostname);`);
  // Bind newly created WebAuthn challenges to their actual browser origin.
- once('async function newChallenge(env, context, kind, key = null, document = null) {','async function newChallenge(env, context, kind, key = null, document = null, portalOrigin = RP_ORIGIN) {');
+ once('async function newChallenge(env, context, kind, key = null, document = null) {','async function newChallenge(env, context, kind, key = null, document = null, portalOrigin = RP_ORIGIN) {\n  if(kind===\'sign\')await requireNoSupplyHold(env,context.record.order_number);');
  once('return { id, challenge, expiresAt: expires, rpId: RP_ID,','await rememberSigningOrigin(env.DB,id,portalOrigin);\n  return { id, challenge, expiresAt: expires, rpId: new URL(portalOrigin).hostname,');
  once('await newChallenge(env, context, "register")','await newChallenge(env, context, "register",null,null,signingOrigin(request))');
  once('await newChallenge(env, context, "sign", key, doc)','await newChallenge(env, context, "sign", key, doc,signingOrigin(request))');

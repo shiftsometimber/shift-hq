@@ -3,6 +3,8 @@ import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCond
 import {ensurePlatformSchema} from './schema.mjs';
 import {SERVICES,API_VERSION,fail,text,economicsTerms,reconcileEconomics,commissioning,nextAction,declineRefund,EXPENSE_KINDS,readObject} from './domain.mjs';
 import {ADAPTERS,selectFutureSupplier,captureOrderRoute,queueSubmission,submitJob,reconcileJob} from './integrations.mjs';
+import {coordinateRecords,claimAction} from './coordination.mjs';
+import {HOLD_KINDS} from './supply-holds.mjs';
 const BASE='/v1/hq/clinical/platform',at=()=>new Date().toISOString();
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private','Access-Control-Allow-Origin':'https://hq.shiftsometimber.co.uk','Access-Control-Allow-Credentials':'true','Vary':'Origin','X-Content-Type-Options':'nosniff'}});
 const all=async q=>(await q.all()).results||[];
@@ -31,20 +33,21 @@ async function ownsCase(env,a,id){
  if(a.staff.kind!=='clinician'||!permission(a.staff,'weight_management','review',at()))return null;
  return await env.DB.prepare('SELECT 1 ok FROM clinical_case_assignments WHERE record_id=? AND hq_user_id=? AND active=1 AND expires_at>?').bind(id,a.id,at()).first()&&r.review_sharing?r:null;
 }
-async function overview(env,a,search=""){
+export async function overview(env,a,search=""){
  const filters=a.internal?'1=1':a.staff.kind==='clinical_admin'?`r.review_sharing=1 AND EXISTS(SELECT 1 FROM clinical_case_assignments x JOIN partner_staff ps ON ps.hq_user_id=x.hq_user_id WHERE x.record_id=r.id AND ps.org_id=? AND x.active=1 AND x.expires_at>?)`:a.staff.kind==='clinician'?`r.review_sharing=1 AND EXISTS(SELECT 1 FROM clinical_case_assignments x WHERE x.record_id=r.id AND x.hq_user_id=? AND x.active=1 AND x.expires_at>?)`:`f.partner_id=?`;
  const args=a.internal?[]:a.staff.kind==='clinical_admin'?[a.orgId,at()]:a.staff.kind==='clinician'?[a.id,at()]:[a.orgId];
- const source=await all(env.DB.prepare(`SELECT r.id recordId,r.order_number orderNumber,r.user_id memberId,r.updated_at updatedAt,CASE WHEN json_extract(rx.state_json,'$.status')='issued' THEN 'prescription_issued' ELSE cs.status END clinicalStatus,f.partner_id pharmacyOrgId,json_extract(f.state_json,'$.status') pharmacyStatus,
+ const source=await all(env.DB.prepare(`SELECT r.id recordId,r.order_number orderNumber,r.user_id memberId,r.updated_at updatedAt,cs.version caseVersion,cs.updated_at caseUpdatedAt,rx.version rxVersion,json_extract(rx.state_json,'$.status') rxStatus,CASE WHEN json_extract(rx.state_json,'$.status')='issued' THEN 'prescription_issued' ELSE cs.status END clinicalStatus,f.partner_id pharmacyOrgId,json_extract(f.state_json,'$.status') pharmacyStatus,f.version pharmacyVersion,f.updated_at pharmacyUpdatedAt,COALESCE(json_extract(f.state_json,'$.area'),'weight_management') service,m.medicine_name medicine,m.clinical_status sharedStatus,
+ (SELECT COUNT(*) FROM rx_supply_holds h WHERE h.order_number=r.order_number AND h.state='open') openHolds,
  EXISTS(SELECT 1 FROM clinical_case_assignments x WHERE x.record_id=r.id AND x.active=1 AND x.expires_at>?) assigned,
  (SELECT COUNT(*) FROM partner_workflow_sync s WHERE s.order_number=r.order_number AND s.status='pending') syncPending,
  (SELECT MIN(due_at) FROM rx_followups u WHERE u.record_id=r.id AND u.status IN ('open','needs_owner')) reviewDueAt,
  m.reorder_of_order_id repeatOfOrderId
  FROM clinical_member_records r JOIN medicine_orders m ON m.order_number=r.order_number AND m.user_id=r.user_id LEFT JOIN clinical_case_state cs ON cs.record_id=r.id LEFT JOIN clinical_prescription_requests rx ON rx.record_id=r.id LEFT JOIN partner_fulfilment f ON f.order_number=r.order_number
  WHERE ${filters} AND (?='' OR r.order_number LIKE ? ESCAPE '\\' OR CAST(r.user_id AS TEXT)=? OR r.id=?) ORDER BY r.updated_at DESC LIMIT 201`).bind(at(),...args,search,'%'+search.replace(/[\\%_]/g,c=>'\\'+c)+'%',search,search));
- const records=source.slice(0,200).map(r=>({...r,action:nextAction(r),url:(a.staff?.kind==='dispensing'?'/workspace/dispensing#':'/workspace/clinical#')+r.recordId}));
+ const records=await coordinateRecords(env,a,source.slice(0,200).map(r=>({...r,url:(a.staff?.kind==='dispensing'?'/workspace/dispensing#':'/workspace/clinical#')+r.recordId})));
  const counts={};for(const r of records)counts[r.action.kind]=(counts[r.action.kind]||0)+1;
  const config=a.orgId?await all(env.DB.prepare('SELECT service,config_json,version,updated_at FROM rx_service_config WHERE org_id=?').bind(a.orgId)):[];
- return {apiVersion:API_VERSION,observedAt:at(),source:'existing_clinical_order_and_fulfilment_records',role:a.staff?.kind||a.role,records,counts,coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),commercialAvailable:a.commercial};
+ return {apiVersion:API_VERSION,observedAt:at(),source:'existing_clinical_order_and_fulfilment_records',role:a.staff?.kind||a.role,records,counts,coordination:{unowned:records.filter(r=>r.action.unowned).length,overdue:records.filter(r=>r.action.overdue).length,deadlineNotConfigured:records.filter(r=>r.action.deadlineState==='not_configured').length,held:records.filter(r=>r.openHolds).length,notificationsSent:false},coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),commercialAvailable:a.commercial};
 }
 export async function platformRoute(request,env){
  const url=new URL(request.url);if(url.pathname!==BASE&&!url.pathname.startsWith(BASE+'/'))return null;
@@ -70,6 +73,35 @@ export async function platformRoute(request,env){
    fail(404,'not_found');
   }
   if(p.length===0&&request.method==='GET'){const search=url.searchParams.get('q')||'';if(search.length>80||/[\u0000-\u001f]/.test(search))fail(422,'invalid_search');return json(await overview(env,a,search));}
+  if(p[0]==='responsibility'&&p.length===1&&request.method==='POST'){
+   const b=await input(request),view=await overview(env,a),record=view.records.find(r=>r.recordId===b.recordId);if(!record)fail(404,'case_not_found');return json(await claimAction(env,a,b,record));
+  }
+  if(p[0]==='operational-policy'&&p.length===1&&request.method==='POST'){
+   if(!a.commercial)fail(403,'owner_policy_approval_required');const b=await input(request);text(b.approvalReference);if(!Object.hasOwn(SERVICES,b.service)||!Number.isInteger(b.version))fail(422,'valid_policy_required');
+   const org=await env.DB.prepare('SELECT state_json FROM partner_organisations WHERE id=?').bind(b.orgId).first();if(!org||JSON.parse(org.state_json).status!=='approved')fail(422,'approved_organisation_required');
+   const windows=b.windowsMinutes;if(!windows||typeof windows!=='object'||Array.isArray(windows)||Object.entries(windows).some(([k,v])=>!['reconcile_status','review_supply_hold','decline_finance_review','verify_prescription','dispense','dispatch','await_delivery','assign_review','await_member_information','await_treatment_response','prescriber_signoff','confirm_handover','prepare_prescription','clinical_review','pharmacy_query','pharmacy_rejected','pharmacy_delivery_exception','pharmacy_returned'].includes(k)||!Number.isInteger(v)||v<1||v>43200))fail(422,'valid_operational_windows_required');
+   const old=await env.DB.prepare('SELECT * FROM rx_service_config WHERE org_id=? AND service=?').bind(b.orgId,b.service).first();if((old?.version||0)!==b.version)fail(409,'policy_changed');const config=old?JSON.parse(old.config_json):{};config.operationalPolicy={approvalReference:b.approvalReference,windowsMinutes:windows};const g=authCondition(a,at()),date=at();
+   const result=await env.DB.batch([env.DB.prepare(`INSERT INTO rx_service_config SELECT ?,?,1,?,? WHERE ${g.sql} ON CONFLICT(org_id,service) DO UPDATE SET version=rx_service_config.version+1,config_json=excluded.config_json,updated_at=excluded.updated_at WHERE rx_service_config.version=?`).bind(b.orgId,b.service,JSON.stringify(config),date,...g.args,b.version),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,?,'operational_policy',?,'policy_recorded',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),b.orgId,b.service,JSON.stringify({approvalReference:b.approvalReference}),date)]);if(result[0].meta.changes!==1)fail(409,'policy_or_access_changed');return json({recorded:true,version:b.version+1,clinicalPathwayEnabled:false,notificationsSent:false});
+  }
+  if(p[0]==='supply-holds'&&p.length===2){
+   const orderNumber=text(p[1]),r=await env.DB.prepare('SELECT id FROM clinical_member_records WHERE order_number=?').bind(orderNumber).first();if(!r)fail(404,'order_not_found');
+   const view=await overview(env,a,orderNumber);if(!view.records.some(x=>x.orderNumber===orderNumber))fail(404,'order_not_found');
+   if(request.method==='GET')return json({holds:await all(env.DB.prepare('SELECT id,kind,state,version,source_reference,review_reference,created_at,updated_at FROM rx_supply_holds WHERE order_number=? ORDER BY created_at').bind(orderNumber))});
+   const b=await input(request),date=at(),g=authCondition(a,date);if(a.orgAdmin)fail(403,'professional_or_operations_account_required');
+   if(b.action==='open'){
+    if(!HOLD_KINDS.includes(b.kind))fail(422,'valid_supply_concern_required');text(b.sourceReference,300);text(b.clientReference,100);
+    const id='hold-'+b.clientReference,prior=await env.DB.prepare('SELECT * FROM rx_supply_holds WHERE id=?').bind(id).first();if(prior){if(prior.order_number!==orderNumber||prior.kind!==b.kind||prior.source_reference!==b.sourceReference)fail(409,'hold_reference_conflict');return json({id,state:prior.state,duplicate:true});}
+    const results=await env.DB.batch([env.DB.prepare(`INSERT INTO rx_supply_holds SELECT ?,?,?,?,?, 'open',1,?,NULL,?,? WHERE ${g.sql}`).bind(id,orderNumber,b.kind,a.orgId||null,a.id,b.sourceReference,date,date,...g.args),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,?,'supply_hold',?,'reported',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),a.orgId||null,id,JSON.stringify({kind:b.kind,orderNumber}),date)]);if(results[0].meta.changes!==1)fail(409,'access_changed');return json({id,state:'open',version:1,supplyBlocked:true,prescriptionCancelled:false,notificationsSent:false},201);
+   }
+   if(b.action==='resolve'){
+    const hold=await env.DB.prepare("SELECT * FROM rx_supply_holds WHERE id=? AND order_number=? AND state='open'").bind(b.id,orderNumber).first();if(!hold)fail(404,'open_hold_not_found');
+    if(a.internal||a.orgAdmin||!['clinician','dispensing'].includes(a.staff?.kind))fail(403,'authorised_professional_review_required');
+    const area=view.records.find(x=>x.orderNumber===orderNumber).service;if(!permission(a.staff,area,a.staff.kind==='clinician'?'clinical_decision':'supply_decision',date,view.records.find(x=>x.orderNumber===orderNumber).medicine))fail(403,'authorised_professional_review_required');text(b.reviewReference,300);
+    const scope=a.staff.kind==='clinician'?{sql:'EXISTS(SELECT 1 FROM clinical_case_assignments WHERE record_id=? AND hq_user_id=? AND active=1 AND expires_at>?)',args:[r.id,a.id,date]}:{sql:'EXISTS(SELECT 1 FROM partner_fulfilment WHERE order_number=? AND partner_id=?)',args:[orderNumber,a.orgId]};
+    const results=await env.DB.batch([env.DB.prepare(`UPDATE rx_supply_holds SET state='resolved',version=version+1,review_reference=?,updated_at=? WHERE id=? AND version=? AND ${g.sql} AND EXISTS(SELECT 1 FROM partner_staff WHERE id=? AND version=? AND state_json=?) AND EXISTS(SELECT 1 FROM partner_organisations WHERE id=? AND json_extract(state_json,'$.status')='approved' AND json_extract(state_json,'$.expiresAt')>?) AND ${scope.sql}`).bind(b.reviewReference,date,hold.id,b.version,...g.args,a.staff.id,a.staff.version,JSON.stringify(a.staff),a.orgId,date,...scope.args),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,?,'supply_hold',?,'professional_review_recorded',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),a.orgId,hold.id,JSON.stringify({reviewReference:b.reviewReference}),date)]);if(results[0].meta.changes!==1)fail(409,'hold_or_access_changed');return json({state:'resolved',version:b.version+1,clinicalApproval:false,automaticRedispatch:false,notificationsSent:false});
+   }
+   fail(422,'valid_hold_action_required');
+  }
   if(p[0]==='repeat-clearance'&&request.method==='POST'&&p.length===1){
    if(a.internal||a.staff.kind!=='clinician'||!permission(a.staff,'weight_management','clinical_decision',at()))fail(403,'assigned_clinician_required');
    const b=await input(request),record=await ownsCase(env,a,b.recordId);if(!record)fail(404,'case_not_found');text(b.reviewReference);
@@ -82,7 +114,7 @@ export async function platformRoute(request,env){
   if(p[0]==='diagnostics'){
    if(a.internal||a.orgAdmin||a.staff.kind!=='clinician'||!permission(a.staff,'diagnostics','request_test',at()))fail(403,'assigned_diagnostics_clinician_required');
    if(request.method==='POST'&&p.length===1){const b=await input(request),record=await ownsCase(env,a,b.recordId);if(!record)fail(404,'case_not_found');return json(await createDiagnosticOrder(env,a,b,record,authCondition(a,at())),201);}
-   if(request.method==='GET'&&p.length===1)return json({orders:await all(env.DB.prepare('SELECT id,record_id,status,version,created_at,updated_at FROM rx_diagnostic_orders d WHERE org_id=? AND EXISTS(SELECT 1 FROM clinical_case_assignments x JOIN clinical_member_records r ON r.id=x.record_id WHERE x.record_id=d.record_id AND x.hq_user_id=? AND x.active=1 AND x.expires_at>? AND r.review_sharing=1) ORDER BY updated_at DESC LIMIT 200').bind(a.orgId,a.id,at()))});
+   if(request.method==='GET'&&p.length===1)return json({orders:await all(env.DB.prepare('SELECT d.id,d.record_id,d.status,d.version,d.created_at,d.updated_at,l.priority,l.due_at,l.ack_at FROM rx_diagnostic_orders d LEFT JOIN rx_diagnostic_alerts l ON l.order_id=d.id WHERE d.org_id=? AND EXISTS(SELECT 1 FROM clinical_case_assignments x JOIN clinical_member_records r ON r.id=x.record_id WHERE x.record_id=d.record_id AND x.hq_user_id=? AND x.active=1 AND x.expires_at>? AND r.review_sharing=1) ORDER BY d.updated_at DESC LIMIT 200').bind(a.orgId,a.id,at()))});
    const order=await env.DB.prepare('SELECT * FROM rx_diagnostic_orders WHERE id=? AND org_id=?').bind(p[1]||'',a.orgId).first();if(!order||!await ownsCase(env,a,order.record_id))fail(404,'diagnostic_order_not_found');
    if(request.method==='GET'&&p[2]==='result'){
     if(!order.result_key||!order.result_digest)fail(409,'verified_result_not_available');const object=await env.CLINICAL_PRIVATE_FILES.get(order.result_key);if(!object)fail(503,'private_result_unavailable');
@@ -90,8 +122,15 @@ export async function platformRoute(request,env){
     const g=authCondition(a,at()),audit=await env.DB.prepare(`INSERT INTO rx_platform_audit SELECT ?,?,?,'diagnostic_order',?,'result_viewed','{}',? WHERE ${g.sql} AND EXISTS(SELECT 1 FROM clinical_case_assignments WHERE record_id=? AND hq_user_id=? AND active=1 AND expires_at>?)`).bind(crypto.randomUUID(),String(a.id),a.orgId,order.id,at(),...g.args,order.record_id,a.id,at()).run();if(audit.meta.changes!==1)fail(403,'clinical_access_changed');
     return new Response(bytes,{headers:{'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="laboratory-result.pdf"','Cache-Control':'no-store, private','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow'}});
    }
-   if(request.method==='POST'&&p[2]==='review'){
-    const b=await input(request);text(b.clinicalReviewReference);if(order.status!=='result_available')fail(409,'result_not_ready_for_review');const g=authCondition(a,at()),r=await env.DB.batch([env.DB.prepare(`UPDATE rx_diagnostic_orders SET status='reviewed',version=version+1,updated_at=? WHERE id=? AND version=? AND ${g.sql}`).bind(at(),order.id,b.version,...g.args),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,?,'diagnostic_order',?,'result_reviewed',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),a.orgId,order.id,JSON.stringify({clinicalReviewReference:b.clinicalReviewReference}),at())]);if(r[0].meta.changes!==1)fail(409,'diagnostic_order_changed');return json({reviewRecorded:true,notificationsSent:false});
+   if(request.method==='POST'&&p[2]==='acknowledge'&&p.length===3){
+    const b=await input(request);text(b.acknowledgementReference);if(order.status!=='result_available')fail(409,'result_not_ready_for_review');const date=at(),g=authCondition(a,date),r=await env.DB.batch([
+     env.DB.prepare(`UPDATE rx_diagnostic_alerts SET acknowledged_by=?,ack_reference=?,ack_at=?,version=version+1 WHERE order_id=? AND version=? AND ack_at IS NULL AND ${g.sql} AND EXISTS(SELECT 1 FROM clinical_case_assignments WHERE record_id=? AND hq_user_id=? AND active=1 AND expires_at>?) AND EXISTS(SELECT 1 FROM partner_staff WHERE id=? AND version=?)`).bind(a.id,b.acknowledgementReference,date,order.id,b.version,...g.args,order.record_id,a.id,date,a.staff.id,a.staff.version),
+     env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,?,'diagnostic_order',?,'critical_result_acknowledged',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),a.orgId,order.id,JSON.stringify({acknowledgementReference:b.acknowledgementReference,resultDigest:order.result_digest}),date)
+    ]);if(r[0].meta.changes!==1)fail(409,'critical_alert_or_access_changed');return json({acknowledged:true,clinicalReviewRequired:true,notificationsSent:false});
+   }
+   if(request.method==='POST'&&p[2]==='review'&&p.length===3){
+    const b=await input(request);text(b.clinicalReviewReference);if(order.status!=='result_available')fail(409,'result_not_ready_for_review');const alert=await env.DB.prepare('SELECT * FROM rx_diagnostic_alerts WHERE order_id=?').bind(order.id).first();if(alert){if(!alert.ack_at)fail(409,'critical_result_acknowledgement_required');text(b.followupPlanReference);}
+    const date=at(),g=authCondition(a,date),r=await env.DB.batch([env.DB.prepare(`UPDATE rx_diagnostic_orders SET status='reviewed',version=version+1,updated_at=? WHERE id=? AND version=? AND status='result_available' AND ${g.sql} AND EXISTS(SELECT 1 FROM clinical_case_assignments WHERE record_id=? AND hq_user_id=? AND active=1 AND expires_at>?) AND EXISTS(SELECT 1 FROM partner_staff WHERE id=? AND version=?)`).bind(date,order.id,b.version,...g.args,order.record_id,a.id,date,a.staff.id,a.staff.version),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,?,'diagnostic_order',?,'result_reviewed',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),a.orgId,order.id,JSON.stringify({clinicalReviewReference:b.clinicalReviewReference,followupPlanReference:b.followupPlanReference||null,resultDigest:order.result_digest}),date)]);if(r[0].meta.changes!==1)fail(409,'diagnostic_order_changed');return json({reviewRecorded:true,notificationsSent:false});
    }
   }
   if(p[0]==='followups'){

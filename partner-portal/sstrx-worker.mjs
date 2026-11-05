@@ -4,7 +4,7 @@ import {partnerHqPage,BRAND} from './ui.mjs';
 import {signInPage,workspacePage,SST_RX_CSS,SST_RX_CLIENT} from './platform/ui.mjs';
 import {SST_LOGO_BASE64} from './assets/logo-data.mjs';
 const ORIGIN='https://sstrx.shiftsometimber.co.uk',native=createPortal(ORIGIN);
-const paths=new Set(['overview','clinical','prescriptions','dispensing','delivery','patients','messages','reports','settings']);
+const paths=new Set(['overview','clinical','prescriptions','dispensing','delivery','patients','messages','reports','settings','diagnostics']);
 async function handle(request,env){
  const url=new URL(request.url);if(url.origin!==ORIGIN)return new Response('Not found',{status:404});
  // Derive security headers from the retained gateway; never set a parent-domain cookie.
@@ -19,9 +19,9 @@ async function handle(request,env){
   const identity=await native.fetch(new Request(ORIGIN+'/api/identity',{headers:request.headers}),env);
   if(!identity.ok)return new Response(null,{status:303,headers:{...Object.fromEntries(identity.headers),Location:'/'}});
   const profile=await identity.json(),kind=profile.partner.kind;
-  const admin=['clinical_admin','pharmacy_admin'].includes(kind);
+  const admin=['clinical_admin','pharmacy_admin','oversight'].includes(kind);
   if(admin){if(!['overview','patients','reports','settings'].includes(url.pathname.split('/')[2]))return secure('Your role does not include clinical or dispensing actions.','text/plain',403);return secure(workspacePage({kind,nativeHtml:'',messagesHtml:''}));}
-  if(kind==='dispensing'&&url.pathname==='/workspace/clinical')return secure('Your role does not include clinical casework.','text/plain',403);
+  if(kind==='dispensing'&&['/workspace/clinical','/workspace/diagnostics'].includes(url.pathname))return secure('Your role does not include clinical casework.','text/plain',403);
   if(kind==='clinician'&&['/workspace/dispensing','/workspace/delivery'].includes(url.pathname))return secure('Your role does not include pharmacy operations.','text/plain',403);
   const page=await native.fetch(new Request(ORIGIN+(kind==='clinician'?'/workspace/clinical':'/workspace/dispensing'),{headers:request.headers}),env);
   if(!page.ok)return page;
