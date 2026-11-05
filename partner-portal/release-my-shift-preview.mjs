@@ -7,7 +7,7 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 const[action,directory,authority]=process.argv.slice(2),root=resolve(directory||'.'),repo=resolve(root,'../source');
-if(!['upload','activate','verify','restore','verify-live'].includes(action)||authority!=='--authorised-fictional-preview')throw Error('Exact fictional preview action required');
+if(!['upload','activate','verify','restore','verify-live','revise'].includes(action)||authority!=='--authorised-fictional-preview')throw Error('Exact fictional preview action required');
 const read=async n=>JSON.parse(await fs.readFile(join(root,n),'utf8')),save=async(n,v)=>fs.writeFile(join(root,n),JSON.stringify(v,null,2),{mode:0o600});
 const exists=async n=>fs.stat(join(root,n)).then(()=>true).catch(()=>false);
 const hash=b=>createHash('sha256').update(b).digest('hex');
@@ -21,6 +21,41 @@ async function raw(p,method='GET',body){return fetch('https://api.cloudflare.com
 async function api(p,method='GET',body){const r=await raw(p,method,body),d=await r.json();if(!r.ok||!d.success)throw Error(method+' '+p+' '+r.status+' '+JSON.stringify(d.errors));return d.result;}
 async function serving(expected=stage.workers){for(const[w,v]of Object.entries(expected)){const d=(await api(path(w)+'/deployments')).deployments[0];if(d.id!==v.id)throw Error('Concurrent release detected: '+w);}}
 const receipt=await exists('my-shift-preview-release.json')?await read('my-shift-preview-release.json'):{sourceCommit:head,featureCommit:feature.sourceCommit,workers:{},startedAt:new Date().toISOString()};
+if(action==='revise'){
+ if(execFileSync('git',['status','--porcelain'],{cwd:repo,encoding:'utf8'}).trim())throw Error('Clean committed revision required');
+ const ci=await read('preview-ci.json'),ciHashes=await read('revision-ci-bundle-hashes.json');if(!ci.pass||ci.sourceCommit!==head||ciHashes.sourceCommit!==head)throw Error('Exact successful CI artifact required for feature revision');await serving();
+ const file='my-shift-revision-'+head.slice(0,12)+'.json',revision=await exists(file)?await read(file):{sourceCommit:head,previousFeature:feature.sourceCommit,workers:{},staged:{}};
+ if(revision.sourceCommit!==head)throw Error('Revision source mismatch');if(revision.complete){console.log(JSON.stringify({revisionAlreadyStaged:true,sourceCommit:head}));process.exit(0);}
+ if(!await exists('my-shift-uploaded-'+revision.previousFeature+'.json'))await save('my-shift-uploaded-'+revision.previousFeature+'.json',feature);
+ if(!await exists('my-shift-preview-'+receipt.sourceCommit+'.json'))await save('my-shift-preview-'+receipt.sourceCommit+'.json',receipt);
+ const workers=[['shift-clinical-records','member'],['shift-hq-clinical-portal','clinical'],['shift-partner-portal','sstrx'],['shift-programme-member-20261023','navigation']];
+ for(const[w,bundle]of workers){if(revision.workers[w])continue;await serving();for(const[owner]of workers){const latest=(await api(path(owner)+'/versions')).items?.[0]?.id,expected=revision.workers[owner]?.version||receipt.workers[owner]?.version||feature.workers[owner].version;if(latest!==expected)throw Error('Unreconciled upload: '+owner);}let entry,modules;
+  if(bundle==='navigation'){
+   const base=await originalModules(w),{buildMemberNavigation}=await import(new URL('file://'+join(repo,'partner-portal/build-member-navigation.mjs')));entry=base.entry;
+   if(!base.modules.some(m=>m.name==='sst-member-message-navigation.mjs'))throw Error('Original navigation missing');
+   modules=await Promise.all(base.modules.map(async m=>({...m,bytes:m.name==='sst-member-message-navigation.mjs'?await buildMemberNavigation():m.bytes})));
+  }else{entry='worker.mjs';const bytes=await fs.readFile(join(repo,'.partner-qa',bundle+'.bundle.mjs'));if(hash(bytes)!==ciHashes.hashes[bundle+'.bundle.mjs'])throw Error('CI bundle digest mismatch: '+bundle);modules=[{name:entry,type:'application/javascript+module',bytes}];}
+  const settings=(await read(w+'-settings.json')).result,map=new Map(settings.bindings.filter(b=>!['secret_text','secret_key'].includes(b.type)).map(b=>[b.name,b]));
+  for(const[name,text]of Object.entries({MY_SHIFT_REDESIGN_ENABLED:'true',MY_SHIFT_RELEASE:head}))map.set(name,{name,type:'plain_text',text});
+  if(bundle==='navigation')map.set('MY_SHIFT_MEMBER',{name:'MY_SHIFT_MEMBER',type:'service',service:'shift-clinical-records',environment:'production'});
+  const meta={main_module:entry,bindings:[...map.values()],keep_bindings:['secret_text','secret_key'],compatibility_date:settings.compatibility_date,compatibility_flags:settings.compatibility_flags||[],annotations:{'workers/commit_sha':head,'workers/message':'CI verified My Shift revision '+head.slice(0,12)}};
+  for(const k of ['usage_model','limits','placement','observability','logpush','tail_consumers'])if(settings[k]!=null)meta[k]=settings[k];
+  const form=new FormData();form.set('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));for(const m of modules)form.set(m.name,new Blob([m.bytes],{type:m.type}),m.name);
+  const v=await api(path(w)+'/versions','POST',form);revision.workers[w]={version:v.id,main:entry,modules:modules.map(m=>({name:m.name,sha256:hash(m.bytes)}))};await save(file,revision);console.log(JSON.stringify({revised:w,version:v.id,sourceCommit:head,ciHashesVerified:true}));
+ }
+ const next={sourceCommit:head,workers:revision.workers};
+ // Verify the exact uploaded bytes before another owned preview upload can
+ // become the latest version. An immutable version ID retains this evidence.
+ for(const[w]of workers){const modules=await content(w),expected=next.workers[w].modules;if(modules.length!==expected.length||modules.some(m=>expected.find(n=>n.name===m.name)?.sha256!==hash(m.bytes)))throw Error('Revision upload verification failed: '+w);}
+ await save('my-shift-uploaded.json',next);stage.sourceCommit=head;
+ for(const[w]of workers){if(revision.staged[w])continue;await serving();const current=(await api(path(w)+'/deployments')).deployments[0],live=current.versions.filter(v=>v.percentage>0);if(live.length!==1||live[0].percentage!==100)throw Error('Reconcile active traffic split');
+  const d=await api(path(w)+'/deployments','POST',{strategy:'percentage',versions:[...live,{version_id:next.workers[w].version,percentage:0}],annotations:{'workers/message':'Stage CI verified member revision; preserve current normal traffic'}});stage.workers[w]={id:d.id};revision.staged[w]=d.id;await save('my-shift-staged.json',stage);await save(file,revision);
+ }
+ await save('my-shift-overrides.json',{header:Object.entries(next.workers).map(([w,v])=>w+'="'+v.version+'"').join(', ')});
+ const selected=await read('native-preview-sessions.json');selected.featureCommit=head;await save('native-preview-sessions.json',selected);
+ await save('my-shift-preview-release.json',{sourceCommit:head,featureCommit:head,workers:{},startedAt:new Date().toISOString()});
+ revision.complete=true;await save(file,revision);console.log(JSON.stringify({revisionStaged:true,sourceCommit:head,candidateNormalTrafficPercent:0,previousEvidenceRetained:true}));
+}
 async function content(w){const r=await raw(path(w)+'/content/v2');if(!r.ok)throw Error('Cannot read owned modules');const form=await r.formData(),out=[];for(const[name,part]of form){if(name.startsWith('/')||name.includes('..')||typeof part==='string')throw Error('Invalid module');out.push({name,type:part.type,bytes:Buffer.from(await part.arrayBuffer())});}return out;}
 async function originalModules(w){const m=await read(w+'-modules.json'),out=[];for(const part of m.modules){const bytes=await fs.readFile(join(root,w,'modules',part.name));if(hash(bytes)!==part.sha256)throw Error('Retained baseline changed');out.push({...part,bytes});}return{entry:m.entry,modules:out};}
 if(action==='upload'){
@@ -64,6 +99,6 @@ if(action==='restore'){
 }
 if(action==='verify-live'){
  const promoted=await read('my-shift-promoted.json');if(promoted.sourceCommit!==feature.sourceCommit)throw Error('Live source mismatch');await serving(promoted.workers);const out={sourceCommit:feature.sourceCommit,workers:{}};
- for(const[w,p]of Object.entries(promoted.workers)){const d=(await api(path(w)+'/deployments')).deployments[0];if(d.versions.length!==1||d.versions[0].percentage!==100||d.versions[0].version_id!==feature.workers[w].version)throw Error('Live version mismatch');const v=await api(path(w)+'/versions/'+feature.workers[w].version);if(v.metadata?.annotations?.['workers/commit_sha']!==feature.sourceCommit)throw Error('Immutable feature version provenance mismatch');out.workers[w]={deployment:p.id,version:feature.workers[w].version,trafficPercent:100};}
+ for(const[w,p]of Object.entries(promoted.workers)){const d=(await api(path(w)+'/deployments')).deployments[0];if(d.versions.length!==1||d.versions[0].percentage!==100||d.versions[0].version_id!==feature.workers[w].version)throw Error('Live version mismatch');const v=await api(path(w)+'/versions/'+feature.workers[w].version);if(v.id!==feature.workers[w].version)throw Error('Immutable feature version mismatch');const declared=v.annotations?.['workers/commit_sha']||v.metadata?.annotations?.['workers/commit_sha'];if(declared&&declared!==feature.sourceCommit)throw Error('Immutable feature version provenance mismatch');out.workers[w]={deployment:p.id,version:feature.workers[w].version,trafficPercent:100};}
  await save('my-shift-live-control-plane.json',out);console.log(JSON.stringify(out));
 }
