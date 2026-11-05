@@ -5,6 +5,7 @@ import {reviewAndPropose,issue} from './workflow-helpers.mjs';
 import {orderTimeline} from '../platform/my-shift-data.mjs';
 import {retainedProfileHTML,routeMyShiftExperience} from '../platform/my-shift-experience.mjs';
 import {myShiftHTML} from '../platform/my-shift-ui.mjs';
+import {myShiftSnapshot} from '../platform/my-shift-data.mjs';
 import sstrx from '../sstrx-worker.mjs';
 import fs from 'node:fs/promises';
 const json=async(r,status=200)=>{const t=await r.text();assert.equal(r.status,status,t);return JSON.parse(t);};
@@ -41,19 +42,26 @@ test('MS-H2/M1/X2: shared support replies, read state and idempotency; private c
  await json(await f.hq('/platform/my-shift-support/'+t.reference,3,{clientReference:crypto.randomUUID(),version:1,message:'Unauthorised clinical role'}),403);
  await json(await f.hq('/platform/my-shift-support/'+t.reference,1,{clientReference:crypto.randomUUID(),version:1,message:'FICTIONAL SHIFT support response'}));
  assert.equal((await json(await f.call())).unread,1);assert.equal((await f.call('/v1/member/my-shift/support/'+t.reference,undefined,f.otherToken)).status,404);
+ assert.equal((await f.call('/v1/member/my-shift/support',{clientReference:crypto.randomUUID(),message:'Fictional other member request',orderReference:ORDER},f.otherToken)).status,404);
  const read=await json(await f.call('/v1/member/my-shift/support/'+t.reference));assert.equal(read.messages[1].body,'FICTIONAL SHIFT support response');
  await json(await f.call('/v1/member/my-shift/support/'+t.reference+'/read',{version:2}));assert.equal((await json(await f.call())).unread,0);assert.equal((await json(await f.call('/v1/member/my-shift/support/'+t.reference))).updatedAt,read.updatedAt,'Reading must not manufacture a new support message timestamp');
  await json(await f.call('/v1/member/my-shift/support/'+t.reference,{clientReference:crypto.randomUUID(),version:1,message:'Stale synthetic reply'}),409);
  await json(await f.call('/v1/member/my-shift/support/'+t.reference,{clientReference:crypto.randomUUID(),version:2,message:'FICTIONAL member reply'}));assert.equal((await json(await f.hq('/platform/my-shift-support'))).tickets[0].messages.length,3);
+ assert.equal(f.sql.prepare('SELECT assigned_hq_user_id FROM support_tickets WHERE reference=?').get(t.reference).assigned_hq_user_id,1);assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM rx_platform_audit WHERE entity_type='support' AND entity_id=?").get(t.reference).n,4);assert(!JSON.stringify(f.sql.prepare("SELECT detail_json FROM rx_platform_audit WHERE entity_type='support'").all()).includes('FICTIONAL SHIFT support response'));
  f.sql.prepare('INSERT INTO clinical_case_assignments VALUES(?,3,1,?)').run(RECORD,new Date(Date.now()+86400000).toISOString());const privateThread=await json(await f.call('/v1/member/secure-messages',{clientReference:crypto.randomUUID(),recordId:RECORD,channel:'clinical',message:'FICTIONAL private clinical question'}),201);assert.equal((await json(await f.call())).unread,0,'A member’s own message is not unread incoming mail');
  await json(await f.hq('/platform/messages/'+privateThread.id,3,{clientReference:crypto.randomUUID(),version:1,message:'FICTIONAL private clinical response'}),201);assert.equal((await json(await f.call())).unread,1);assert(!JSON.stringify(await json(await f.hq('/platform/my-shift-support'))).includes('private clinical'));
  assert(!JSON.stringify(await json(await f.call(undefined,undefined,f.otherToken))).includes(ORDER));
 }finally{f.close();}});
 test('MS-A2/X2: current device sign-out, expiry, CSRF and verified identity boundaries',async()=>{const f=await myShiftFixture();try{
  assert.equal((await f.call(undefined,undefined,'missing')).status,401);assert.equal((await f.call(undefined,undefined,f.memberToken,{Origin:'https://evil.example'})).status,403);
+ for(const path of ['/v1/member/my-shift','/v1/member/my-shift/support','/v1/member/secure-messages','/v1/member/care-card','/v1/member/clinical-records'])assert.equal((await f.call(path,undefined,f.otherToken,{'X-My-Timber-Expected-Account':'42'})).status,409,path+' changed-account boundary');
  const sessions=await json(await f.call('/v1/member/my-shift/sessions'));assert.equal(sessions.sessions.length,2);assert.equal(sessions.sessions.filter(s=>s.current).length,1);assert(!JSON.stringify(sessions).includes('token_hash'));
  await json(await f.call('/v1/member/my-shift/sign-out',{},f.memberToken,{Origin:'https://evil.example'}),403);await json(await f.call('/v1/member/my-shift/sign-out',{}));assert.equal((await f.call()).status,401);assert.equal((await f.call(undefined,undefined,f.secondToken)).status,200);assert.equal((await f.call(undefined,undefined,f.otherToken)).status,200);
  f.sql.prepare('UPDATE user_auth SET email_verified=0 WHERE user_id=42').run();assert.equal((await f.call(undefined,undefined,f.secondToken)).status,403);
+}finally{f.close();}});
+test('MS-P: shared read projection has a constant database query count at one and one hundred orders',async()=>{const f=await myShiftFixture();try{
+ let calls=0;const env={...f.env,DB:{prepare(sql){calls++;return f.DB.prepare(sql);}}};await myShiftSnapshot(env,{id:42});const one=calls;
+ for(let id=2;id<=102;id++)f.sql.prepare("INSERT INTO medicine_orders(id,order_number,user_id,email,medicine_id,variant_id,medicine_name,strength_label,unit_price_pence,total_pence,currency,status,clinical_status,updated_at) VALUES(?,?,42,'james.my-shift@example.test',1,11,'Synthetic','Synthetic',100,100,'GBP','paid','assessment_pending',?)").run(id,'SYNTHETIC-LOAD-'+id,new Date().toISOString());calls=0;const result=await myShiftSnapshot(env,{id:42});assert.equal(calls,one);assert(calls<=8);assert.equal(result.orders.length,100);assert.equal(result.hasMoreOrders,true);assert.equal(result.activeOrders,null,'A bounded result is not an exact total');
 }finally{f.close();}});
 test('MS-O3/X4: original historical pharmacy is retained and uncertain jobs do not imply delivery',async()=>{const f=await myShiftFixture();try{
  await seedPastOrders(f);let d=await json(await f.call());assert.equal(d.orders.filter(o=>!o.active).length,2);assert.equal(d.orders.find(o=>o.reference==='SST-PAST-A').supplier.id,'pharmacy-org');assert.equal(d.orders.find(o=>o.reference==='SST-PAST-B').supplier.id,'other-pharmacy');

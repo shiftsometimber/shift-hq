@@ -31,8 +31,8 @@ export async function myShiftSnapshot(env,actor){
  const source=await rows(env.DB.prepare(`SELECT m.*,r.id record_id,r.revision,r.review_sharing,r.status assessment_status,cs.version case_version,rx.state_json prescription_json,sig.id signature_id,f.state_json fulfilment_json,COALESCE(rt.pharmacy_org_id,f.partner_id) pharmacy_id,rt.contract_id,org.state_json pharmacy_json,
  (SELECT occurred_at FROM rx_finance_entries e WHERE e.order_number=m.order_number AND e.kind='member_payment' ORDER BY occurred_at LIMIT 1) paid_at,
  (SELECT created_at FROM partner_audit a WHERE a.entity_type='order' AND a.entity_id=m.order_number AND a.action='fulfilment_dispensed' ORDER BY version LIMIT 1) dispensed_at,
- (SELECT state FROM rx_integration_jobs j WHERE j.order_number=m.order_number AND j.state IN ('uncertain','failed','retry') ORDER BY updated_at DESC LIMIT 1) uncertain_state,
- (SELECT updated_at FROM rx_integration_jobs j WHERE j.order_number=m.order_number AND j.state IN ('uncertain','failed','retry') ORDER BY updated_at DESC LIMIT 1) uncertain_at
+ (SELECT state FROM rx_integration_jobs j WHERE j.order_number=m.order_number AND j.state IN ('uncertain','submitting','retryable','failed','retry') ORDER BY updated_at DESC LIMIT 1) uncertain_state,
+ (SELECT updated_at FROM rx_integration_jobs j WHERE j.order_number=m.order_number AND j.state IN ('uncertain','submitting','retryable','failed','retry') ORDER BY updated_at DESC LIMIT 1) uncertain_at
  FROM medicine_orders m LEFT JOIN clinical_member_records r ON r.order_number=m.order_number AND r.user_id=m.user_id
  LEFT JOIN clinical_case_state cs ON cs.record_id=r.id LEFT JOIN clinical_prescription_requests rx ON rx.record_id=r.id AND rx.member_id=m.user_id AND rx.order_number=m.order_number
  LEFT JOIN clinical_prescription_signatures sig ON sig.record_id=r.id AND sig.id=json_extract(rx.state_json,'$.prescriptionId') AND sig.version=rx.version

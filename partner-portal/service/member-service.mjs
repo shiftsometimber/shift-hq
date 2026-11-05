@@ -22,6 +22,7 @@ export default {async fetch(request,env,ctx){
   const origin=request.headers.get('Origin');
   if(origin&&!origins.includes(origin)||request.method==='POST'&&!origins.includes(origin))return Response.json({error:'origin_not_allowed'},{status:403});
   const actor=await authenticate(request,env);
+  const expected=request.headers.get('X-My-Timber-Expected-Account');if(actor&&expected&&expected!==String(actor.id))return Response.json({error:'account_changed'},{status:409,headers:{'Cache-Control':'no-store, private'}});
   const admitted=actor&&Number(actor.email_verified)===1&&(env.CLINICAL_REVIEW_READY==='true'||env.CLINICAL_TEST_MEMBER_EMAIL&&actor.email.toLowerCase()===env.CLINICAL_TEST_MEMBER_EMAIL.toLowerCase())&&env.CLINICAL_MEMBER_RECORDS_ENABLED==='true'&&env.CLINICAL_PRIVATE_FILES;
   if(admitted){
    await ensurePlatformSchema(env.DB);
