@@ -29,10 +29,13 @@ if(action==='inspect'){
 }
 if(action==='upload'){
  if(execFileSync('git',['status','--porcelain'],{cwd:repo,encoding:'utf8'}).trim())throw Error('Release checkout must be clean.');await assertServing(baseline);
- const prior=await fs.readFile(join(root,'uploaded.json'),'utf8').then(JSON.parse).catch(()=>null);if(prior)throw Error('Upload receipt already exists; reconcile it instead of repeating.');
+ const prior=await fs.readFile(join(root,'uploaded.json'),'utf8').then(JSON.parse).catch(()=>null);
+ if(prior&&authorisation!=='--replace-owned-upload')throw Error('Upload receipt already exists; reconcile it instead of repeating.');
+ if(prior&&(Object.keys(prior.workers).length!==targets.length||await fs.stat(join(root,'promoted.json')).then(()=>true).catch(()=>false)))throw Error('Cannot replace a partial or already promoted upload.');
  const uploaded={sourceCommit:sha,workers:{}};
  // Check all preconditions before creating any versions.
- for(const[w]of targets){const v=await api(path(w)+'/versions'),latest=v.items?.[0]?.id||v[0]?.id;if(latest&&latest!==baseline[w].versions[0].version_id)throw Error('An unpublished version must be reconciled first: '+w);}
+ for(const[w]of targets){const v=await api(path(w)+'/versions'),latest=v.items?.[0]?.id||v[0]?.id,expected=prior?.workers[w].version||baseline[w].versions[0].version_id;if(latest&&latest!==expected)throw Error('An unpublished version must be reconciled first: '+w);}
+ if(prior)await fs.rename(join(root,'uploaded.json'),join(root,'uploaded-'+prior.sourceCommit+'.json'));
  for(const[w,bundle,flags]of targets){
   const source=await fs.readFile(join(repo,'.partner-qa',bundle+'.bundle.mjs'));const s=settings[w],map=new Map(s.bindings.filter(b=>!['secret_text','secret_key'].includes(b.type)).map(b=>[b.name,b]));
   for(const[name,text]of Object.entries({...flags,RELEASE_SOURCE_COMMIT:sha}))map.set(name,{name,type:'plain_text',text});
@@ -45,7 +48,7 @@ if(action==='upload'){
 }
 if(action==='promote'){
  const uploaded=await read('uploaded.json');if(uploaded.sourceCommit!==sha||Object.keys(uploaded.workers).length!==targets.length)throw Error('Exact complete upload receipt required.');await assertServing(baseline);
- const promoted={sourceCommit:sha,workers:{}};for(const[w]of targets){const result=await api(path(w)+'/deployments','POST',{strategy:'percentage',versions:[{version_id:uploaded.workers[w].version,percentage:100}],annotations:{'workers/message':'Matt authorised SST Rx portal release '+sha.slice(0,12)}});promoted.workers[w]={id:result.id,versions:result.versions};await fs.writeFile(join(root,'promoted.json'),JSON.stringify(promoted,null,2));console.log(JSON.stringify({deployed:w,...promoted.workers[w]}));}
+ const promoted={sourceCommit:sha,workers:{}};for(const[w]of targets){await assertServing({...baseline,...promoted.workers});const result=await api(path(w)+'/deployments','POST',{strategy:'percentage',versions:[{version_id:uploaded.workers[w].version,percentage:100}],annotations:{'workers/message':'Matt authorised SST Rx portal release '+sha.slice(0,12)}});promoted.workers[w]={id:result.id,versions:result.versions};await fs.writeFile(join(root,'promoted.json'),JSON.stringify(promoted,null,2));console.log(JSON.stringify({deployed:w,...promoted.workers[w]}));}
 }
 if(action==='domain'){
  const promoted=await read('promoted.json');if(promoted.sourceCommit!==sha)throw Error('Exact promoted source required.');await assertServing(promoted.workers);
