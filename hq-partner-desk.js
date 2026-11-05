@@ -60,6 +60,7 @@ window.installPartnerDeskHQ=()=>{
 // Member support remains in the existing support_tickets queue. This panel is
 // admitted only by the existing HQ identity and the candidate's explicit flag.
 window.installMyShiftSupportHQ=async()=>{
+ const previous=window.myShiftSupportInstance;if(previous&&(!S.me||previous.id!==S.me.id||previous.role!==S.me.role))previous.clear();
  if(document.getElementById('myShiftSupportHQ')||!S.me||!['owner','admin','operations','support'].includes(S.me.role))return;
  const principal=S.me.id,role=S.me.role,base='/v1/hq/clinical/platform/my-shift-support';let current=true,version=0;
  const allowed=()=>current&&S.me?.id===principal&&S.me?.role===role;
@@ -68,7 +69,7 @@ window.installMyShiftSupportHQ=async()=>{
  const section=node('section');section.id='myShiftSupportHQ';section.className='view';section.hidden=true;
  const nav=node('button','Member messages');nav.type='button';nav.dataset.view='myShiftSupportHQ';document.querySelector('aside nav').append(nav);document.querySelector('main').append(section);
  const heading=node('h2','My Shift · Member support'),notice=node('p'),list=node('div'),detail=node('div'),refresh=node('button','Refresh member messages');refresh.type='button';section.append(heading,node('p','Account, order and everyday support. Clinical conversations stay with the assigned care team. Replies here appear in the member’s My Shift inbox; no email or push is sent.'),refresh,notice,list,detail);
- function clear(){current=false;version++;section.replaceChildren();nav.remove();}
+ function clear(){current=false;version++;section.replaceChildren();section.remove();nav.remove();if(window.myShiftSupportInstance?.id===principal)delete window.myShiftSupportInstance;}window.myShiftSupportInstance={id:principal,role,clear};
  document.getElementById('logoutBtn')?.addEventListener('click',clear);window.addEventListener('pagehide',clear,{once:true});
  function show(){if(!allowed())return clear();for(const v of document.querySelectorAll('.view')){v.classList.remove('active');}section.hidden=false;section.classList.add('active');document.getElementById('title').textContent='Member messages';}
  function draw(){if(!allowed())return clear();list.replaceChildren();for(const t of data.tickets){const b=node('button','SHIFT-'+t.memberId+' · '+t.reference+' · '+t.status.replaceAll('_',' '));b.type='button';b.className='pd-thread';b.onclick=()=>open(t.reference);list.append(b);}if(!data.tickets.length)list.append(node('p','No member support conversations yet.'));}
@@ -78,3 +79,5 @@ window.installMyShiftSupportHQ=async()=>{
  }
  nav.onclick=()=>{show();load();};refresh.onclick=load;draw();
 };
+
+const myShiftSupportIdentityChip=document.getElementById('hqUserChip');if(myShiftSupportIdentityChip)new MutationObserver(()=>window.installMyShiftSupportHQ()).observe(myShiftSupportIdentityChip,{childList:true,subtree:true});
