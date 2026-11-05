@@ -17,7 +17,12 @@ const before={},settings={};for(const w of targets){before[w]=(await read(w+'/de
 async function assertServing(expected){for(const w of targets){const d=(await api(path(w)+'/deployments')).deployments[0];if(d.id!==(expected[w]?.id||before[w].id))throw Error('Concurrent release: '+w);}}
 if(action==='upload'){
  if(execFileSync('git',['status','--porcelain'],{cwd:repo,encoding:'utf8'}).trim())throw Error('Source must be clean.');
- await assertServing(before);if(await fs.stat(join(root,'uploaded.json')).then(()=>true).catch(()=>false))throw Error('Upload exists; reconcile rather than repeat.');
+ await assertServing(before);if(await fs.stat(join(root,'uploaded.json')).then(()=>true).catch(()=>false)){
+  const prior=await read('uploaded.json');
+  if(authority!=='--replace-owned-upload'||Object.keys(prior.workers).length!==2||await fs.stat(join(root,'promoted.json')).then(()=>true).catch(()=>false))throw Error('Upload exists; reconcile rather than repeat.');
+  for(const w of targets){const versions=await api(path(w)+'/versions');if(versions.items?.[0]?.id!==prior.workers[w].version)throw Error('A newer upload must be reconciled: '+w);}
+  await fs.rename(join(root,'uploaded.json'),join(root,'uploaded-'+prior.sourceCommit+'.json'));
+ }
  const result={sourceCommit:sha,workers:{}};
  for(const w of targets){
   let main,modules=[];

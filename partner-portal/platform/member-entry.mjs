@@ -2,7 +2,7 @@
 export function installMemberMessages(){
  if(document.getElementById('mt-secure-messages-script'))return;
  const marker=document.createElement('span');marker.id='mt-secure-messages-script';marker.hidden=true;document.body.append(marker);
- let alive=true,ready=false,unread=0,pending=false;
+ let alive=true,ready=true,unread=null,pending=false;
  const clear=()=>document.getElementById('mt-secure-messages-link')?.remove();
  function mount(){
   if(!alive||!ready)return clear();
@@ -25,10 +25,12 @@ export function installMemberMessages(){
   finally{pending=false;}
  }
  const observer=new MutationObserver(mount);observer.observe(document.body,{childList:true,subtree:true});
+ const resume=e=>{if(e.persisted){window.removeEventListener('pageshow',resume);marker.remove();installMemberMessages();}};
+ window.addEventListener('pageshow',resume);
  const timer=setInterval(refresh,60000);
  window.addEventListener('focus',refresh);document.addEventListener('sstrx-message-change',refresh);
  window.addEventListener('pagehide',()=>{alive=false;ready=false;clear();observer.disconnect();clearInterval(timer);window.removeEventListener('focus',refresh);document.removeEventListener('sstrx-message-change',refresh);},{once:true});
- refresh();
+ mount();refresh();
 }
 export const MEMBER_ENTRY_CLIENT='('+installMemberMessages.toString()+')();';
 export function wrapMemberInboxNavigation(original){
