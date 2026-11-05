@@ -89,6 +89,10 @@ The browser fixture's profile, consent, export and password-request responses
 are contract fixtures. They are not proof of live account editing, email/token
 delivery or a complete privacy export. The retained native loader is exercised;
 this is not a physical installed-app or production Safari acceptance claim.
+WebKit request interception omits Cookie headers: its synthetic transport reads
+only the URL-scoped cookie jar belonging to that isolated test context. The
+evidence records each normalisation. It does not prove hosted SameSite/cookie
+attachment. Synthetic redirects are asserted without following an external hop.
 
 ## Release boundary
 
