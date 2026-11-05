@@ -1,9 +1,12 @@
 import member from '../../service/member-service.mjs';
 import {RECORD} from '../fixture.mjs';
+import fs from 'node:fs/promises';
+import {digest} from '../../platform/domain.mjs';
 export async function completeAssessment(f){const source=await member.fetch(new Request('https://shiftsometimber.co.uk/assets/clinical-records/schema.mjs'),f.env);const {fields,active}=await import('data:text/javascript;base64,'+Buffer.from(await source.text()).toString('base64'));
  const answers={...JSON.parse(f.sql.prepare('SELECT answers_json FROM clinical_member_versions').get().answers_json),requestPath:'Starting treatment',heightCm:'175',weightKg:'100',phone:'07700900000',deliveryAddress:'FICTIONAL ADDRESS',deliveryPostcode:'AA1 1AA',gpSharingChoice:'Yes',treatmentConfirmation:'I confirm',forMyself:'Yes',inUK:'Yes',insulinUse:'No',urgentSymptoms:'No'};
  for(let n=0;n<3;n++)for(const q of fields){if(!active(q,answers)||q.optional||answers[q.id]!==undefined)continue;answers[q.id]=q.type==='multi'?JSON.stringify([q.options.includes('None of the above')?'None of the above':q.options[0]]):q.options?(q.options.includes('No')?'No':q.options[0]):q.type==='number'?'1':q.type==='date'?'1980-01-01':'FICTIONAL acceptance test';}
  f.sql.prepare('UPDATE clinical_member_versions SET answers_json=? WHERE record_id=?').run(JSON.stringify(answers),RECORD);f.sql.prepare('INSERT INTO clinical_member_evidence VALUES(?,?,?,?,?,?,?,?)').run('scale-fixture',RECORD,'fictional/scale','scale_photo','image/png',1,'TEST-SCALE-HASH',new Date().toISOString());
-
+ const png=await fs.readFile(new URL('../../qa/fixtures/evidence-placeholder.png',import.meta.url)),fileHash=Buffer.from(await crypto.subtle.digest('SHA-256',png)).toString('hex');f.env.CLINICAL_PRIVATE_FILES=f.env.PARTNER_PRIVATE_FILES={async get(){return {body:new Uint8Array(png),httpMetadata:{contentType:'image/png'}}}};f.sql.prepare('UPDATE clinical_member_evidence SET digest=?,size=? WHERE record_id=?').run(fileHash,png.length,RECORD);
+ const files=f.sql.prepare('SELECT id,kind,mime,digest,uploaded_at FROM clinical_member_evidence WHERE record_id=? ORDER BY uploaded_at,id').all(RECORD),v=f.sql.prepare('SELECT * FROM clinical_member_versions WHERE record_id=? AND version=1').get(RECORD),declarations=JSON.parse(v.declarations_json),versionDigest=await digest({schemaVersion:v.schema_version,answers,evidence:files,submitted:true,declarations});f.sql.prepare('UPDATE clinical_member_versions SET evidence_json=?,digest=? WHERE record_id=? AND version=1').run(JSON.stringify(files),versionDigest,RECORD);
 return f;
 }

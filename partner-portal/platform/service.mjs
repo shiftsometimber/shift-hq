@@ -3,6 +3,7 @@ import {functionalCaseRoute} from './functional-case-routes.mjs';
 import {refundRoute} from './refunds.mjs';
 import {lifecycleRoute} from './prescription-lifecycle.mjs';
 import {auditExportRoute} from './audit-export.mjs';
+import {informationExceptions} from './functional-casework.mjs';
 import {listConversations,readConversation,sendSecureMessage,markConversationRead,messageAlertDrafts} from './messages.mjs';
 import {createDiagnosticOrder} from './diagnostics.mjs';
 import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition,newStaff} from '../service/clinical-kernel.mjs';
@@ -50,7 +51,7 @@ export async function overview(env,a,search=""){
  m.reorder_of_order_id repeatOfOrderId
  FROM clinical_member_records r JOIN medicine_orders m ON m.order_number=r.order_number AND m.user_id=r.user_id LEFT JOIN clinical_case_state cs ON cs.record_id=r.id LEFT JOIN clinical_prescription_requests rx ON rx.record_id=r.id LEFT JOIN partner_fulfilment f ON f.order_number=r.order_number
  WHERE ${filters} AND (?='' OR r.order_number LIKE ? ESCAPE '\\' OR CAST(r.user_id AS TEXT)=? OR r.id=?) ORDER BY r.updated_at DESC LIMIT 201`).bind(at(),...args,search,'%'+search.replace(/[\\%_]/g,c=>'\\'+c)+'%',search,search));
- const records=await coordinateRecords(env,a,source.slice(0,200).map(r=>({...r,url:(a.staff?.kind==='dispensing'?'/workspace/dispensing#':'/workspace/clinical#')+r.recordId})));
+ const records=await informationExceptions(env,a,await coordinateRecords(env,a,source.slice(0,200).map(r=>({...r,url:(a.staff?.kind==='dispensing'?'/workspace/dispensing#':'/workspace/clinical#')+r.recordId}))));
  const counts={};for(const r of records)counts[r.action.kind]=(counts[r.action.kind]||0)+1;
  const config=a.orgId?await all(env.DB.prepare('SELECT service,config_json,version,updated_at FROM rx_service_config WHERE org_id=?').bind(a.orgId)):[];
  return {apiVersion:API_VERSION,observedAt:at(),sessionExpiresAt:(await env.DB.prepare('SELECT expires_at FROM hq_sessions WHERE hq_user_id=? AND token_hash=? AND revoked_at IS NULL').bind(a.id,a.sessionHash).first())?.expires_at||null,source:'existing_clinical_order_and_fulfilment_records',memberExperienceCandidate:env.MY_SHIFT_REDESIGN_ENABLED==='true',role:a.staff?.kind||a.role,records,counts,coordination:{unowned:records.filter(r=>r.action.unowned).length,overdue:records.filter(r=>r.action.overdue).length,deadlineNotConfigured:records.filter(r=>r.action.deadlineState==='not_configured').length,held:records.filter(r=>r.openHolds).length,notificationsSent:false},coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),commercialAvailable:a.commercial};

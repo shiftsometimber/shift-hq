@@ -3,6 +3,7 @@ import {myShiftFixture,signedRxFixture,RECORD} from './my-shift-fixture.mjs';
 import {functionalFixture} from '../test/helpers/functional-fixture.mjs';
 import {completeAssessment} from '../test/helpers/complete-assessment.mjs';
 import {ensureRefundSchema} from '../platform/refunds.mjs';
+import {ensureAuditSchema} from '../platform/audit-export.mjs';
 import {economicsTerms} from '../platform/domain.mjs';
 export const CASES=[['A','Verification required','new'],['B','Measurement pending','identity'],['C','Information requested','information'],['D','Clinical decline','declined'],['E','Signed prescription','signed'],['F','Pharmacy clarification','query'],['G','Pharmacy rejection','rejected'],['H','Dispatched with tracking','dispatched'],['I','Delivery exception','delivery_exception'],['J','Delivered order and repeat history','delivered'],['K','Refund submitted','refund'],['L','Cancellation supply hold','hold']];
 const j=async(r)=>{const b=await r.json();if(!r.ok)throw Error('Fictional seed action '+r.status+' '+JSON.stringify(b));return b;};
@@ -31,5 +32,5 @@ export async function functionalDataset(code){
   const terms=economicsTerms({model:'shift_collects',supplierId:'FICTIONAL',sellingPence:100,outputTaxPence:0,taxTreatment:'FICTIONAL',approvalReference:'FICTIONAL-ACCEPTED-TERMS',costSourceReference:'FICTIONAL-COSTS'});f.sql.prepare('INSERT INTO rx_economics VALUES(?,1,?,?)').run(order,JSON.stringify(terms),date);f.sql.prepare("INSERT INTO rx_finance_entries VALUES(?,? ,?,'member_payment',100,'GBP','FICTIONAL',?,?)").run(crypto.randomUUID(),order,'payment-'+code,date,date);
   f.env.REFUND_TEST_TRANSPORT={fetch:async()=>Response.json({id:'re_FICTIONAL_'+code,amount:50,currency:'gbp',payment_intent:'pi_FICTIONAL_'+code,status:'pending'})};let r=await j(await f.hq('/platform/refunds',1,{orderReference:order,amountPence:50,reason:'FICTIONAL cancellation',termsReference:'FICTIONAL-ACCEPTED-TERMS',clientReference:crypto.randomUUID()}));r=await j(await f.hq('/platform/refunds/'+r.id+'/approve',1,{version:r.version,approvalReference:'FICTIONAL-FINANCE',exceptionDueAt:future}));await j(await f.hq('/platform/refunds/'+r.id+'/submit',1,{version:r.version}));proof.push('native refund request, explicit approval and simulated processor pending receipt');
  }
- return {...f,order,definition,proof,synthetic:true,releaseAcceptance:false};
+ f.env.SSTRX_AUDIT_V3_ENABLED='true';await ensureAuditSchema(f.DB);return {...f,order,definition,proof,synthetic:true,releaseAcceptance:false};
 }

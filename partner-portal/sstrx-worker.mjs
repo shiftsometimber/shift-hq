@@ -15,7 +15,7 @@ async function handle(request,env){
  // Derive security headers from the retained gateway; never set a parent-domain cookie.
  const secure=async(body,type='text/html; charset=utf-8',status=200)=>{const base=await native.fetch(new Request(ORIGIN+'/robots.txt'),env),headers=new Headers(base.headers);headers.set('Content-Type',type);return new Response(request.method==='HEAD'?null:body,{status,headers});};
  if(url.pathname==='/assets/sstrx-logo.png'&&['GET','HEAD'].includes(request.method))return secure(Uint8Array.from(atob(SST_LOGO_BASE64),c=>c.charCodeAt(0)),'image/png');
- if(url.pathname==='/assets/sstrx.css'&&['GET','HEAD'].includes(request.method))return secure(SST_RX_CSS+ACCESS_REQUEST_CSS,'text/css; charset=utf-8');
+ if(url.pathname==='/assets/sstrx.css'&&['GET','HEAD'].includes(request.method))return secure(SST_RX_CSS+ACCESS_REQUEST_CSS+FUNCTIONAL_CSS,'text/css; charset=utf-8');
  if(url.pathname==='/assets/access-request.js'&&['GET','HEAD'].includes(request.method))return secure(ACCESS_REQUEST_CLIENT,'text/javascript; charset=utf-8');
  if(url.pathname==='/assets/sstrx.js'&&['GET','HEAD'].includes(request.method))return secure(SST_RX_CLIENT+RX_MESSAGE_CLIENT+FUNCTIONAL_CLIENT,'text/javascript; charset=utf-8');
  const open=env.SSTRX_PORTAL_ENABLED==='true';

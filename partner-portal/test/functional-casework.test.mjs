@@ -33,6 +33,7 @@ test('RX-IR1 structured information request, deadline, native event and outbox a
   const d=await j(await f.call('/information',body));assert.equal(d.informationRequests.length,1);const request=d.informationRequests[0];assert.equal(request.status,'open');assert.deepEqual(request.fields,['medicines1Details']);
   const event=f.sql.prepare('SELECT kind FROM clinical_case_events WHERE id=?').get(request.id);assert.equal(event.kind,'information_requested');assert(f.sql.prepare('SELECT 1 ok FROM partner_workflow_sync WHERE source_key=?').get('clinical_case_events:'+request.id));
   f.sql.prepare("UPDATE rx_information_work SET due_at='2000-01-01T00:00:00Z'").run();assert.equal((await informationList(f.env,f.sql.prepare('SELECT * FROM clinical_member_records').get()))[0].status,'expired');
+  const workbench=await j(await f.hq('/platform',1));assert.equal(workbench.records[0].action.code,'information_expired');assert.equal(workbench.records[0].action.owner.userId,3);assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM rx_operational_exceptions WHERE kind='information_expired' AND owner_user_id=3 AND state='open'").get().n,1);
   await j(await f.call('/information',body),409);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_information_work').get().n,1);
  }finally{f.close();}
 });

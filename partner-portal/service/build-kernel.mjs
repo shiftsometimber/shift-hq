@@ -71,6 +71,7 @@ export async function buildKernel(){
  once('await verifyAssertion(b.proof, c.challenge, key, actor2.id)','await verifyAssertion(b.proof, c.challenge, key, actor2.id,{portalOrigin:await challengeOrigin(env.DB,c.id,signingOrigin(request))})');
  once('if(!["https://partner.shiftsometimber.co.uk","https://hq.shiftsometimber.co.uk"].includes(origin))','if(!["https://partner.shiftsometimber.co.uk","https://hq.shiftsometimber.co.uk","https://sstrx.shiftsometimber.co.uk"].includes(origin))');
  once('const paid = ["paid", "succeeded", "completed", "fulfilled"].includes(order.status) && /^cs_live_/.test(order.stripe_checkout_session_id || "");','const paid = paidClinicalOrder(env,order);');
+ source=source.replaceAll("toLocaleString('en-GB')","toLocaleString('en-GB',{timeZone:'Europe/London'})");
  source+='\nexport {newStaff,internalPrescriptionDocument,internalPrescriptionCurrent,prescriptionHqRoute, partnerRoute, hqClinicalRoute, commissioningRoute, notificationManagementRoute, internalDispensingAdapters, credentialsCurrent, currentPartner, permission, authCondition, caseView, caseAction, memberPrescription, memberFulfilment, memberView, memberTracking, verifyRegistration, verifyAssertion, careFields, careChecks, CARE_HANDOVER_VERSION};\n';
  await fs.writeFile(new URL('./clinical-kernel.mjs',import.meta.url),source);
  return {baseline:'f65e4594-fd83-49d4-b20d-f43fcee88e1c',sha256:createHash('sha256').update(source).digest('hex')};
