@@ -1,7 +1,9 @@
 # My Shift member experience
 
-Review candidate for the 5 November 2026 four-door work order. This change is
-off by default. Matt retains switch-on after the named evidence is reviewed.
+Member experience for the 5 November 2026 four-door work order. The source flag
+is off by default. Matt explicitly authorised deployment ("Deploy") after the
+review candidate and evidence were presented. Release receipts establish the
+actual deployed state; approval alone is not deployment.
 
 ## One account and operating record
 
@@ -102,14 +104,15 @@ Read-only production inspection on 5 November confirmed these serving versions:
 | --- | --- | --- |
 | `shift-programme-member-20261023` | `eb345c49-2ba1-4604-a192-f4f91f83af7a` | `5d61cb85-a3ea-4ca9-ae05-998e3f797685` |
 | `shift-clinical-records` | `18cbfc60-c4ff-4b0e-a8cb-786e3b204aa3` | `4594ca5e-6ebc-4953-8262-2256bf3cf02f` |
-| `shift-hq-clinical-portal` | `eb0bd0c5-a317-4de5-8110-64982bb6b6d4` | `bd6b78ba-48c2-4b4f-b33f-f420cff816e5` |
-| `shift-partner-portal` | `dfb5438a-b525-4b0b-823a-b50e387117f0` | `d4eb3b69-12b4-402e-a6b4-e086c921967a` |
+| `shift-hq-clinical-portal` | `dc9aa616-e0cb-4d4d-9d44-8566ab6e4a27` | `69cc7c77-d3e8-451f-80de-caa76082873b` |
+| `shift-partner-portal` | `51625c3a-0398-4a0a-ab9f-5a267ab8948d` | `d80acaec-27ec-4418-9b19-aa5fcf62540d` |
 
 The redesign flag was absent on all four. The existing settings and dashboard
 route owners, clinical-record assets route and native database schema were
-verified. This candidate has not changed a production deployment, route or flag.
+verified. These are the pre-release identities; use the owned release receipts for the
+subsequent staged, promoted or rolled-back state.
 
-After approval, an owned release must freshly capture the active versions,
+The authorised owned release must freshly capture the active versions,
 settings and routes and reject concurrent changes before any promotion. Build
 the three existing service bundles and the bundled member-entry wrapper.
 Retain all other programme modules and bindings. Bind `MY_SHIFT_MEMBER` on the
@@ -130,3 +133,11 @@ owned routes/bindings. Preserve all records, support conversations, delivery
 events and audit history. `sstrx.co.uk` and the public website/HQ routing remain
 outside this change. Supplier signing/legal approval, credentials and genuine
 live integration acceptance remain separate gates.
+
+The already deployed f461eac owner/test sign-in repair is retained. Its named,
+time-limited exception also permits non-clinical support replies; it does not
+change clinical or pharmacy write guards. Member logout clears both the native
+parent-domain cookie and the earlier host-only cookie and revokes only the
+current native session. `release-my-shift.mjs` preserves existing modules and
+bindings, stages at zero percent, requires exact hosted acceptance before
+promotion and records owned routes and exact rollback versions.
