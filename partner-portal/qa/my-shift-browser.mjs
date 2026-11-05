@@ -12,14 +12,15 @@ import {authenticate} from '../service/member-kernel.mjs';
 import {captureOrderRoute,queueSubmission,submitJob,reconcileJob,isolatedSyntheticAdapter} from '../platform/integrations.mjs';
 import {repairAccountBoundary} from '../platform/account-boundary-fix.mjs';
 const SHIFT='https://shiftsometimber.co.uk',RX='https://sstrx.shiftsometimber.co.uk',HQ='https://hq.shiftsometimber.co.uk',API='https://api.shiftsometimber.co.uk';
-if(process.env.GITHUB_ACTIONS&&process.env.MY_SHIFT_EVIDENCE_DIRECTORY)throw Error('CI evidence must use its declared artifact path');
+if(process.env.GITHUB_ACTIONS&&(process.env.MY_SHIFT_EVIDENCE_DIRECTORY||process.env.MY_SHIFT_BROWSER_ENGINE))throw Error('CI evidence must use its declared artifact path');
 const directory=process.env.MY_SHIFT_EVIDENCE_DIRECTORY||'.partner-qa/my-shift';await fs.mkdir(directory,{recursive:true});
 const retained=JSON.parse(await fs.readFile(new URL('../test/fixtures/public-account-boundary.json',import.meta.url),'utf8'));
 const report={environment:'Synthetic local interception of compiled Workers and real Chromium/WebKit; SQLite. Not hosted acceptance or physical iOS/Android acceptance.',accounts:['james.my-shift@example.test','ben.my-shift@example.test','fixture-1@example.test','fixture-3@example.test','fixture-4@example.test'],externalRequests:0,runtime:{platform:process.platform,node:process.version},engines:[]};
 const metrics=a=>{const s=[...a].sort((x,y)=>x-y);return{n:s.length,medianMs:Math.round(s[Math.floor(s.length/2)]*10)/10,p95Ms:Math.round(s[Math.ceil(s.length*.95)-1]*10)/10};};
-for(const [engine,type]of [['chromium',chromium],['webkit',webkit]]){
+const engineFilter=process.env.MY_SHIFT_BROWSER_ENGINE;if(engineFilter&&!['chromium','webkit'].includes(engineFilter))throw Error('Unknown browser engine');
+for(const [engine,type]of [['chromium',chromium],['webkit',webkit]].filter(([name])=>!engineFilter||name===engineFilter)){
  const f=await myShiftFixture();f.portalEnv.CLINICAL={fetch:r=>clinical.fetch(r,f.env,{})};const scenarios={};let failSnapshot=false,expired=false,browser,trackedFixture;
- const checks={};const errors=[];let videoStart=0;let resetCaptures=0,trackingConsent=true;const screenshots=[];
+ const checks={};const errors=[],authDiagnostics=[];let videoStart=0;let resetCaptures=0,trackingConsent=true;const screenshots=[];
  const check=(name,details)=>{checks[name]={pass:true,videoMs:videoStart?Math.round(performance.now()-videoStart):null,...details};};
  const snap=async(page,name)=>{const file=engine+'-'+name+'.png';await page.screenshot({path:directory+'/'+file,fullPage:true});screenshots.push(file);return file;};
  const contextCookies=(token,domain='shiftsometimber.co.uk',name='sst_session')=>[{name,value:token,url:'https://'+domain+'/',httpOnly:true,secure:true,sameSite:'Lax'}];
@@ -34,7 +35,7 @@ for(const [engine,type]of [['chromium',chromium],['webkit',webkit]]){
  window.openMessages=async()=>{const d=await openRetained(new URL('/member/messages',location.origin));target.innerHTML=d.html;await retained.load(d,target);};
  `;
  async function dispatch(req){
-  const u=new URL(req.url),path=u.pathname;
+  const u=new URL(req.url),path=u.pathname;if(u.origin===SHIFT&&path==='/member/my-shift'&&authDiagnostics.length<2){const a=await authenticate(req,f.env);authDiagnostics.push({cookiePresent:req.headers.has('Cookie'),expectedCookie:(req.headers.get('Cookie')||'').includes('sst_session='+f.memberToken),authenticatedMember:a?.id||null});}
   if(u.origin===RX)return gateway.fetch(req,f.portalEnv,{});
   if(u.origin===API&&path.startsWith('/v1/hq/clinical'))return clinical.fetch(req,f.env,{});
   if(u.origin===HQ){
@@ -114,7 +115,7 @@ for(const [engine,type]of [['chromium',chromium],['webkit',webkit]]){
   check('MS-X3',{noNewPatientOrderOrMessageSchema:true,services:['Existing member identity','shift-clinical-records','shift-hq-clinical-portal','existing medicine_orders and partner_fulfilment','existing support_tickets','existing rx_message_threads/rx_messages'],source:'partner-portal/test/my-shift.test.mjs proves read-only schema preservation'});check('MS-P2',{accounts:report.accounts,firstName:'James',realData:false,externalMessages:0});assert.deepEqual(errors,[]);
   await context.close();await rxContext.close();await hqContext.close();await other.close();await second.close();await entrance.close();
   report.engines.push({engine,browserVersion:browser.version(),pass:true,checks,screenshots,video:page.video()?(await page.video().path()).replace(directory+'/',''):null,performance:checks['MS-P-performance']});
- }catch(e){const failurePage=browser?.contexts()[0]?.pages()[0];const failure=failurePage?{url:failurePage.url(),body:(await failurePage.locator('body').innerText().catch(()=>'' )).slice(0,1500)}:null;if(failurePage)await snap(failurePage,'failure').catch(()=>{});console.error(JSON.stringify({engine,failure}));report.engines.push({engine,pass:false,checks,screenshots,error:e.stack,errors,failure});if(errors.length)console.error(JSON.stringify({engine,browserErrors:errors}));await fs.writeFile(directory+'/acceptance.json',JSON.stringify(report,null,2));throw e;}
+ }catch(e){const failurePage=browser?.contexts()[0]?.pages()[0];const failure=failurePage?{url:failurePage.url(),body:(await failurePage.locator('body').innerText().catch(()=>'' )).slice(0,1500)}:null;if(failurePage)await snap(failurePage,'failure').catch(()=>{});console.error(JSON.stringify({engine,failure,authDiagnostics}));report.engines.push({engine,pass:false,checks,screenshots,error:e.stack,errors,failure});if(errors.length)console.error(JSON.stringify({engine,browserErrors:errors}));await fs.writeFile(directory+'/acceptance.json',JSON.stringify(report,null,2));throw e;}
  finally{for(const context of browser?.contexts()||[])await context.close().catch(()=>{});await browser?.close();trackedFixture?.close();f.close();}
 }
 await fs.writeFile(directory+'/acceptance.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
