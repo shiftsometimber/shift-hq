@@ -69,3 +69,11 @@ test('RX-RF6 reconciliation derives its ledger total and leaves an owned varianc
   const result=await json(await f.call('reconciliation',b));assert.equal(result.variancePence,-300);assert.equal(result.state,'variance');assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM rx_finance_exceptions WHERE kind='reconciliation_variance' AND owner_user_id=1").get().n,1);
  }finally{f.close();}
 });
+test('RX-RF7 a receipt racing another refund version cannot leave a receipt, event or refund ledger entry behind',async()=>{
+ const f=await setup();try{
+  f.env.REFUND_TEST_TRANSPORT=transport();let r=await f.approve(await f.create());r=await json(await f.call('refunds/'+r.id+'/submit',{version:r.version}));const eventsBefore=f.sql.prepare('SELECT COUNT(*) n FROM rx_refund_events').get().n;
+  const batch=f.DB.batch.bind(f.DB);f.DB.batch=async commands=>{f.sql.prepare('UPDATE rx_refunds SET version=version+1 WHERE id=?').run(r.id);return batch(commands)};
+  await assert.rejects(applyRefundReceipt(f.env,receipt('evt_FICTIONAL_RACE'),'verified_stripe_webhook'),/refund_receipt_race/);
+  assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM rx_finance_entries WHERE kind='refund'").get().n,0);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_refund_receipts').get().n,0);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_refund_events').get().n,eventsBefore);
+ }finally{f.close();}
+});

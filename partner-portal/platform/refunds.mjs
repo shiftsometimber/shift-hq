@@ -58,7 +58,7 @@ export async function refundRoute(request,env,a,parts){
  if(request.method==='GET'&&parts.length===1)return {refunds:(await rows(env.DB.prepare('SELECT * FROM rx_refunds ORDER BY updated_at DESC LIMIT 200'))).map(publicRefund),approvalLimitPence:auth.limit};
  if(request.method==='POST'&&parts.length===1){
   const b=await readObject(request);text(b.clientReference);text(b.reason,500);text(b.termsReference,300);pence(b.amountPence);if(!b.amountPence)fail(422,'positive_refund_amount_required');
-  const order=await env.DB.prepare('SELECT * FROM medicine_orders WHERE order_number=?').bind(b.orderReference).first();if(!order||!['paid','succeeded','completed','fulfilled'].includes(order.status))fail(409,'paid_order_required');
+  const order=await env.DB.prepare('SELECT * FROM medicine_orders WHERE order_number=?').bind(b.orderReference).first();if(!order||!['paid','succeeded','completed','fulfilled'].includes(order.status))fail(409,'paid_order_required');if(order.currency!=='GBP')fail(422,'supported_order_currency_required');
   const payload=await digest({order:order.order_number,amount:b.amountPence,reason:b.reason,terms:b.termsReference});const prior=await env.DB.prepare('SELECT * FROM rx_refunds WHERE idempotency_key=?').bind(b.clientReference).first();
   if(prior){if(prior.payload_digest!==payload)fail(409,'refund_reference_conflict');return {...publicRefund(prior),duplicate:true};}
   const id=crypto.randomUUID(),date=at();
@@ -78,6 +78,7 @@ export async function refundRoute(request,env,a,parts){
  }
  if(parts[2]==='submit'&&request.method==='POST'){
   if(!['approved','unknown'].includes(r.state))fail(409,'approved_or_unknown_refund_required');
+  if(r.amount_pence>auth.limit)fail(403,'refund_exceeds_approval_authority');
   if(env.SSTRX_ENVIRONMENT!=='synthetic'||env.SSTRX_REFUND_TEST_EXECUTION_ENABLED!=='true')fail(503,'refund_execution_not_authorised');
   const order=await env.DB.prepare('SELECT stripe_payment_intent_id FROM medicine_orders WHERE order_number=?').bind(r.order_number).first();if(!/^pi_/.test(order?.stripe_payment_intent_id||''))fail(409,'verified_processor_payment_reference_required');
   const reserved=await env.DB.prepare(`UPDATE rx_refunds SET state='submitting',version=version+1,updated_at=? WHERE id=? AND version=? AND state IN ('approved','unknown') AND ${g.sql}`).bind(at(),r.id,r.version,...g.args).run();if(reserved.meta.changes!==1)fail(409,'refund_or_access_changed');

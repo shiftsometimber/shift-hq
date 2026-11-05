@@ -6,6 +6,7 @@ export const FUNCTIONAL_SCHEMA=[
  `CREATE TABLE IF NOT EXISTS rx_case_verifications(record_id TEXT NOT NULL REFERENCES clinical_member_records(id),assessment_version INTEGER NOT NULL,requirement TEXT NOT NULL,state TEXT NOT NULL,method TEXT NOT NULL,source_reference TEXT NOT NULL,verified_by INTEGER NOT NULL,expires_at TEXT NOT NULL,exception_reason TEXT,protocol_version INTEGER NOT NULL,version INTEGER NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(record_id,assessment_version,requirement))`,
  `CREATE TABLE IF NOT EXISTS rx_information_work(id TEXT PRIMARY KEY REFERENCES clinical_case_events(id),record_id TEXT NOT NULL REFERENCES clinical_member_records(id),requested_by INTEGER NOT NULL,assessment_version INTEGER NOT NULL,fields_json TEXT NOT NULL,due_at TEXT NOT NULL,state TEXT NOT NULL,response_version INTEGER,acknowledged_by INTEGER,acknowledged_at TEXT,version INTEGER NOT NULL,created_at TEXT NOT NULL)`,
  `CREATE INDEX IF NOT EXISTS rx_information_pending ON rx_information_work(record_id,state,due_at)`,
+ `CREATE TABLE IF NOT EXISTS rx_member_information_commands(member_id INTEGER NOT NULL,client_reference TEXT NOT NULL,request_id TEXT NOT NULL REFERENCES rx_information_work(id),payload_digest TEXT NOT NULL,assessment_version INTEGER NOT NULL,state TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(member_id,client_reference))`,
  `CREATE TABLE IF NOT EXISTS rx_functional_audit(id TEXT PRIMARY KEY,previous_hash TEXT NOT NULL,entry_hash TEXT NOT NULL UNIQUE,actor_id TEXT NOT NULL,org_id TEXT,record_id TEXT,action TEXT NOT NULL,detail_json TEXT NOT NULL,created_at TEXT NOT NULL)`
 ];
 const ready=new WeakMap();
@@ -60,8 +61,17 @@ export async function informationStatements(env,record,actor,reviewer,b,id,kind,
   if(!Number.isFinite(Date.parse(b.dueAt))||b.dueAt<=date)fail(422,'information_deadline_required');
   return [env.DB.prepare("INSERT INTO rx_information_work SELECT ?,?,?,?,?,?,'open',NULL,NULL,NULL,1,? WHERE EXISTS(SELECT 1 FROM clinical_case_events WHERE id=?)").bind(id,record.id,actor.id,assessment.version,JSON.stringify(fields),b.dueAt,date,id)];
  }
- if(kind==='member_reply')return [env.DB.prepare("UPDATE rx_information_work SET state='resubmitted',response_version=?,version=version+1 WHERE id=? AND record_id=? AND state='open' AND EXISTS(SELECT 1 FROM clinical_case_events WHERE id=?)").bind(assessment.version,b.requestId,record.id,id)];
+ if(kind==='member_reply')return [env.DB.prepare("UPDATE rx_information_work SET state='resubmitted',response_version=?,version=version+1 WHERE id=? AND record_id=? AND state='open' AND EXISTS(SELECT 1 FROM clinical_case_events WHERE id=?)").bind(assessment.version,b.requestId,record.id,id),env.DB.prepare("UPDATE rx_member_information_commands SET state='completed' WHERE member_id=? AND request_id=? AND assessment_version=? AND EXISTS(SELECT 1 FROM clinical_case_events WHERE id=?)").bind(actor.id,b.requestId,assessment.version,id)];
  return [];
+}
+export async function assessmentCommandProof(env,request,record,actor,b){
+ const c=b.sstInformationCommand;if(!c)return {sql:'1=1',args:[],statements:[]};
+ if(env.SSTRX_FUNCTIONAL_V3_ENABLED!=='true')fail(404,'information_response_not_open');
+ text(c.clientReference);text(c.payloadDigest);if(!/^[a-f0-9-]{36}$/.test(c.clientReference))fail(422,'client_reference_required');
+ const item=await env.DB.prepare("SELECT * FROM rx_information_work WHERE id=? AND record_id=? AND state='open' AND version=?").bind(c.requestId,record.id,c.requestVersion).first();if(!item||!b.submit)fail(409,'information_request_changed');
+ const token=(request.headers.get('Cookie')||'').match(/(?:^|;\s*)sst_session=([^;]+)/)?.[1];if(!token)fail(401,'member_session_required');
+ const date=now(),hash=await digest(token),sql="EXISTS(SELECT 1 FROM rx_information_work WHERE id=? AND record_id=? AND state='open' AND version=?) AND NOT EXISTS(SELECT 1 FROM rx_member_information_commands WHERE member_id=? AND client_reference=?) AND EXISTS(SELECT 1 FROM user_sessions WHERE user_id=? AND token_hash=? AND revoked_at IS NULL AND julianday(expires_at)>julianday(?))",args=[c.requestId,record.id,c.requestVersion,actor.id,c.clientReference,actor.id,hash,date];
+ return {sql,args,statements:[env.DB.prepare("INSERT INTO rx_member_information_commands SELECT ?,?,?,?,?,'assessment_saved',? WHERE EXISTS(SELECT 1 FROM clinical_member_versions WHERE record_id=? AND version=? AND created_at=?)").bind(actor.id,c.clientReference,c.requestId,c.payloadDigest,record.revision+1,date,record.id,record.revision+1,c.assessmentCreatedAt)]};
 }
 export async function informationList(env,record,clinical=false){
  const rs=await rows(env.DB.prepare('SELECT w.*,e.public_json FROM rx_information_work w JOIN clinical_case_events e ON e.id=w.id WHERE w.record_id=? ORDER BY w.created_at DESC').bind(record.id));

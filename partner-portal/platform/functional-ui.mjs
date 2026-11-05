@@ -1,0 +1,59 @@
+// These controls call the retained services. Button visibility never confers authority.
+export function functionalClient(){
+ function reference(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20);}
+
+ if(document.body.dataset.functional!=='true')return;
+ const byId=id=>document.getElementById(id),node=(t,s)=>{const n=document.createElement(t);if(s!==undefined)n.textContent=s;return n;};
+ let caseId=null,generation=0,gatesReady=false;
+ function enforceVisibleGates(){const host=byId('rx-native');if(!host)return;const outcome=host.querySelector('select[aria-label="Clinical outcome"] option[value="proceed"]');if(outcome){outcome.disabled=!gatesReady;outcome.title=gatesReady?'':'Complete required verification and acknowledge the current response first.';}for(const b of host.querySelectorAll('button'))if(/^Sign (?:prescription|current)/i.test(b.textContent)){b.disabled=!gatesReady;b.title=gatesReady?'':'Required verification or acknowledgement is pending.';}}
+ const native=byId('rx-native');if(native)new MutationObserver(enforceVisibleGates).observe(native,{childList:true,subtree:true});
+ async function api(path,body){const r=await fetch('/api/clinical/platform/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});const d=await r.json();if(r.status===401||r.status===403){document.dispatchEvent(new Event('partner-access-denied'));throw Error('Your current role or session does not permit this action.');}if(!r.ok)throw Error(String(d.error||'Action unavailable').replaceAll('_',' '));return d;}
+ function field(form,label,type='text',values){const wrap=node('label',label),input=node(values?'select':'input');if(values)for(const v of values){const option=node('option',v.label||v);option.value=v.id||v;input.append(option);}else input.type=type;input.required=true;input.setAttribute('aria-label',label);wrap.append(input);form.append(wrap);return input;}
+ function submit(form,label,handler){const button=node('button',label);button.type='submit';button.className='rx-primary';form.append(button);form.onsubmit=async e=>{e.preventDefault();if(button.disabled)return;button.disabled=true;try{await handler();}catch(e){byId('rx-notice').textContent=e.message;}finally{button.disabled=false;}};return button;}
+ function card(title){const c=node('section');c.className='rx-functional-card';c.append(node('h3',title));return c;}
+ async function openCase(id){
+  caseId=id;gatesReady=false;enforceVisibleGates();const turn=++generation;let host=byId('rx-functional-case');if(!host){host=node('section');host.id='rx-functional-case';byId('rx-native')?.prepend(host);}if(!host)return;
+  host.replaceChildren(node('p','Checking the current assessment and required gates…'));
+  try{
+   const d=await api('cases/'+encodeURIComponent(id));if(turn!==generation)return;gatesReady=d.gates.ready&&d.informationRequests.every(r=>r.status==='acknowledged');enforceVisibleGates();host.replaceChildren(node('h2','Case checks · '+d.record.orderReference),node('p','Assessment version '+d.record.assessmentVersion+' · '+(gatesReady?'Required verification complete':'Sign-off blocked until required checks are complete')));
+   if(d.gates.blocker)host.append(node('p','Approved provider verification protocol is required.'));
+   for(const requirement of d.gates.requirements){const c=card(requirement.label+' · '+requirement.state);if(requirement.sourceReference)c.append(node('p','Reference: '+requirement.sourceReference));const form=node('form'),state=field(form,'Outcome','text',requirement.allowException?['verified','failed','exception']:['verified','failed']),method=field(form,'Approved verification method','text',requirement.methods),source=field(form,'Independent verification reference'),expiry=field(form,'Verification expires','datetime-local'),reason=requirement.allowException?field(form,'Reason if recording an exception'):null;if(reason)reason.required=false;
+    submit(form,'Record verification',async()=>{await api('cases/'+id+'/verification',{assessmentVersion:d.record.assessmentVersion,requirement:requirement.id,state:state.value,method:method.value,sourceReference:source.value.trim(),expiresAt:new Date(expiry.value).toISOString(),version:requirement.version,...reason?{reason:reason.value.trim()}:{}});await openCase(id);});c.append(form);host.append(c);
+   }
+   for(const request of d.informationRequests){const c=card('Information request · '+request.status);c.append(node('p',request.message),node('p','Due '+new Date(request.dueAt).toLocaleString('en-GB')));for(const change of request.diff||[]){const p=node('p');p.append(node('strong',change.field+': '),node('span',String(change.before??'Not provided')+' → '+String(change.after??'Not provided')));c.append(p);}if(request.status==='resubmitted'){const f=node('form');submit(f,'Acknowledge assessment version '+request.responseVersion,async()=>{await api('cases/'+id+'/information/'+request.id+'/acknowledge',{version:request.version,responseVersion:request.responseVersion});await openCase(id);});c.append(f);}host.append(c);}
+   const requestCard=card('Request further information'),form=node('form'),message=field(form,'Message for the member'),fields=field(form,'Requested answer fields','text',d.answerFields||[]);fields.multiple=true;fields.size=Math.min(6,d.answerFields?.length||1);const due=field(form,'Response due','datetime-local');submit(form,'Send information request',async()=>{await api('cases/'+id+'/information',{version:d.workflow.version,assessmentVersion:d.record.assessmentVersion,message:message.value.trim(),requestedFields:[...fields.selectedOptions].map(x=>x.value),dueAt:new Date(due.value).toISOString()});await openCase(id);document.dispatchEvent(new Event('partner-order-sync'));});requestCard.append(form);host.append(requestCard);
+  }catch(e){if(turn===generation)host.replaceChildren(node('p',e.message));}
+ }
+ document.addEventListener('sstrx-open-record',e=>{if(document.body.dataset.rxKind==='clinician')openCase(e.detail);});
+ document.addEventListener('partner-order-sync',()=>{if(caseId&&!byId('rx-native')?.hidden&&!document.querySelector('#rx-functional-case input:focus,#rx-functional-case select:focus'))openCase(caseId);});
+ document.addEventListener('partner-access-denied',()=>{generation++;caseId=null;byId('rx-functional-case')?.replaceChildren();byId('rx-finance-content')?.replaceChildren();});
+ async function finance(){
+  const host=byId('rx-finance-content');if(!host||byId('rx-finance')?.hidden)return;const turn=generation;host.replaceChildren(node('p','Checking the current finance records…'));
+  try{
+   const [d,reconciliation]=await Promise.all([api('refunds'),api('reconciliation')]);if(turn!==generation)return;host.replaceChildren();
+   const create=card('Request a refund'),form=node('form'),order=field(form,'Order reference'),amount=field(form,'Refund amount in pence','number'),reason=field(form,'Reason'),terms=field(form,'Accepted terms reference');amount.min='1';amount.step='1';let command;
+   submit(form,'Record refund request',async()=>{command=command||{clientReference:reference(),orderReference:order.value.trim(),amountPence:Number(amount.value),reason:reason.value.trim(),termsReference:terms.value.trim()};await api('refunds',command);command=null;await finance();});create.append(form);host.append(create);
+   for(const r of d.refunds){const c=card(r.orderReference+' · '+r.state);c.append(node('p',new Intl.NumberFormat('en-GB',{style:'currency',currency:r.currency}).format(r.amountPence/100)),node('p',r.state==='completed'?'Payment provider completion confirmed.':'Processor completion has not been confirmed.'));
+    if(r.state==='requested'){const f=node('form'),approval=field(f,'Finance approval reference'),due=field(f,'Exception response due','datetime-local');submit(f,'Approve refund',async()=>{await api('refunds/'+r.id+'/approve',{version:r.version,approvalReference:approval.value.trim(),exceptionDueAt:new Date(due.value).toISOString()});await finance();});c.append(f);}
+    if(['approved','unknown'].includes(r.state)){const f=node('form');submit(f,r.state==='unknown'?'Reconcile with the same refund key':'Submit refund',async()=>{await api('refunds/'+r.id+'/submit',{version:r.version});await finance();});c.append(f);}host.append(c);
+   }
+   const exceptions=card('Finance exceptions');for(const e of reconciliation.exceptions)exceptions.append(node('p',e.order_number+' · '+e.kind.replaceAll('_',' ')+' · Owner '+e.owner_user_id+' · Due '+new Date(e.due_at).toLocaleString('en-GB')));if(!reconciliation.exceptions.length)exceptions.append(node('p','No open finance exceptions in this view.'));host.append(exceptions);
+  }catch(e){host.replaceChildren(node('p',e.message));}
+ }
+ document.addEventListener('click',e=>{if(e.target.closest('[data-rx-view="finance"]'))queueMicrotask(finance);});if(location.pathname.endsWith('/finance'))finance();
+}
+export const FUNCTIONAL_CLIENT='\n('+functionalClient.toString()+')();';
+export const FUNCTIONAL_CSS=`
+body.rx-app[data-functional="true"]{--rx-line:#41463a;--rx-muted:#b5b9ab;--rx-card:#151712;background:#050505;color:#E7E3DA;font-size:16px;line-height:1.55}
+body.rx-app[data-functional="true"] .rx-content{background:#050505;color:#E7E3DA}
+body.rx-app[data-functional="true"] .rx-table-wrap,body.rx-app[data-functional="true"] .rx-count,body.rx-app[data-functional="true"] .rx-signin,body.rx-app[data-functional="true"] .rx-functional-card{background:#151712;color:#E7E3DA;border:1px solid #41463a;border-radius:16px}
+body.rx-app[data-functional="true"] th,body.rx-app[data-functional="true"] td{color:#E7E3DA;border-color:#41463a;background:transparent}
+body.rx-app[data-functional="true"] small,body.rx-app[data-functional="true"] .rx-kicker,body.rx-app[data-functional="true"] .rx-footnote{color:#b5b9ab}
+body.rx-app[data-functional="true"] input,body.rx-app[data-functional="true"] select,body.rx-app[data-functional="true"] textarea{background:#050505;color:#E7E3DA;border:1px solid #707762;border-radius:8px;min-height:44px;padding:10px;font:inherit;width:100%;max-width:100%}
+body.rx-app[data-functional="true"] button{min-height:44px;font:inherit;background:#E7E3DA;color:#050505;border:1px solid #E7E3DA;padding:10px 16px;border-radius:8px;white-space:normal}
+body.rx-app[data-functional="true"] button:disabled{opacity:.65;cursor:wait}
+body.rx-app[data-functional="true"] label{display:block;margin:12px 0;font-size:16px;color:#E7E3DA}
+body.rx-app[data-functional="true"] .rx-functional-card{padding:20px;margin:16px 0;overflow-wrap:anywhere}
+body.rx-app[data-functional="true"] :focus-visible{outline:3px solid #c2cfac;outline-offset:3px}
+@media(max-width:700px){body.rx-app[data-functional="true"] .rx-content{padding:18px 14px}body.rx-app[data-functional="true"] td:before{color:#b5b9ab}body.rx-app[data-functional="true"] h1{font-size:28px}}
+`;

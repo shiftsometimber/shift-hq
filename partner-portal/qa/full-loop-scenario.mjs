@@ -12,7 +12,7 @@ import {authenticator} from '../test/authenticator.mjs';
 import {selectFutureSupplier,captureOrderRoute} from '../platform/integrations.mjs';
 import {careFields,careChecks,CARE_HANDOVER_VERSION} from '../service/clinical-kernel.mjs';
 
-export async function fullLoop({continueAfterPaymentBlock=false,sstrxCandidate=false}={}){
+export async function fullLoop({continueAfterPaymentBlock=false,sstrxCandidate=false,functionalV3=false}={}){
  const s=await nativeAccounts(),{sql,DB}=s;
  const checks=[],timings=[],transport=[],pending=[];
  const report={startedAt:new Date().toISOString(),scope:sstrxCandidate?'Fresh isolated native APIs and SST Rx gateway; no production browser actions or live supplier calls':'Fresh isolated native-API run plus separate live public UI observation; not live clinical acceptance',timingLimit:'Local response wait only, excludes network and may exclude initial handler work; NOT live user-facing speed measurements.',accounts:s.summary,checks,timings,workarounds:[],outboundMessages:0,realPayments:0,realPrescriptions:0};
@@ -22,6 +22,7 @@ export async function fullLoop({continueAfterPaymentBlock=false,sstrxCandidate=f
  const files=new Map(),bucket={async put(k,b,o){files.set(k,{body:new Uint8Array(b),httpMetadata:o?.httpMetadata});},async get(k){return files.get(k)||null},async delete(k){files.delete(k)}};
  const env={...s.env,HQ_AUTH:{fetch:s.nativeFetch},CLINICAL_PRIVATE_FILES:bucket,PARTNER_PRIVATE_FILES:bucket,PARTNER_OPERATIONS_ENABLED:'true',PARTNER_INTERNAL_SETUP_ONLY:'false',PARTNER_LOGIN_ENABLED:'true',PARTNER_FULFILMENT_ENABLED:'true',CLINICAL_CASEWORK_ENABLED:'true',CLINICAL_REVIEW_READY:'true',CLINICAL_CONTEXT_ENABLED:'false',PRESCRIPTION_WORKFLOW_ENABLED:'true',PRESCRIPTION_SIGNING_ENABLED:'true',PRESCRIPTION_SIGNATURE_POLICY_REFERENCE:'FICTIONAL-ACCEPTANCE-ONLY',PARTNER_CLINICAL_APPROVER_IDS:String(s.actors.governor.user.id),SHARED_ORDER_WORKFLOW_ENABLED:'true',CLINICAL_MEMBER_RECORDS_ENABLED:'true',NOTIFICATION_EVENTS_ENABLED:'true',PARTNER_NOTIFICATION_REVIEW_ENABLED:'true',PARTNER_TRACKING_READ_ENABLED:'true',PARTNER_MEMBER_REPLIES_ENABLED:'true',STRIPE_MODE:'test',STRIPE_SECRET_KEY:'sk_test_ISOLATED_NO_PROVIDER_ACCOUNT',STRIPE_WEBHOOK_SECRET:randomBytes(32).toString('hex'),PHARMACY_CLINICAL_INTAKE_URL:'https://pharmacy.example.test/intake',PHARMACY_INTEGRATION_SECRET:randomBytes(32).toString('hex')};
  if(sstrxCandidate)Object.assign(env,{SSTRX_PLATFORM_ENABLED:'true',SSTRX_PAID_RECORD_LINK_ENABLED:'true',SSTRX_ENVIRONMENT:'synthetic',SSTRX_TEST_SIGNING:'true'});
+ if(functionalV3)env.SSTRX_FUNCTIONAL_V3_ENABLED='true';
  const portalEnv={PARTNER_ACCESS_ENABLED:'true',PORTAL_SESSION_KEY:randomBytes(32).toString('hex'),HQ_AUTH:env.HQ_AUTH,CLINICAL:{fetch:r=>clinical.fetch(r,env,ctx)}};
  const req=(origin,path,body,cookie='',extra={})=>new Request(origin+path,{method:body===undefined?'GET':'POST',headers:{Origin:origin,Cookie:cookie,...(!(body instanceof FormData)?{'Content-Type':'application/json'}:{}),...extra},body:body===undefined?undefined:body instanceof FormData||body instanceof Uint8Array?body:JSON.stringify(body)});
  const commerce=(path,body)=>medicineCommerceRoutes(req('https://shiftsometimber.co.uk','/v1/'+path,body,s.memberSession),env,ctx);
@@ -79,7 +80,7 @@ export async function fullLoop({continueAfterPaymentBlock=false,sstrxCandidate=f
   if(!submission.ok){record('Submit partner clinical questionnaire','FAIL','Native member API returned '+submission.status+' '+submittedBody.error+' for a fresh completed assessment.');report.submissionError=submittedBody.error;return {s,env,portalEnv,report,files,transport,clinicalAnswers,created,evidence};}
   const submitted=await result('Submit partner clinical questionnaire',Promise.resolve(submission));report.assessmentVersion=submitted.revision;
   record('Submit partner clinical questionnaire','PASS','Fresh record and all required evidence submitted via native member API. Assessment version '+submitted.revision+'.');
-  const f={s,env,portalEnv,report,files,transport,intakeAnswers:answers,png,commerce,clinicalAnswers,created,evidence,submitted,record,result,ctx,sstrxCandidate,portal:sstrxCandidate?sstrxPortal:portal};
+  const f={s,env,portalEnv,report,files,transport,intakeAnswers:answers,png,commerce,clinicalAnswers,created,evidence,submitted,record,result,ctx,sstrxCandidate,functionalV3,portal:sstrxCandidate?sstrxPortal:portal};
   await downstream(f,{continueAfterPaymentBlock});if(sstrxCandidate&&!report.executionError){await organisationAcceptance(f);await repeatJourney(f);await supplierSwitchJourney(f)};return f;
  }catch(e){record(e.stage||'Execution','FAIL',e.message);report.executionError=e.message;return {s,env,portalEnv,report,files,transport};}
  finally{globalThis.fetch=originalFetch;report.completedAt=new Date().toISOString();await fs.mkdir(new URL('../../.partner-qa/full-loop/',import.meta.url),{recursive:true});await fs.writeFile(new URL('../../.partner-qa/full-loop/report.json',import.meta.url),JSON.stringify(report,null,2)+'\n');}
@@ -93,6 +94,10 @@ async function downstream(f,{continueAfterPaymentBlock}){
   sql.prepare('INSERT OR IGNORE INTO partner_staff VALUES(?,?,?,?,?,1,?,?)').run(profile.id,id,profile.username,kind,org,JSON.stringify(profile),stamp);
  }
  for(const actor of ['governor','clinician'])sql.prepare("INSERT OR IGNORE INTO clinical_hq_staff VALUES(?,'clinician',1,'TEST-ONLY','GMC',?,?)").run(s.actors[actor].user.id,'SYNTHETIC-'+s.actors[actor].user.id,future);
+ if(f.functionalV3){
+  const {ensurePlatformSchema}=await import('../platform/schema.mjs');await ensurePlatformSchema(env.DB);
+  sql.prepare("INSERT OR IGNORE INTO rx_service_config VALUES('test-clinical-org','weight_management',1,?,?)").run(JSON.stringify({verificationProtocol:{version:1,approvalReference:'FICTIONAL-PROVIDER-PROTOCOL',requirements:[{id:'identity',methods:['independent_document'],allowException:false},{id:'measurements',methods:['video'],allowException:false}]}}),stamp);
+ }
  report.workarounds.push('Professional organisation approvals, credentials and scope grants are synthetic test fixtures, not regulator checks or approved real partner access.');
  async function login(actor){const data=s.secrets.get(actor),username=actor==='clinician'?'CLNTEST':actor==='dispenser'?'DSPTEST':actor==='otherDispenser'?'DSPSWITCH':data.email;
   const start=await portal.fetch(new Request(PORTAL_ORIGIN+'/api/login',{method:'POST',headers:{Origin:PORTAL_ORIGIN,'CF-Connecting-IP':'203.0.113.42','Content-Type':'application/json'},body:JSON.stringify({username,password:data.password})}),portalEnv);
@@ -109,14 +114,16 @@ async function downstream(f,{continueAfterPaymentBlock}){
  const action=async(body)=>{const response=await result('Clinical '+body.action,partner(recordPath+'/action',clinicianCookie,{version:caseVersion,assessmentVersion:submitted.revision,...body}));caseVersion++;return response;};
  await action({action:'start_review'});
  if(f.sstrxCandidate){
-  await action({action:'request_information',message:'FICTIONAL clarification of submitted information',evidenceKinds:[]});
+  await action({action:'request_information',message:'FICTIONAL clarification of submitted information',evidenceKinds:[],...f.functionalV3?{requestedFields:['medicines1Details'],dueAt:future}:{} });
   const requested=sql.prepare("SELECT id FROM clinical_case_events WHERE record_id=? AND kind='information_requested' ORDER BY version DESC LIMIT 1").get(created.id);
   const revised=await result('Member resubmits clarification',s.callMember(recordPath+'/assessment',{schemaVersion:created.schemaVersion,revision:submitted.revision,answers:f.clinicalAnswers,submit:true,accuracy:true,reviewSharing:true}));
   await result('Member replies to clinician',s.callMember(recordPath+'/workflow/action',{version:caseVersion,assessmentVersion:revised.revision,action:'reply',requestId:requested.id,message:'FICTIONAL member clarification'}));caseVersion++;submitted.revision=revised.revision;
+  if(f.functionalV3)await result('Clinician acknowledges exact response',partner('/platform/cases/'+created.id+'/information/'+requested.id+'/acknowledge',clinicianCookie,{version:2,responseVersion:revised.revision}));
   await action({action:'start_review'});record('C: Additional information','PASS (SYNTHETIC)','Clinician request → explicit member resubmission/reply → return to assigned review; no clinical answer inferred.');
  }
  for(const item of evidence.filter(e=>e.kind!=='photo_id'))await action({action:'review_evidence',evidenceId:item.id,outcome:'approve'});
  const handover={version:CARE_HANDOVER_VERSION};for(const [id,,type]of careFields)handover[id]=Array.isArray(type)?type[0]:type==='date'?new Date(Date.now()+(id==='followUpDate'?7:0)*86400000).toISOString().slice(0,10):'Fictional acceptance handover only';for(const [id]of careChecks)handover[id]=true;handover.medicine='TEST Mounjaro — NOT FOR SUPPLY';
+ if(f.functionalV3)for(const [requirement,method]of [['identity','independent_document'],['measurements','video']])await result('Independent '+requirement+' verification',partner('/platform/cases/'+created.id+'/verification',clinicianCookie,{assessmentVersion:submitted.revision,requirement,state:'verified',method,sourceReference:'FICTIONAL-INDEPENDENT-'+requirement,expiresAt:future,version:0}));
  await action({action:'decision',outcome:'proceed',identityVerified:true,independentMeasurementsVerified:true,verification:'Fictional checks only — not a clinical decision',handover,rationale:'Fictional acceptance only',message:'TEST review complete'});
  report.assessmentVersion=submitted.revision;
  record('Clinician review','PASS','Fresh assessment version '+submitted.revision+', medical evidence decisions and explicit identity verification recorded on the same generated order.');

@@ -9,6 +9,7 @@ import {ensurePlatformSchema} from '../platform/schema.mjs';
 import {readObject} from '../platform/domain.mjs';
 import {linkPaidOrder} from '../platform/intake.mjs';
 import {ensureFunctionalSchema} from '../platform/functional-casework.mjs';
+import {memberInformationRoute} from '../platform/member-information.mjs';
 export default {async fetch(request,env,ctx){
  if(env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return original.fetch(request,env,ctx);
  if(env.SSTRX_FUNCTIONAL_V3_ENABLED==='true')await ensureFunctionalSchema(env.DB);
@@ -27,6 +28,7 @@ export default {async fetch(request,env,ctx){
   const expected=request.headers.get('X-My-Timber-Expected-Account');if(actor&&expected&&expected!==String(actor.id))return Response.json({error:'account_changed'},{status:409,headers:{'Cache-Control':'no-store, private'}});
   const admitted=actor&&Number(actor.email_verified)===1&&(env.CLINICAL_REVIEW_READY==='true'||env.CLINICAL_TEST_MEMBER_EMAIL&&actor.email.toLowerCase()===env.CLINICAL_TEST_MEMBER_EMAIL.toLowerCase())&&env.CLINICAL_MEMBER_RECORDS_ENABLED==='true'&&env.CLINICAL_PRIVATE_FILES;
   if(admitted){
+   const information=await memberInformationRoute(request,withSharedOutbox(env),actor,original);if(information)return completeSharedResponse(information,request,env);
    await ensurePlatformSchema(env.DB);
    if(env.SSTRX_PAID_RECORD_LINK_ENABLED==='true'&&path==='/v1/member/clinical-records'&&request.method==='GET'){
     const {results=[]}=await env.DB.prepare("SELECT order_number FROM medicine_orders WHERE user_id=? AND status='paid' ORDER BY id DESC LIMIT 50").bind(actor.id).all();

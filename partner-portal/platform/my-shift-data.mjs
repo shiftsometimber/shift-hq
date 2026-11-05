@@ -3,6 +3,8 @@
 import {memberView,memberTracking} from '../service/member-kernel.mjs';
 import {listConversations} from './messages.mjs';
 import {supportList} from './my-shift-support.mjs';
+import {ensureRefundSchema,memberRefunds} from './refunds.mjs';
+import {informationList} from './functional-casework.mjs';
 const rows=async q=>(await q.all()).results||[];
 const date=v=>typeof v==='string'&&Number.isFinite(Date.parse(v))?v:null;
 const terminal=new Set(['delivered','fulfilled','declined','cancelled','rejected','returned']);
@@ -18,6 +20,7 @@ export function orderTimeline({order,prescription,fulfilment,signature,paidAt,di
  return [
   {key:'paid',label:'Paid',complete:['paid','succeeded','completed','fulfilled','refunded'].includes(order.status),at:date(paidAt),source:'medicine_orders'},
   {key:'signed',label:'Prescription signed',complete:!!signed,at:signed?date(prescription.issuedAt):null,source:'clinical_prescription_signatures'},
+  {key:'accepted',label:'Pharmacy accepted',complete:!!event('fulfilment_accept'),at:event('fulfilment_accept'),source:'partner_audit'},
   {key:'dispensed',label:'Dispensed',complete:!!date(dispensedAt),at:date(dispensedAt),source:'partner_audit'},
   {key:'dispatched',label:'Dispatched',complete:!!dispatched,at:dispatched,source:'partner_audit'},
   {key:'delivered',label:'Delivered',complete:!!delivered,at:delivered,source:'partner_audit'}
@@ -39,7 +42,7 @@ export async function myShiftSnapshot(env,actor){
  LEFT JOIN partner_fulfilment f ON f.order_number=m.order_number AND f.member_id=m.user_id AND r.id IS NOT NULL
  LEFT JOIN rx_order_routes rt ON rt.order_number=m.order_number AND rt.member_id=m.user_id LEFT JOIN partner_organisations org ON org.id=COALESCE(rt.pharmacy_org_id,f.partner_id)
  WHERE m.user_id=? ORDER BY m.created_at DESC,m.id DESC LIMIT 101`).bind(actor.id));
- const supplyEvents=source.length?await rows(env.DB.prepare(`SELECT a.entity_id,a.action,a.created_at FROM partner_audit a JOIN medicine_orders m ON m.order_number=a.entity_id WHERE a.entity_type='order' AND m.user_id=? AND a.entity_id IN (${source.slice(0,100).map(()=>'?').join(',')}) AND a.action IN ('fulfilment_dispatch','fulfilment_delivered') ORDER BY a.entity_id,a.version`).bind(actor.id,...source.slice(0,100).map(o=>o.order_number))):[];
+ const supplyEvents=source.length?await rows(env.DB.prepare(`SELECT a.entity_id,a.action,a.created_at FROM partner_audit a JOIN medicine_orders m ON m.order_number=a.entity_id WHERE a.entity_type='order' AND m.user_id=? AND a.entity_id IN (${source.slice(0,100).map(()=>'?').join(',')}) AND a.action IN ('fulfilment_accept','fulfilment_dispatch','fulfilment_delivered') ORDER BY a.entity_id,a.version`).bind(actor.id,...source.slice(0,100).map(o=>o.order_number))):[];
  const orders=source.slice(0,100).map(order=>{
   let prescription=null,fulfilment=null;
   if(order.prescription_json&&env.PRESCRIPTION_WORKFLOW_ENABLED==='true'){
@@ -49,8 +52,12 @@ export async function myShiftSnapshot(env,actor){
   if(order.fulfilment_json&&(env.PARTNER_TRACKING_READ_ENABLED==='true'||env.PARTNER_FULFILMENT_ENABLED==='true'))fulfilment={...memberTracking(JSON.parse(order.fulfilment_json)),events:supplyEvents.filter(e=>e.entity_id===order.order_number)};
   const timeline=orderTimeline({order,prescription,fulfilment,signature:order.signature_id?{id:order.signature_id}:null,paidAt:order.paid_at,dispensedAt:order.dispensed_at});
   const status=fulfilment?.status||prescription?.status||order.clinical_status||order.status;
-  return {reference:order.order_number,recordId:order.record_id||null,createdAt:date(order.created_at),updatedAt:date(fulfilment?.updatedAt||prescription?.updatedAt||order.clinical_updated_at||order.updated_at),payment:{status:order.status,totalPence:order.total_pence,currency:order.currency},status,active:!terminal.has(status)&&!['cancelled','refunded','failed'].includes(order.status),timeline,tracking:timeline[3].complete?fulfilment?.tracking||null:null,deliveryUpdate:fulfilment?.deliveryUpdate||null,uncertain:order.uncertain_state?{state:order.uncertain_state,at:date(order.uncertain_at)}:null,supplier:order.pharmacy_id?{id:order.pharmacy_id,name:order.pharmacy_json?JSON.parse(order.pharmacy_json).name:order.pharmacy_id,contractId:order.contract_id||null}:null,repeat:!!order.reorder_of_order_id,prescription:prescription?{status:prescription.status,id:prescription.prescriptionId||null,issuedAt:date(prescription.issuedAt)}:null};
+  return {reference:order.order_number,recordId:order.record_id||null,createdAt:date(order.created_at),updatedAt:date(fulfilment?.updatedAt||prescription?.updatedAt||order.clinical_updated_at||order.updated_at),payment:{status:order.status,totalPence:order.total_pence,currency:order.currency},status,active:!terminal.has(status)&&!['cancelled','refunded','failed'].includes(order.status),timeline,tracking:timeline.find(s=>s.key==='dispatched').complete?fulfilment?.tracking||null:null,deliveryUpdate:fulfilment?.deliveryUpdate||null,uncertain:order.uncertain_state?{state:order.uncertain_state,at:date(order.uncertain_at)}:null,supplier:order.pharmacy_id?{id:order.pharmacy_id,name:order.pharmacy_json?JSON.parse(order.pharmacy_json).name:order.pharmacy_id,contractId:order.contract_id||null}:null,repeat:!!order.reorder_of_order_id,prescription:prescription?{status:prescription.status,id:prescription.prescriptionId||null,issuedAt:date(prescription.issuedAt)}:null};
  });
+ if(env.SSTRX_FUNCTIONAL_V3_ENABLED==='true'){
+  await ensureRefundSchema(env.DB);const refunds=await memberRefunds(env,actor.id);
+  for(const order of orders){order.refunds=refunds.filter(r=>r.orderReference===order.reference);order.informationRequests=order.recordId?await informationList(env,{id:order.recordId,order_number:order.reference}):[];}
+ }
  const events=await rows(env.DB.prepare(`SELECT 'prescription:'||e.id id,e.kind,r.order_number,r.id record_id,e.created_at,'clinical_prescription_events' source FROM clinical_prescription_events e JOIN clinical_member_records r ON r.id=e.record_id WHERE r.user_id=?
  UNION ALL SELECT 'pharmacy:'||e.id id,e.action kind,r.order_number,r.id record_id,e.created_at,'partner_audit' source FROM partner_audit e JOIN clinical_member_records r ON r.order_number=e.entity_id JOIN partner_fulfilment f ON f.order_number=r.order_number AND f.member_id=r.user_id WHERE e.entity_type='order' AND r.user_id=?
  UNION ALL SELECT 'case:'||e.id id,e.kind,r.order_number,r.id record_id,e.created_at,'clinical_case_events' source FROM clinical_case_events e JOIN clinical_member_records r ON r.id=e.record_id WHERE r.user_id=?
@@ -60,5 +67,5 @@ export async function myShiftSnapshot(env,actor){
  const care=results[0].status==='fulfilled'?results[0].value:null,support=results[1].status==='fulfilled'?results[1].value:null;
  const unread=care&&support&&!care.hasMore&&!support.hasMore?care.threads.filter(t=>t.unread).length+support.tickets.filter(t=>t.unread).length:null;
  const latest=[...updates,...(care?.threads||[]).map(t=>({id:t.id,title:t.unread?'New care message':'Care conversation updated',at:date(t.updated_at),reference:t.order_number,view:'messages',thread:t.id,source:'rx_message_threads'})),...(support?.tickets||[]).map(t=>({id:t.reference,title:t.unread?'New message from SHIFT':'SHIFT support updated',at:date(t.updatedAt),reference:t.orderReference||null,view:'messages',support:t.reference,source:'support_tickets'}))].filter(e=>e.at).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)).slice(0,2);
- return {memberId:actor.id,account:{firstName:identity?.first_name||'',lastName:identity?.last_name||'',email:identity?.email||'',memberSince:date(identity?.created_at)},orders,hasMoreOrders:source.length>100,activeOrders:source.length>100?null:orders.filter(o=>o.active).length,unread,latest,careUpdates:updates,careThreads:care?.threads||[],supportAvailable:!!support,careMessagesAvailable:!!care,observedAt,refreshSeconds:30,clinicalServiceOpen:env.CLINICAL_REVIEW_READY==='true',source:'Existing SHIFT identity, medicine_orders, clinical records, prescriptions, partner_fulfilment, partner_audit, support_tickets and Rx conversations',notificationsSent:false};
+ return {memberId:actor.id,account:{firstName:identity?.first_name||'',lastName:identity?.last_name||'',email:identity?.email||'',memberSince:date(identity?.created_at)},orders,hasMoreOrders:source.length>100,activeOrders:source.length>100?null:orders.filter(o=>o.active).length,unread,latest,careUpdates:updates,careThreads:care?.threads||[],supportAvailable:!!support,careMessagesAvailable:!!care,observedAt,refreshSeconds:5,clinicalServiceOpen:env.CLINICAL_REVIEW_READY==='true',source:'Existing SHIFT identity, medicine_orders, clinical records, prescriptions, partner_fulfilment, partner_audit, support_tickets and Rx conversations',notificationsSent:false};
 }

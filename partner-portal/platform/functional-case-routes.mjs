@@ -12,7 +12,7 @@ export async function functionalCaseRoute(request,env,a,parts){
  if(request.method==='GET'&&parts.length===2){
   let gates;try{const g=await verificationSummary(env,record,a.orgId,latest.version);gates={protocolVersion:g.protocol.version,requirements:g.requirements,ready:g.ready};}catch(e){if(e.status!==409)throw e;gates={ready:false,requirements:[],blocker:e.message};}
   await appendReadAudit(env,a,record,'assigned_clinical_review');
-  return {record:{id:record.id,orderReference:record.order_number,memberId:record.user_id,assessmentVersion:latest.version,revision:record.revision},patient:{name:JSON.parse(latest.answers_json).fullName||'Member'},workflow:await caseView(env,record,true),gates,informationRequests:await informationList(env,record,true),notificationsSent:false};
+  return {record:{id:record.id,orderReference:record.order_number,memberId:record.user_id,assessmentVersion:latest.version,revision:record.revision},patient:{name:JSON.parse(latest.answers_json).fullName||'Member'},answerFields:Object.keys(JSON.parse(latest.answers_json)).sort(),workflow:await caseView(env,record,true),gates,informationRequests:await informationList(env,record,true),notificationsSent:false};
  }
  const b=await readObject(request);
  if(request.method==='POST'&&parts[2]==='verification'&&parts.length===3)return recordVerification(env,a,record,b);
