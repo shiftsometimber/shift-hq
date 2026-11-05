@@ -23,6 +23,7 @@ for(const [engine,type]of [['chromium',chromium],['webkit',webkit]]){
   browser=await type.launch();const page=await browser.newPage({viewport:{width:390,height:844}});
   await page.goto(origin+'/member/dashboard');await page.getByRole('link',{name:'Messages',exact:true}).waitFor();await page.getByRole('link',{name:'Messages',exact:true}).click();
   await page.goBack();await page.getByRole('link',{name:'Messages',exact:true}).waitFor();await page.getByRole('link',{name:'Messages',exact:true}).click();
+  await page.getByText('Your member care record',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Start a secure conversation'}).click();
   await page.getByLabel('Record for secure conversation').selectOption(RECORD);await page.getByLabel('Care team',{exact:true}).selectOption('clinical');await page.getByLabel('Secure message',{exact:true}).fill('FICTIONAL app member question');await page.getByRole('button',{name:'Send secure message',exact:true}).click();await page.getByText('FICTIONAL app member question',{exact:true}).waitFor();
   const t=f.sql.prepare('SELECT * FROM rx_message_threads').get();assert.equal(t.member_id,42);
