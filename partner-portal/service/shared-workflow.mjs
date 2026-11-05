@@ -11,7 +11,7 @@ export function withSharedOutbox(env){
  const shared=env.SHARED_ORDER_WORKFLOW_ENABLED==='true';
  if(!shared&&env.SSTRX_PLATFORM_ENABLED!=='true')return env;
  const DB=env.DB;
- const facade={prepare(sql){return trackedStatement(DB.prepare(sql),sql)},async batch(statements){
+ const facade={__sstrxBaseDB:DB.__sstrxBaseDB||DB,prepare(sql){return trackedStatement(DB.prepare(sql),sql)},async batch(statements){
   const extra=[],orders=new Set();
   for(const s of shared?statements:[]){
    let table,key,recordId,orderNumber;
