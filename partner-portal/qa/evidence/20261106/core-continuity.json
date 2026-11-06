@@ -1,0 +1,134 @@
+{
+  "recordedAt": "2026-11-06T19:13:50.910001+00:00",
+  "baseline": {
+    "version": "baseline",
+    "source": "7d63a50b7e67955627ad957e1b549d0294bcf123",
+    "exit": 1,
+    "failedNames": [
+      "intake rejects missing previous-treatment answer before contacting a pharmacy",
+      "intake rejects invalid previous-treatment answer before contacting a pharmacy",
+      "intake rejects missing previous medicine before contacting a pharmacy",
+      "intake rejects missing previous dose before contacting a pharmacy",
+      "intake rejects missing last-dose date before contacting a pharmacy",
+      "intake rejects impossible last-dose date before contacting a pharmacy",
+      "intake rejects future last-dose date before contacting a pharmacy",
+      "intake rejects an overlong history instead of silently truncating it",
+      "intake forwards a complete previous-treatment answer unchanged",
+      "a no answer does not forward stale hidden previous-treatment details"
+    ],
+    "passedNames": [
+      "returning to a product restores the exact selected variant",
+      "verification handover includes the selected variant in its return route",
+      "verified return retains dose and existing query parameters",
+      "a backslash return target cannot send a verified member to another origin",
+      "hidden previous-treatment inputs do not participate in a no submission",
+      "the deployed assessment asset remains identical to its source copy"
+    ],
+    "summary": [
+      "# tests 16",
+      "# pass 6",
+      "# fail 10",
+      "# skipped 0"
+    ],
+    "log": "core-continuity-baseline.tap"
+  },
+  "repaired": {
+    "version": "repaired",
+    "source": "6f900ad8db2e319574b7488e12769d19066d4648",
+    "exit": 0,
+    "failedNames": [],
+    "passedNames": [
+      "intake refuses missing-signoff before forwarding any assessment",
+      "intake refuses expired-supply before forwarding any assessment",
+      "intake rejects missing previous-treatment answer before contacting a pharmacy",
+      "intake rejects invalid previous-treatment answer before contacting a pharmacy",
+      "intake rejects missing previous medicine before contacting a pharmacy",
+      "intake rejects missing previous dose before contacting a pharmacy",
+      "intake rejects missing last-dose date before contacting a pharmacy",
+      "intake rejects impossible last-dose date before contacting a pharmacy",
+      "intake rejects future last-dose date before contacting a pharmacy",
+      "intake rejects an overlong history instead of silently truncating it",
+      "intake forwards a complete previous-treatment answer unchanged",
+      "a no answer does not forward stale hidden previous-treatment details",
+      "returning to a product restores the exact selected variant",
+      "verification handover includes the selected variant in its return route",
+      "verified return retains dose and existing query parameters",
+      "a backslash return target cannot send a verified member to another origin",
+      "hidden previous-treatment inputs do not participate in a no submission",
+      "the deployed assessment asset remains identical to its source copy"
+    ],
+    "summary": [
+      "# tests 18",
+      "# pass 18",
+      "# fail 0",
+      "# skipped 0"
+    ],
+    "log": "core-continuity-repaired.tap"
+  },
+  "eachFormerFailure": [
+    {
+      "test": "intake rejects missing previous-treatment answer before contacting a pharmacy",
+      "result": "PASS",
+      "fixCommit": "6f900ad8db2e319574b7488e12769d19066d4648",
+      "classification": "Outdated fixture lacked current catalogue approval/supply source rows; production safety guards retained"
+    },
+    {
+      "test": "intake rejects invalid previous-treatment answer before contacting a pharmacy",
+      "result": "PASS",
+      "fixCommit": "6f900ad8db2e319574b7488e12769d19066d4648",
+      "classification": "Outdated fixture lacked current catalogue approval/supply source rows; production safety guards retained"
+    },
+    {
+      "test": "intake rejects missing previous medicine before contacting a pharmacy",
+      "result": "PASS",
+      "fixCommit": "6f900ad8db2e319574b7488e12769d19066d4648",
+      "classification": "Outdated fixture lacked current catalogue approval/supply source rows; production safety guards retained"
+    },
+    {
+      "test": "intake rejects missing previous dose before contacting a pharmacy",
+      "result": "PASS",
+      "fixCommit": "6f900ad8db2e319574b7488e12769d19066d4648",
+      "classification": "Outdated fixture lacked current catalogue approval/supply source rows; production safety guards retained"
+    },
+    {
+      "test": "intake rejects missing last-dose date before contacting a pharmacy",
+      "result": "PASS",
+      "fixCommit": "6f900ad8db2e319574b7488e12769d19066d4648",
+      "classification": "Outdated fixture lacked current catalogue approval/supply source rows; production safety guards retained"
+    },
+    {
+      "test": "intake rejects impossible last-dose date before contacting a pharmacy",
+      "result": "PASS",
+      "fixCommit": "6f900ad8db2e319574b7488e12769d19066d4648",
+      "classification": "Outdated fixture lacked current catalogue approval/supply source rows; production safety guards retained"
+    },
+    {
+      "test": "intake rejects future last-dose date before contacting a pharmacy",
+      "result": "PASS",
+      "fixCommit": "6f900ad8db2e319574b7488e12769d19066d4648",
+      "classification": "Outdated fixture lacked current catalogue approval/supply source rows; production safety guards retained"
+    },
+    {
+      "test": "intake rejects an overlong history instead of silently truncating it",
+      "result": "PASS",
+      "fixCommit": "6f900ad8db2e319574b7488e12769d19066d4648",
+      "classification": "Outdated fixture lacked current catalogue approval/supply source rows; production safety guards retained"
+    },
+    {
+      "test": "intake forwards a complete previous-treatment answer unchanged",
+      "result": "PASS",
+      "fixCommit": "6f900ad8db2e319574b7488e12769d19066d4648",
+      "classification": "Outdated fixture lacked current catalogue approval/supply source rows; production safety guards retained"
+    },
+    {
+      "test": "a no answer does not forward stale hidden previous-treatment details",
+      "result": "PASS",
+      "fixCommit": "6f900ad8db2e319574b7488e12769d19066d4648",
+      "classification": "Outdated fixture lacked current catalogue approval/supply source rows; production safety guards retained"
+    }
+  ],
+  "realMembers": 0,
+  "externalTransactions": 0,
+  "scope": "Local synthetic current Core fixture regression. No supplier sandbox, hosted or live acceptance.",
+  "logFormatting": "Trailing whitespace stripped; assertions, results, errors and timings retained."
+}

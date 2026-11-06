@@ -3,6 +3,7 @@ import {providerReceiptRoute} from './provider-receipts.mjs';
 import {passwordSignInAllowed} from '../password-signin.mjs';
 import {functionalCaseRoute} from './functional-case-routes.mjs';
 import {refundRoute} from './refunds.mjs';
+import {financeOperationsRoute} from './finance-operations.mjs';
 import {lifecycleRoute} from './prescription-lifecycle.mjs';
 import {auditExportRoute} from './audit-export.mjs';
 import {informationExceptions} from './functional-casework.mjs';
@@ -70,6 +71,7 @@ export async function platformRoute(request,env){
   const providerReceipt=await providerReceiptRoute(request,env,a,p);if(providerReceipt)return json(providerReceipt);
   const functionalCase=await functionalCaseRoute(request,env,a,p);if(functionalCase)return json(functionalCase);
   const refunds=await refundRoute(request,env,a,p);if(refunds)return json(refunds);
+  const financeOperations=await financeOperationsRoute(request,env,a,p);if(financeOperations)return json(financeOperations);
   const lifecycle=await lifecycleRoute(request,env,a,p);if(lifecycle)return json(lifecycle);
   const auditExport=await auditExportRoute(request,env,a,p);if(auditExport)return json(auditExport);
   if(p[0]==='catalogue'&&p.length===2&&/^[1-9]\d*$/.test(p[1]))return json(await catalogueSignoff(request,env,a,Number(p[1])));
