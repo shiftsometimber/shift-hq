@@ -1,5 +1,6 @@
 // Generated imports resolve the exact explicit Core source before bundling.
 import core from '__CORE_ROOT__/worker.js';
+export {SiteContentState} from '__CORE_ROOT__/site-content-state-v1.js';
 import hq from '__CORE_ROOT__/hq-ai-v2.js';
 import {hqCatalogueRoutes} from '__CORE_ROOT__/hq-catalogue-v1.js';
 import {hqCommerceContentRoutes} from '__CORE_ROOT__/hq-commerce-content-v1.js';
