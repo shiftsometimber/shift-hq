@@ -74,6 +74,31 @@ test('RX-RF6 reconciliation derives its ledger total and leaves an owned varianc
   const result=await json(await f.call('reconciliation',b));assert.equal(result.variancePence,-300);assert.equal(result.state,'variance');assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM rx_finance_exceptions WHERE kind='reconciliation_variance' AND owner_user_id=1").get().n,1);
  }finally{f.close();}
 });
+test('Reconciliation replay retains one run, immutable source and one exception; changed receipts or scope are refused',async()=>{
+ const f=await setup();try{
+  const b={sourceReference:'TEST-IDEMPOTENT-STATEMENT',fromAt:'2000-01-01T00:00:00Z',toAt:'2099-01-01T00:00:00Z',ownerUserId:1,dueAt:new Date(Date.now()+3600000).toISOString()};
+  let total=f.total-300;f.env.STATEMENT_TEST_TRANSPORT={fetch:async()=>Response.json({reference:b.sourceReference,fromAt:b.fromAt,toAt:b.toAt,currency:'GBP',netReceivedPence:total})};
+  const first=await json(await f.call('reconciliation',b)),replay=await json(await f.call('reconciliation',b));
+  assert.equal(replay.id,first.id);assert.equal(replay.variancePence,-300);assert.equal(replay.duplicate,true);
+  for(const table of ['rx_reconciliation_runs','rx_reconciliation_sources','rx_finance_exceptions'])assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM '+table).get().n,1);
+  assert.equal(f.sql.prepare('SELECT ledger_total_pence n FROM rx_reconciliation_sources').get().n,f.total);
+  assert.throws(()=>f.sql.prepare('UPDATE rx_reconciliation_sources SET ledger_total_pence=0').run(),/immutable_reconciliation_source/);
+  total++;await json(await f.call('reconciliation',b),409);total--;
+  await json(await f.call('reconciliation',{...b,ownerUserId:2}),409);
+  await json(await f.call('reconciliation',{...b,orderReference:ORDER}),422);
+  await json(await f.call('reconciliation',b,3),403);
+  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_finance_exceptions').get().n,1);
+ }finally{f.close();}
+});
+test('Concurrent reconciliation submissions converge on one retained run and one exception',async()=>{
+ const f=await setup();try{
+  const b={sourceReference:'TEST-CONCURRENT-STATEMENT',fromAt:'2000-01-01T00:00:00Z',toAt:'2099-01-01T00:00:00Z',ownerUserId:1,dueAt:new Date(Date.now()+3600000).toISOString()};
+  f.env.STATEMENT_TEST_TRANSPORT={fetch:async()=>Response.json({reference:b.sourceReference,fromAt:b.fromAt,toAt:b.toAt,currency:'GBP',netReceivedPence:f.total-300})};
+  const responses=await Promise.all([f.call('reconciliation',b),f.call('reconciliation',b)]),results=await Promise.all(responses.map(r=>json(r)));
+  assert.equal(results[0].id,results[1].id);
+  for(const table of ['rx_reconciliation_runs','rx_reconciliation_sources','rx_finance_exceptions'])assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM '+table).get().n,1);
+ }finally{f.close();}
+});
 test('RX-RF7 a receipt racing another refund version cannot leave a receipt, event or refund ledger entry behind',async()=>{
  const f=await setup();try{
   f.env.REFUND_TEST_TRANSPORT=transport();let r=await f.approve(await f.create());r=await json(await f.call('refunds/'+r.id+'/submit',{version:r.version}));const eventsBefore=f.sql.prepare('SELECT COUNT(*) n FROM rx_refund_events').get().n;

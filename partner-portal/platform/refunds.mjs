@@ -11,6 +11,9 @@ export const REFUND_SCHEMA=[
  `CREATE TABLE IF NOT EXISTS rx_refund_sources(refund_id TEXT PRIMARY KEY REFERENCES rx_refunds(id),payment_id TEXT,payment_intent TEXT NOT NULL,captured_pence INTEGER NOT NULL,created_at TEXT NOT NULL)`,
  `CREATE TABLE IF NOT EXISTS rx_finance_authorities(hq_user_id INTEGER PRIMARY KEY,limit_pence INTEGER NOT NULL,expires_at TEXT NOT NULL,approval_reference TEXT NOT NULL,granted_by INTEGER NOT NULL)`,
  `CREATE TABLE IF NOT EXISTS rx_finance_exceptions(id TEXT PRIMARY KEY,order_number TEXT NOT NULL,kind TEXT NOT NULL,state TEXT NOT NULL,owner_user_id INTEGER NOT NULL,due_at TEXT NOT NULL,detail_json TEXT NOT NULL,created_at TEXT NOT NULL)`,
+ `CREATE TABLE IF NOT EXISTS rx_reconciliation_sources(run_id TEXT PRIMARY KEY,statement_digest TEXT NOT NULL,request_digest TEXT NOT NULL,ledger_total_pence INTEGER NOT NULL,created_at TEXT NOT NULL)`,
+ `CREATE TRIGGER IF NOT EXISTS rx_reconciliation_sources_no_update BEFORE UPDATE ON rx_reconciliation_sources BEGIN SELECT RAISE(ABORT,'immutable_reconciliation_source'); END`,
+ `CREATE TRIGGER IF NOT EXISTS rx_reconciliation_sources_no_delete BEFORE DELETE ON rx_reconciliation_sources BEGIN SELECT RAISE(ABORT,'immutable_reconciliation_source'); END`,
  `CREATE TABLE IF NOT EXISTS rx_reconciliation_runs(id TEXT PRIMARY KEY,from_at TEXT NOT NULL,to_at TEXT NOT NULL,source_reference TEXT NOT NULL,variance_pence INTEGER NOT NULL,state TEXT NOT NULL,created_at TEXT NOT NULL)`
 ];
 const ready=new WeakMap();
@@ -45,16 +48,30 @@ export async function refundRoute(request,env,a,parts){
  if(parts[0]==='reconciliation'){
   if(request.method==='GET')return {runs:await rows(env.DB.prepare('SELECT * FROM rx_reconciliation_runs ORDER BY created_at DESC LIMIT 100')),exceptions:await rows(env.DB.prepare("SELECT * FROM rx_finance_exceptions WHERE state='open' ORDER BY due_at"))};
   if(request.method!=='POST')fail(405,'method_not_allowed');
-  const b=await readObject(request);text(b.sourceReference);if(!Number.isInteger(b.ownerUserId)||!Number.isFinite(Date.parse(b.dueAt))||b.dueAt<=at()||!Number.isFinite(Date.parse(b.fromAt))||!Number.isFinite(Date.parse(b.toAt))||b.fromAt>=b.toAt)fail(422,'reconciliation_owner_and_deadline_required');
+  const b=await readObject(request);text(b.sourceReference);if(!Number.isInteger(b.ownerUserId)||!Number.isFinite(Date.parse(b.dueAt))||!Number.isFinite(Date.parse(b.fromAt))||!Number.isFinite(Date.parse(b.toAt))||b.fromAt>=b.toAt)fail(422,'reconciliation_owner_and_deadline_required');
   if(env.SSTRX_ENVIRONMENT!=='synthetic'||!env.STATEMENT_TEST_TRANSPORT)fail(503,'authenticated_processor_statement_required');
   const statementResponse=await env.STATEMENT_TEST_TRANSPORT.fetch(new Request('https://processor.invalid/statement/'+encodeURIComponent(b.sourceReference)));
   const statement=await statementResponse.json();if(!statementResponse.ok||statement.reference!==b.sourceReference||statement.fromAt!==b.fromAt||statement.toAt!==b.toAt||statement.currency!=='GBP')fail(409,'processor_statement_does_not_match');pence(statement.netReceivedPence);
+  if(b.orderReference&&b.orderReference!=='ALL')fail(422,'reconciliation_is_period_wide');
+  const statementDigest=await digest(statement),requestDigest=await digest({sourceReference:b.sourceReference,fromAt:b.fromAt,toAt:b.toAt,ownerUserId:b.ownerUserId,dueAt:b.dueAt,scope:'ALL'});
+  const id='recon-'+await digest({sourceReference:b.sourceReference,fromAt:b.fromAt,toAt:b.toAt});
+  const previous=await rows(env.DB.prepare('SELECT r.*,s.statement_digest,s.request_digest FROM rx_reconciliation_runs r LEFT JOIN rx_reconciliation_sources s ON s.run_id=r.id WHERE r.source_reference=? AND r.from_at=? AND r.to_at=?').bind(b.sourceReference,b.fromAt,b.toAt));
+  if(previous.length){
+   if(previous.length!==1||!previous[0].statement_digest)fail(409,'legacy_reconciliation_requires_review');
+   const r=previous[0];if(r.statement_digest!==statementDigest||r.request_digest!==requestDigest)fail(409,'reconciliation_reference_conflict');
+   return {id:r.id,state:r.state,variancePence:r.variance_pence,duplicate:true};
+  }
+  if(b.dueAt<=at())fail(422,'reconciliation_owner_and_deadline_required');
   const ledger=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN kind IN ('member_payment','refund_reversal') THEN amount_pence WHEN kind IN ('refund','adjustment_credit') THEN -amount_pence ELSE 0 END),0) total FROM rx_finance_entries WHERE occurred_at>=? AND occurred_at<?").bind(b.fromAt,b.toAt).first();
+  if(!Number.isSafeInteger(ledger?.total))fail(409,'reconciliation_ledger_total_invalid');
   const owner=await env.DB.prepare("SELECT id FROM hq_users WHERE id=? AND status='active' AND role IN ('owner','admin','operations')").bind(b.ownerUserId).first();if(!owner)fail(422,'active_finance_owner_required');
-  const id=crypto.randomUUID(),variance=statement.netReceivedPence-ledger.total,date=at();
-  const commands=[env.DB.prepare(`INSERT INTO rx_reconciliation_runs SELECT ?,?,?,?,?,?,? WHERE ${g.sql}`).bind(id,text(b.fromAt),text(b.toAt),b.sourceReference,variance,variance?'variance':'matched',date,...g.args)];
-  if(variance)commands.push(env.DB.prepare("INSERT INTO rx_finance_exceptions SELECT ?,?,'reconciliation_variance','open',?,?,?,? WHERE EXISTS(SELECT 1 FROM rx_reconciliation_runs WHERE id=?)").bind('recon:'+id,b.orderReference||'ALL',b.ownerUserId,b.dueAt,JSON.stringify({variancePence:variance,sourceReference:b.sourceReference}),date,id));
-  const result=await env.DB.batch(commands);if(result[0].meta.changes!==1)fail(409,'finance_access_changed');return {id,state:variance?'variance':'matched',variancePence:variance};
+  const variance=statement.netReceivedPence-ledger.total,date=at();if(!Number.isSafeInteger(variance))fail(422,'reconciliation_variance_invalid');
+  const commands=[env.DB.prepare(`INSERT OR IGNORE INTO rx_reconciliation_runs SELECT ?,?,?,?,?,?,? WHERE ${g.sql}`).bind(id,text(b.fromAt),text(b.toAt),b.sourceReference,variance,variance?'variance':'matched',date,...g.args),env.DB.prepare('INSERT OR IGNORE INTO rx_reconciliation_sources SELECT ?,?,?,?,? WHERE changes()=1').bind(id,statementDigest,requestDigest,ledger.total,date)];
+  if(variance)commands.push(env.DB.prepare("INSERT OR IGNORE INTO rx_finance_exceptions SELECT ?,?,'reconciliation_variance','open',?,?,?,? WHERE EXISTS(SELECT 1 FROM rx_reconciliation_sources WHERE run_id=? AND statement_digest=? AND request_digest=?)").bind('recon:'+id,'ALL',b.ownerUserId,b.dueAt,JSON.stringify({variancePence:variance,sourceReference:b.sourceReference,ledgerTotalPence:ledger.total,processorTotalPence:statement.netReceivedPence}),date,id,statementDigest,requestDigest));
+  const result=await env.DB.batch(commands),retained=await env.DB.prepare('SELECT r.*,s.statement_digest,s.request_digest FROM rx_reconciliation_runs r JOIN rx_reconciliation_sources s ON s.run_id=r.id WHERE r.id=?').bind(id).first();
+  if(!retained)fail(409,'finance_access_changed');
+  if(retained.statement_digest!==statementDigest||retained.request_digest!==requestDigest)fail(409,'reconciliation_reference_conflict');
+  return {id:retained.id,state:retained.state,variancePence:retained.variance_pence,duplicate:result[0].meta.changes!==1};
  }
  if(request.method==='GET'&&parts.length===1)return {refunds:(await rows(env.DB.prepare('SELECT * FROM rx_refunds ORDER BY updated_at DESC LIMIT 200'))).map(publicRefund),approvalLimitPence:auth.limit,fullCommercial:a.commercial,paymentSources:await rows(env.DB.prepare("SELECT id,order_number orderReference,amount_pence amountPence FROM rx_lifecycle_payments WHERE state='paid' ORDER BY created_at DESC LIMIT 200")),priceWork:a.commercial?await (await import('./price-adjustments.mjs')).priceWork(env):[],replacementWork:a.commercial?await rows(env.DB.prepare("SELECT l.id,l.record_id recordId,l.order_number orderReference,l.kind,l.version,l.due_at dueAt FROM rx_prescription_lifecycle l LEFT JOIN rx_lifecycle_funding f ON f.lifecycle_id=l.id WHERE l.state='acknowledged' AND f.lifecycle_id IS NULL ORDER BY l.due_at")):[],withdrawalFinanceWork:a.commercial?await rows(env.DB.prepare("SELECT l.id,l.record_id recordId,l.order_number orderReference,l.kind,l.version,l.finance_owner_id ownerUserId,l.due_at dueAt FROM rx_prescription_lifecycle l LEFT JOIN rx_lifecycle_finance_reviews r ON r.lifecycle_id=l.id WHERE l.state IN ('closed','acknowledged','issued') AND r.lifecycle_id IS NULL ORDER BY l.due_at")):[]};
  if(request.method==='POST'&&parts.length===1){
