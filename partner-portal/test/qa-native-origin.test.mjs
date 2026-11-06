@@ -41,3 +41,13 @@ test('QA adapter retains actual current Core native member/owner/MFA sessions an
   r=await app.fetch(req('/v1/auth/logout',{},memberCookie),env,{});assert.equal(r.status,200);assert.ok(r.headers.getSetCookie().every(c=>!c.includes('Domain=')&&c.includes('Max-Age=0')));r=await app.fetch(req('/v1/me',null,memberCookie),env,{});assert.equal(r.status,401);
  }finally{s?.close();globalThis.fetch=old;}
 });
+
+test('Catalogue HTML accepts reviewer document return while the same cross-site headers still cannot read native APIs',async()=>{
+ const a=await access();let calls=0;const app=createQaNativeOrigin({fetch(){calls++;return new Response('TEST catalogue',{headers:{'Content-Type':'text/html'}})}},{host:'hq-qa.sstrx.co.uk'},a.options);
+ const headers={'Cf-Access-Jwt-Assertion':a.token,'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'};
+ const request=(path,extra={})=>new Request('https://hq-qa.sstrx.co.uk'+path,{headers:{...headers,...extra}});
+ assert.equal((await app.fetch(request('/hq/catalogue-controls'),{SSTRX_ENVIRONMENT:'synthetic'})).status,200);
+ assert.equal((await app.fetch(request('/v1/hq/me'),{SSTRX_ENVIRONMENT:'synthetic'})).status,403);
+ assert.equal((await app.fetch(request('/hq/catalogue-controls',{'Sec-Fetch-Dest':'iframe'}),{SSTRX_ENVIRONMENT:'synthetic'})).status,403);
+ assert.equal(calls,1);
+});
