@@ -1,17 +1,52 @@
 {
   "release": "SST Rx functional v3",
   "purpose": "Private hosted acceptance with fictional users, orders and provider/payment simulators only",
-  "productionDeploymentAuthorised": false,
-  "productionResourcesForbidden": ["shift-partner-portal", "shift-hq-clinical-portal", "shift-core", "88f40aed-cb23-4372-8c94-8a73f48bc847"],
+  "productionResourcesForbidden": [
+    "shift-partner-portal",
+    "shift-hq-clinical-portal",
+    "shift-core",
+    "88f40aed-cb23-4372-8c94-8a73f48bc847"
+  ],
   "requiredIsolatedBindings": [
-    {"name":"RX_GATEWAY", "kind":"Worker", "proposedName":"sstrx-functional-v3-qa", "status":"NOT PROVISIONED"},
-    {"name":"CLINICAL", "kind":"Worker service", "proposedName":"sstrx-functional-v3-qa-clinical", "status":"NOT PROVISIONED"},
-    {"name":"HQ_AUTH", "kind":"native test identity service", "proposedName":"sstrx-functional-v3-qa-core", "status":"NOT PROVISIONED"},
-    {"name":"DB", "kind":"D1", "proposedName":"sstrx-functional-v3-qa-db", "status":"NOT PROVISIONED"},
-    {"name":"CLINICAL_PRIVATE_FILES", "kind":"private object storage", "proposedName":"sstrx-functional-v3-qa-files", "status":"NOT PROVISIONED"}
+    {
+      "name": "RX_GATEWAY",
+      "kind": "Worker",
+      "proposedName": "sstrx-functional-v3-qa",
+      "status": "NOT PROVISIONED"
+    },
+    {
+      "name": "HQ_ASSETS",
+      "kind": "Worker static assets",
+      "proposedName": "sstrx-functional-v3-qa-hq",
+      "status": "NOT PROVISIONED in last inventory; current provisioning unverified"
+    },
+    {
+      "name": "CLINICAL",
+      "kind": "Worker service",
+      "proposedName": "sstrx-functional-v3-qa-clinical",
+      "status": "NOT PROVISIONED"
+    },
+    {
+      "name": "HQ_AUTH",
+      "kind": "native test identity service",
+      "proposedName": "sstrx-functional-v3-qa-core",
+      "status": "NOT PROVISIONED"
+    },
+    {
+      "name": "DB",
+      "kind": "D1",
+      "proposedName": "sstrx-functional-v3-qa-db",
+      "status": "NOT PROVISIONED"
+    },
+    {
+      "name": "CLINICAL_PRIVATE_FILES",
+      "kind": "private object storage",
+      "proposedName": "sstrx-functional-v3-qa-files",
+      "status": "NOT PROVISIONED"
+    }
   ],
   "requirements": [
-    "Confirm private hostnames and existing access control for named reviewers; no public role-switching fixture.",
+    "Use exactly the approved QA hosts, named reviewer policy and 30-minute PIN-only session. Validate the JWT signature, issuer, saved application audience and named identity at every externally reachable origin; close workers.dev and preview alternatives.",
     "Use new isolated resource identifiers. Never run wrangler.sstrx-candidate.jsonc for QA because it names production services.",
     "Use existing identity implementation and shared records in this isolated test stack; no separate Rx member-account implementation.",
     "No real credentials, patient data, real prescription, Stripe live key, supplier transport or outbound messaging binding.",
@@ -19,6 +54,37 @@
     "Record physical iPhone/PWA and Android wrapper results; a 390 px browser frame is not a device result.",
     "Any cost, plan change, external message or real provider test submission requires its separate explicit approval."
   ],
-  "actionNeeded": "Supply or authorise the exact isolated resource identifiers, private hostnames and reviewer access. If new resources or cost are needed, present the exact provisioning/cost request before applying it.",
-  "notAnAutoReviewRequest": true
+  "actionNeeded": "Complete the joined isolated deployment configuration, remaining HQ/member/Core origin and cookie routes, synthetic native identity and records, resource-binding verification and sandbox sinks. Verify existing plan limits before provisioning; any additional cost or paid plan still needs exact approval. The saved Access configuration is already approved: do not request its approval again.",
+  "notAnAutoReviewRequest": true,
+  "ownerProductionReleaseIntentAuthorised": true,
+  "productionReady": false,
+  "approvedAccessConfiguration": {
+    "applicationId": "f5a742b7-16e0-4d38-beb8-8a5cb3f6df46",
+    "policyId": "6191cb04-d628-45f5-9df9-5851973fdd26",
+    "issuer": "https://little-queen-e78e.cloudflareaccess.com",
+    "audience": "d7e00b4b7ba7072df594592b1af11131f13e5f4a6f538eacf0083e4e60a6deed",
+    "hosts": {
+      "RX_GATEWAY": "rx-qa.sstrx.co.uk",
+      "HQ_ASSETS": "hq-qa.sstrx.co.uk",
+      "MY_TIMBER": "my-qa.sstrx.co.uk",
+      "CORE_API": "api-qa.sstrx.co.uk"
+    },
+    "loginMethod": "One-time PIN only",
+    "reviewerEmails": [
+      "matt@shiftsometimber.co.uk",
+      "shiftsometimber@gmail.com",
+      "sstrx@shiftsometimber.co.uk"
+    ],
+    "sessionDuration": "30m",
+    "configurationVerifiedAt": "2026-11-06T10:40:33Z",
+    "actualSignInAndDenyTests": "NOT RUN"
+  },
+  "implementationState": {
+    "rxPrivateEntry": "qa/rx-private-entry.mjs, synthetic-only, exact QA RX origin and host-bound native session",
+    "signingOrigin": "QA accepted only for synthetic environment; professional signature controls retained",
+    "hqAssetsNativeApiMemberOriginRouting": "IMPLEMENTATION / hosted qualification remains",
+    "allOriginProtection": "RX wrapper implemented; remaining external entrypoints require the same validated boundary",
+    "isolatedResourceBindings": "NOT PROVISIONED / VERIFIED",
+    "realProviderOrPaymentTransports": "Forbidden in QA"
+  }
 }
