@@ -16,6 +16,7 @@
   function showMoney(data,state){
    let html='<p>Money defaults to TODAY · processor capture event-time. Commercial order lines below retain their separately labelled creation-cohort basis.</p><div class="hq-v3-gates">';
    for(const [key,label] of [['captured','Processor captures'],['accounting','Accounting revenue'],['cash','Bank cash'],['contribution','Contribution']])html+='<article><h3>'+label+'</h3><strong>'+gbp(data[key]?.value)+'</strong>'+gap(data[key])+'</article>';
+   const receipt=data.medicine_capture_receipts;html+='<article><h3>Medicine payment receipts</h3><strong>'+gbp(receipt?.value)+'</strong>'+gap(receipt)+(receipt?.status==='available'?'<p>'+esc(receipt.capture_count)+' confirmed payment(s) · '+esc(receipt.receipt_count)+' retained receipt event(s). Legacy paid orders in the separate order-creation cohort without a receipt: '+esc(receipt.legacy_paid_orders_in_creation_cohort)+'.</p><p>'+esc(receipt.recognition_basis)+'</p>':'')+'</article>';
    html+='</div><p>Compare '+(state.form.elements.compare.checked?'ON':'OFF')+'. '+(state.form.elements.compare.checked?'Previous window: '+esc(data.contract?.comparison?.since)+' → '+esc(data.contract?.comparison?.until)+'. Deltas Unavailable while either source period is incomplete.':'Base period totals are unchanged.')+'</p><button type="button" data-existing="products">Open catalogue admin</button>';return html;
   }
   function render(id,data,state){
