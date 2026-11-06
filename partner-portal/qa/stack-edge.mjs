@@ -1,3 +1,4 @@
+import {qaPageRequestAllowed} from './page-navigation.mjs';
 import {createSstrxPortal} from '../sstrx-worker.mjs';
 import {createQaAccessBoundary} from './access-boundary.mjs';
 import {createQaNativeOrigin} from './native-origin.mjs';
@@ -12,7 +13,7 @@ const rx=createQaAccessBoundary(createSstrxPortal(QA_RX_ORIGIN));
 const reviewerRuntime=createQaAccessBoundary({fetch(){return new Response(REVIEWER_EXPIRY_CLIENT,{headers:{...privateHeaders,'Content-Type':'text/javascript; charset=utf-8'}})}});
 const pages=createQaAccessBoundary({async fetch(request,env){
  const u=new URL(request.url),origin=request.headers.get('Origin');
- if(!['GET','HEAD'].includes(request.method)||origin&&origin!==u.origin||request.headers.get('Sec-Fetch-Site')==='cross-site')return new Response('TEST origin required',{status:403,headers:privateHeaders});
+ if(!qaPageRequestAllowed(request))return new Response('TEST origin required',{status:403,headers:privateHeaders});
  if(u.hostname==='my-qa.sstrx.co.uk'&&u.pathname==='/test-purchase')return new Response(null,{status:303,headers:{...privateHeaders,Location:u.origin+'/qa/start'}});
  if(u.hostname==='my-qa.sstrx.co.uk'&&u.pathname==='/test-checkout')return new Response('This old fictional checkout format has been retired. Check the existing order in My Shift before starting any new attempt.',{status:410,headers:{...privateHeaders,'Content-Type':'text/plain; charset=utf-8'}});
  let response;

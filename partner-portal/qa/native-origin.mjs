@@ -1,3 +1,4 @@
+import {qaPageRequestAllowed} from './page-navigation.mjs';
 // Isolated deployment adapter over the unchanged native identity/API handlers.
 // It is not an account store, role source, public proxy or production entry.
 import {createQaAccessBoundary} from './access-boundary.mjs';
@@ -32,7 +33,8 @@ export function createQaNativeOrigin(handler,{host}={},accessOptions){
   const cataloguePage=host==='hq-qa.sstrx.co.uk'&&['/hq/catalogue-controls','/hq/radar-controls','/hq/radar-social'].includes(url.pathname)&&['GET','HEAD'].includes(request.method);
   const legacyCrm=host==='hq-qa.sstrx.co.uk'&&url.pathname.startsWith('/v1/crm/');
   const authConfig=host==='hq-qa.sstrx.co.uk'&&url.pathname==='/v1/auth/turnstile-config'&&request.method==='GET';
-  if(url.origin!==origin||!url.pathname.startsWith('/v1/')&&!cataloguePage||request.headers.get('Sec-Fetch-Site')==='cross-site'||supplied&&supplied!==origin||!['GET','HEAD'].includes(request.method)&&supplied!==origin)return denied();
+  if(cataloguePage&&!qaPageRequestAllowed(request))return denied();
+  if(url.origin!==origin||!url.pathname.startsWith('/v1/')&&!cataloguePage||request.headers.get('Sec-Fetch-Site')==='cross-site'&&!cataloguePage||supplied&&supplied!==origin||!['GET','HEAD'].includes(request.method)&&supplied!==origin)return denied();
   if(host==='my-qa.sstrx.co.uk'&&url.pathname.startsWith('/v1/hq/'))return denied();
   if(host==='hq-qa.sstrx.co.uk'&&!url.pathname.startsWith('/v1/hq/')&&!cataloguePage&&!legacyCrm&&!authConfig)return denied();
   const logical=url.pathname.startsWith('/v1/hq/')||cataloguePage||legacyCrm||authConfig?'https://hq.shiftsometimber.co.uk':'https://shiftsometimber.co.uk';

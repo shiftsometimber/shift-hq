@@ -53,3 +53,13 @@ test('Existing catalogue and Social admin pages remain read-only and confined to
  assert.equal(seen.length,3);assert.ok(seen.every(x=>new URL(x.url).hostname==='api.shiftsometimber.co.uk'&&x.origin==='https://hq.shiftsometimber.co.uk'));
  assert.equal((await app.fetch(new Request('https://hq-qa.sstrx.co.uk/hq/admin-email-test',{headers:{'Cf-Access-Jwt-Assertion':a.token}}),{SSTRX_ENVIRONMENT:'synthetic'})).status,403);
 });
+
+test('Catalogue HTML accepts reviewer document return while the same cross-site headers still cannot read native APIs',async()=>{
+ const a=await access();let calls=0;const app=createQaNativeOrigin({fetch(){calls++;return new Response('TEST catalogue',{headers:{'Content-Type':'text/html'}})}},{host:'hq-qa.sstrx.co.uk'},a.options);
+ const headers={'Cf-Access-Jwt-Assertion':a.token,'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'};
+ const request=(path,extra={})=>new Request('https://hq-qa.sstrx.co.uk'+path,{headers:{...headers,...extra}});
+ assert.equal((await app.fetch(request('/hq/catalogue-controls'),{SSTRX_ENVIRONMENT:'synthetic'})).status,200);
+ assert.equal((await app.fetch(request('/v1/hq/me'),{SSTRX_ENVIRONMENT:'synthetic'})).status,403);
+ assert.equal((await app.fetch(request('/hq/catalogue-controls',{'Sec-Fetch-Dest':'iframe'}),{SSTRX_ENVIRONMENT:'synthetic'})).status,403);
+ assert.equal(calls,1);
+});
