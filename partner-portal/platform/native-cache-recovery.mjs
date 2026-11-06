@@ -11,6 +11,11 @@ export function createCacheRecovery(cache,getStorage=()=>globalThis.localStorage
  const api={async restore(){if(guarded())return null;return run(()=>cache.restore(),null);},async purge(){mark();const ok=await run(()=>cache.purge(),false);if(ok===true)clear();return ok;},async save(...args){if(guarded()&&await api.purge()!==true)return false;return run(()=>cache.save(...args),false);}};
  return api;
 }
+function repairNativeIntegration(client){
+ const logout='logout$|',copy='Bored? Seven quick games, just for a laugh.';
+ if(client.split(logout).length!==2||client.split(copy).length!==2)throw Error('Native privacy/copy boundaries changed');
+ return client.replace(logout,"logout$|\\/v1\\/member\\/my-shift\\/sign-out$|").replace(copy,'Bored? Eight quick games, just for a laugh.');
+}
 const hash=s=>createHash('sha256').update(s).digest('hex');
 export const NATIVE_CACHE_INPUT_SHA='a77a897d939f76b74cbb5c9e20ad5b2dc833c070aa081c033786cf420cef5b8e';
 function spliceCacheOperations(client){
@@ -23,7 +28,7 @@ function spliceCacheOperations(client){
  const qualified=purge.slice(0,-suffix.length)+'});return true}catch{return false}}';
  return client.replace(purge,qualified).replace(marker,'n=('+createCacheRecovery.toString()+')(makePrivateCache()),a=JSON.parse(t.textContent)');
 }
-export function repairNativeCacheClient(client){if(hash(client)!==NATIVE_CACHE_INPUT_SHA)throw Error('Native cache source must be reconciled');return spliceCacheOperations(client);}
+export function repairNativeCacheClient(client){if(hash(client)!==NATIVE_CACHE_INPUT_SHA)throw Error('Native cache source must be reconciled');return repairNativeIntegration(spliceCacheOperations(client));}
 export function buildNativeCacheClient(client){
  const repaired=repairNativeCacheClient(client),version=hash(repaired+'private-cache-recovery-v1').slice(0,20),source=repaired.replaceAll('26868396173096934c6e',version);
  return {source,version,inputNativeSha:hash(client),outputNativeSha:hash(source)};
@@ -42,7 +47,7 @@ export function patchProgrammeCacheRecovery(source){
   return vm.runInNewContext(code.slice(0,end.index)+';dn',context,{timeout:1000});
  };
  if(plainOf(source)!==client)throw Error('Plain/Brotli native clients differ');
- let next=spliceCacheOperations(source).replaceAll(oldVersion,version);
+ let next=repairNativeIntegration(spliceCacheOperations(source)).replaceAll(oldVersion,version);
  if(plainOf(next)!==nextClient)throw Error('Qualified native build differs from the tested client');
  const encoded=brotliCompressSync(Buffer.from(nextClient),{params:{[constants.BROTLI_PARAM_QUALITY]:11}}).toString('base64');
  const oldBr=compressed[0][0];if(!next.includes(oldBr))throw Error('Retained compressed source changed');

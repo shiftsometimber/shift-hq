@@ -13,6 +13,11 @@ export function installMemberMessages(){
    const u=new URL(a.getAttribute('href')||'',location.origin);
    if(u.origin===location.origin&&u.pathname==='/member/dashboard'&&u.searchParams.get('timber')==='stuff'&&!u.searchParams.has('tools'))a.setAttribute('href','/member/settings');
   }
+  // Existing settings fragments must continue to open their original controls.
+  for(const a of document.querySelectorAll('a[href*="/member/settings#"]')){
+   const u=new URL(a.getAttribute('href')||'',location.origin);
+   if(u.origin===location.origin&&u.pathname==='/member/settings'&&['#notifications','#prefWeight','#healthConsentManager','#deviceHealth','#food'].includes(u.hash)){u.searchParams.set('legacy-settings','1');a.setAttribute('href',u.pathname+u.search+u.hash);}
+  }
   const header=document.querySelector('.mt-shop-brand');if(!header)return;
   let link=document.getElementById('mt-secure-messages-link');
   if(!link){link=document.createElement('a');link.id='mt-secure-messages-link';link.href='/member/messages';link.style.cssText='color:#E7E3DA;background:#050505;border:1px solid #707762;border-radius:8px;padding:10px 12px;min-height:44px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap';header.append(link);}
