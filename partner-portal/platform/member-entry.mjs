@@ -3,12 +3,23 @@ import {routeMyShiftExperience} from './my-shift-experience.mjs';
 export function installMemberMessages(){
  if(document.getElementById('mt-secure-messages-script'))return;
  const marker=document.createElement('span');marker.id='mt-secure-messages-script';marker.hidden=true;document.body.append(marker);
- let alive=true,ready=true,unread=null,pending=false;
+ let alive=true,ready=true,unread=null,pending=false,generation=0;
  const clear=()=>document.getElementById('mt-secure-messages-link')?.remove();
  function mount(){
-  if(!alive||!ready)return clear();
+  if(!alive)return clear();
   const aliases={'#shop':'/member/life-back/shop','#grub':'/member/grub','#fit':'/member/fit','#support':'/member/dashboard?timber=support#today','#more':'/member/settings'};
-  const legacyTarget=value=>{const u=new URL(value,location.origin);if(u.origin!==location.origin||u.pathname!=='/member/dashboard'||u.searchParams.has('tools')||u.searchParams.has('timber')||!aliases[u.hash])return null;const v=new URL(aliases[u.hash],location.origin);for(const [k,x]of u.searchParams)if(!v.searchParams.has(k))v.searchParams.set(k,x);return v.pathname+v.search+v.hash;};
+  const legacyTarget=value=>{
+   const u=new URL(value,location.origin);if(u.origin!==location.origin||u.searchParams.has('tools')||u.searchParams.has('timber'))return null;
+   let path=u.pathname==='/member/dashboard'?aliases[u.hash]:({'/member/support':'/member/life-back/support','/member/more':'/member/settings','/member/messages':'/member/my-shift?view=messages'})[u.pathname];
+   if(u.pathname==='/member/settings'&&u.searchParams.get('legacy-settings')!=='1'){
+    if(u.hash==='#privacy')path='/member/settings?legacy-settings=1#healthConsentManager';
+    if(u.hash==='#memberDetailsPanel'||u.hash==='#memberDeliveryPanel')path='/member/my-shift/profile'+u.hash;
+   }
+   if(!path)return null;const v=new URL(path,location.origin);for(const [k,x]of u.searchParams)if(!v.searchParams.has(k))v.searchParams.set(k,x);
+   if(u.pathname!=='/member/dashboard'&&!v.hash)v.hash=u.hash;
+   if(v.pathname==='/member/settings'&&v.hash==='#privacy'){v.searchParams.set('legacy-settings','1');v.hash='#healthConsentManager';}
+   return v.pathname+v.search+v.hash;
+  };
   for(const a of document.querySelectorAll('a[href]')){const target=legacyTarget(a.getAttribute('href'));if(target)a.setAttribute('href',target);}
   const target=legacyTarget(location.href);
   if(target&&document.body.hasAttribute('data-mt-native-shell')&&document.body.dataset.memberSession==='ready'){
@@ -46,30 +57,32 @@ export function installMemberMessages(){
     section.append(heading,copy,link);pwa.before(section);
    }
   }
+  if(!ready)return clear();
   const header=document.querySelector('.mt-shop-brand');if(!header)return;
   let link=document.getElementById('mt-secure-messages-link');
-  if(!link){link=document.createElement('a');link.id='mt-secure-messages-link';link.href='/member/messages';link.style.cssText='color:#E7E3DA;background:#050505;border:1px solid #707762;border-radius:8px;padding:10px 12px;min-height:44px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap';header.append(link);}
+  if(!link){link=document.createElement('a');link.id='mt-secure-messages-link';link.href='/member/my-shift?view=messages';link.style.cssText='color:#E7E3DA;background:#050505;border:1px solid #707762;border-radius:8px;padding:10px 12px;min-height:44px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap';header.append(link);}
   const label=unread?'Messages · '+unread+' unread':'Messages';
   if(link.textContent!==label)link.textContent=label;
   link.setAttribute('aria-label',unread===null?'Messages — unread status unavailable':label);
  }
  async function refresh(){
-  if(!alive||pending||document.hidden)return;pending=true;
+  if(!alive||pending||document.hidden)return;pending=true;const version=generation;
   try{
-   const r=await fetch('/v1/member/secure-messages',{credentials:'same-origin',cache:'no-store'});
-   if(!alive)return;
+   const r=await fetch('/v1/member/my-shift?projection=message-count',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)});
+   if(!alive||version!==generation)return;
    if(r.status===401||r.status===403){ready=false;clear();return;}
-   if(!r.ok)throw Error('unavailable');const d=await r.json();if(!alive)return;
-   ready=true;unread=d.threads.filter(t=>t.unread).length;mount();
-  }catch{unread=null;const link=document.getElementById('mt-secure-messages-link');if(link){link.textContent='Messages';link.setAttribute('aria-label','Messages — unread status unavailable');}}
+   if(!r.ok)throw Error('unavailable');const d=await r.json();if(!alive||version!==generation)return;if(!Number.isInteger(d.unread)||d.unread<0)throw Error('unread status unavailable');
+   ready=true;unread=d.unread;mount();
+  }catch{if(!alive||version!==generation)return;unread=null;const link=document.getElementById('mt-secure-messages-link');if(link){link.textContent='Messages';link.setAttribute('aria-label','Messages — unread status unavailable');}}
   finally{pending=false;}
  }
+ const accountChanged=()=>{generation++;ready=false;unread=null;clear();};document.addEventListener('sst:account-changed',accountChanged);
  const observer=new MutationObserver(mount);observer.observe(document.body,{childList:true,subtree:true});
  const resume=e=>{if(e.persisted){window.removeEventListener('pageshow',resume);marker.remove();installMemberMessages();}};
  window.addEventListener('pageshow',resume);
  const timer=setInterval(refresh,60000);
  window.addEventListener('focus',refresh);window.addEventListener('hashchange',mount);window.addEventListener('popstate',mount);document.addEventListener('sstrx-message-change',refresh);
- window.addEventListener('pagehide',()=>{alive=false;ready=false;clear();observer.disconnect();clearInterval(timer);window.removeEventListener('focus',refresh);window.removeEventListener('hashchange',mount);window.removeEventListener('popstate',mount);document.removeEventListener('sstrx-message-change',refresh);},{once:true});
+ window.addEventListener('pagehide',()=>{alive=false;ready=false;clear();observer.disconnect();clearInterval(timer);window.removeEventListener('focus',refresh);window.removeEventListener('hashchange',mount);window.removeEventListener('popstate',mount);document.removeEventListener('sstrx-message-change',refresh);document.removeEventListener('sst:account-changed',accountChanged);},{once:true});
  mount();refresh();
 }
 export const MEMBER_ENTRY_CLIENT='('+installMemberMessages.toString()+')();';
