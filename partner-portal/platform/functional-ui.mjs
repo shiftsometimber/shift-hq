@@ -62,6 +62,12 @@ export function functionalClient(){
   submit(form,'Create fictional provider contract',async()=>{await api('integrations/stub-contract',{contractReference:reference.value.trim(),clinicalOrgId:clinical.value,pharmacyOrgId:pharmacy.value,variantId:Number(variant.value),approvalReference:approval.value.trim()});await finance();});c.append(form);
   if(state.contracts.length){const handover=node('form'),order=field(handover,'Signed fictional order','text',overview.records.filter(x=>x.rxStatus==='issued'&&!['delivered','cancelled','returned'].includes(x.pharmacyStatus)).map(x=>({id:x.orderNumber,label:x.orderNumber}))),contract=field(handover,'Fictional provider contract','text',state.contracts.map(x=>({id:x.id,label:JSON.parse(x.config_json).contractReference||x.id}))),authorisation=field(handover,'TEST handover authorisation reference');authorisation.value='TEST-ONLY-OWNER-HANDOVER';
    submit(handover,'Submit to fictional provider',async()=>{const r=await api('integrations/stub-handover',{orderReference:order.value,contractId:contract.value,approvalReference:authorisation.value.trim()});byId('rx-notice').textContent=r.state==='uncertain'?'Provider result unknown. Reconcile the existing submission before any retry.':'Fictional transport '+r.state+'. Pharmacy acceptance remains separate.';await finance();document.dispatchEvent(new Event('partner-order-sync'));});c.append(handover);}
+  if(state.testLifecycleSetupAvailable)for(const item of state.contracts){
+   const config=JSON.parse(item.config_json);if(config.simulation!==true)continue;
+   const rules=fold('Fictional withdrawal rules · '+(config.contractReference||item.id)),form=node('form'),approval=field(form,'TEST withdrawal setup reference');approval.value='TEST-ONLY-FICTIONAL-WITHDRAWAL';let command;
+   rules.append(node('p','Prepares cancellation, amendment and replacement rules for fictional cases only. Existing professional rules cannot be replaced. Real clinical and pharmacy approval is still required before live use.'));
+   submit(form,'Prepare fictional withdrawal rules',async()=>{command=command||{contractId:item.id,clinicalVersion:item.clinical_config_version,pharmacyVersion:item.pharmacy_config_version,approvalReference:approval.value.trim(),clientReference:crypto.randomUUID()};await api('integrations/stub-lifecycle',command);byId('rx-notice').textContent='Fictional withdrawal rules saved. No real clinical or pharmacy approval was recorded.';await finance();});rules.append(form);c.append(rules);
+  }
   for(const job of state.jobs){c.append(node('p',job.order_number+' · '+job.state));if(['uncertain','submitting'].includes(job.state)){const f=node('form');submit(f,'Reconcile existing fictional submission',async()=>{await api('integrations/reconcile',{id:job.id});await finance();});c.append(f);}}
   host.append(c);
  }
@@ -101,6 +107,22 @@ export function functionalClient(){
     item.append(resolve);const inspect=node('button','View saved ownership history');inspect.type='button';inspect.onclick=async()=>{inspect.disabled=true;try{const detail=await api('finance-exceptions/'+e.id),list=node('div');for(const h of detail.history)list.append(node('p',h.action+' · '+new Date(h.createdAt).toLocaleString('en-GB',{timeZone:'Europe/London'})+' · '+h.sourceReference));if(!detail.history.length)list.append(node('p','No ownership changes recorded.'));inspect.replaceWith(list);}catch(error){byId('rx-notice').textContent=error.message;inspect.disabled=false;}};item.append(inspect);exceptions.append(item);
    }
    if(!exceptionData.exceptions.length)exceptions.append(node('p','No open finance exceptions in this view.'));host.append(exceptions);
+   if(d.fullCommercial&&d.statementTransportAvailable){
+    const section=fold('Reconcile a provider statement'),form=node('form'),owners=(exceptionData.owners||[]).filter(o=>Number.isSafeInteger(o.id??o.userId)).map(o=>({id:String(o.id??o.userId),label:o.name}));
+    section.append(node('p',d.statementMode==='synthetic'?'Private testing: the statement comes from the simulated provider’s retained payments and refunds. It does not represent a bank balance.':'Compare the provider statement with the period’s saved finance entries.'));
+    if(owners.length){
+     const from=field(form,'Statement period starts','datetime-local'),to=field(form,'Statement period ends','datetime-local'),source=field(form,'Statement source'),owner=field(form,'Variance review owner','text',owners),due=field(form,'Variance response due','datetime-local');let command;
+     if(d.statementMode==='synthetic'){source.value='Fictional provider statement';source.readOnly=true;}
+     form.addEventListener('input',()=>{command=null;});
+     submit(form,'Reconcile provider statement',async()=>{
+      if(!command){const fromAt=ukTime(from.value),toAt=ukTime(to.value);command={fromAt,toAt,ownerUserId:Number(owner.value),dueAt:ukTime(due.value),orderReference:'ALL',sourceReference:d.statementMode==='synthetic'?'TEST-QA-STMT-'+reference()+'-'+Date.parse(fromAt)+'-'+Date.parse(toAt):source.value.trim()};}
+      const result=await api('reconciliation',command);byId('rx-notice').textContent=result.state==='matched'?'The statement matches the saved finance entries for this period.':'A statement variance was recorded and assigned for review.';await finance();
+     });section.append(form);
+    }else section.append(node('p','A current finance review owner is required before reconciliation.'));
+    const saved=await api('reconciliation');if(turn!==generation)return;
+    for(const run of saved.runs||[])section.append(node('p',run.from_at.slice(0,10)+' to '+run.to_at.slice(0,10)+' · '+run.state+' · Variance '+new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(run.variance_pence/100)));
+    host.append(section);
+   }
    if(d.fullCommercial)await providerManagement(host,turn);
   }catch(e){host.replaceChildren(node('p',e.message));}
  }
