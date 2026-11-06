@@ -1,6 +1,6 @@
 // Refund commands reuse the existing paid order and finance ledger. A request or
 // an HTTP acknowledgement can never masquerade as processor completion.
-import {fail,text,pence,digest,readObject} from './domain.mjs';
+import {fail,text,pence,digest,readObject,economicsTerms} from './domain.mjs';
 import {authCondition} from '../service/clinical-kernel.mjs';
 import {passwordSignInAllowed} from '../password-signin.mjs';
 const at=()=>new Date().toISOString(),rows=async q=>(await q.all()).results||[];
@@ -40,6 +40,23 @@ async function processorRequest(env,r,paymentIntent){
  if(env.REFUND_TEST_TRANSPORT)return env.REFUND_TEST_TRANSPORT.fetch(new Request('https://api.stripe.com/v1/refunds',options));
  if(!/^sk_test_/.test(env.STRIPE_SECRET_KEY||''))fail(503,'stripe_test_credentials_required');
  options.headers.Authorization='Bearer '+env.STRIPE_SECRET_KEY;return fetch('https://api.stripe.com/v1/refunds',{...options,signal:AbortSignal.timeout(15000)});
+}
+async function validatedRefundEconomics(env,orderNumber){
+ const row=await env.DB.prepare('SELECT e.version,e.terms_json,m.total_pence,m.currency FROM rx_economics e JOIN medicine_orders m ON m.order_number=e.order_number WHERE e.order_number=?').bind(orderNumber).first();
+ if(!row)fail(409,'order_economics_required_for_refund_reconciliation');
+ let terms;try{const raw=JSON.parse(row.terms_json);if(raw.currency!=='GBP')throw Error('currency');terms=economicsTerms(raw);}catch{fail(409,'valid_order_economics_required_for_refund_reconciliation');}
+ if(!Number.isSafeInteger(row.version)||row.version<1||String(row.currency).toUpperCase()!=='GBP'||terms.sellingPence!==row.total_pence)fail(409,'matching_order_economics_required_for_refund_reconciliation');
+ return {version:row.version,json:row.terms_json,approvalReference:terms.approvalReference};
+}
+function economicsCondition(orderNumber,economics){return {sql:'EXISTS(SELECT 1 FROM rx_economics WHERE order_number=? AND version=? AND terms_json=?)',args:[orderNumber,economics.version,economics.json]};}
+async function processorLookup(env,r){
+ if(env.SSTRX_ENVIRONMENT!=='synthetic'||env.SSTRX_REFUND_TEST_EXECUTION_ENABLED!=='true')fail(503,'refund_reconciliation_not_authorised');
+ const url='https://api.stripe.com/v1/refunds/'+encodeURIComponent(r.processor_reference);
+ const options={method:'GET',headers:{'Idempotency-Key':r.idempotency_key}};
+ if(env.REFUND_TEST_TRANSPORT)return env.REFUND_TEST_TRANSPORT.fetch(new Request(url,options));
+ if(!/^sk_test_/.test(env.STRIPE_SECRET_KEY||''))fail(503,'stripe_test_credentials_required');
+ options.headers.Authorization='Bearer '+env.STRIPE_SECRET_KEY;
+ return fetch(url,{...options,signal:AbortSignal.timeout(15000)});
 }
 export async function refundRoute(request,env,a,parts){
  if(parts[0]!=='refunds'&&parts[0]!=='reconciliation')return null;
@@ -97,12 +114,33 @@ export async function refundRoute(request,env,a,parts){
   const delegated=auth.delegated?' AND EXISTS(SELECT 1 FROM rx_finance_authorities WHERE hq_user_id=? AND expires_at>? AND limit_pence>=?)':'';
   const results=await env.DB.batch([env.DB.prepare(`UPDATE rx_refunds SET state='approved',version=version+1,approved_by=?,approval_reference=?,updated_at=? WHERE id=? AND version=? AND state='requested' AND ${g.sql}${delegated}`).bind(a.id,b.approvalReference,at(),r.id,r.version,...g.args,...auth.delegated?[a.id,at(),r.amount_pence]:[]),eventStatement(env,r,'approved',b.approvalReference,a.id),env.DB.prepare("INSERT INTO rx_finance_exceptions SELECT ?,?,'refund_watch','watching',?,?,?,? WHERE EXISTS(SELECT 1 FROM rx_refunds WHERE id=? AND version=? AND state='approved')").bind('refund:'+r.id,r.order_number,a.id,b.exceptionDueAt,JSON.stringify({refundId:r.id,approvalReference:b.approvalReference,automaticRetry:false}),at(),r.id,r.version+1)]);if(results[0].meta.changes!==1)fail(409,'refund_or_authority_changed');return publicRefund(await env.DB.prepare('SELECT * FROM rx_refunds WHERE id=?').bind(r.id).first());
  }
+ if(parts[2]==='reconcile'&&request.method==='POST'){
+  if(!a.mfa)fail(403,'finance_mfa_required');
+  if(!['submitted','unknown','requires_action','completed','failed'].includes(r.state)||!/^re_[A-Za-z0-9_]{1,180}$/.test(r.processor_reference||'')||!r.approved_by||!r.approval_reference)fail(409,'known_approved_processor_refund_required');
+  if(r.amount_pence>auth.limit)fail(403,'refund_exceeds_approval_authority');
+  if(r.state==='completed'){
+   const current=await env.DB.prepare('SELECT 1 present WHERE ('+g.sql+") AND EXISTS(SELECT 1 FROM rx_refunds WHERE id=? AND version=? AND state='completed')").bind(...g.args,r.id,r.version).first();
+   if(!current)fail(409,'refund_or_access_changed');
+   return {...publicRefund(r),reconciled:true,duplicate:true};
+  }
+  const economics=await validatedRefundEconomics(env,r.order_number),eg=economicsCondition(r.order_number,economics);
+  let response;try{response=await processorLookup(env,r);}catch(e){if(e.status)throw e;fail(503,'refund_lookup_unavailable');}
+  const receipt=await response.json().catch(()=>null);
+  if(!response.ok||!receipt||receipt.id!==r.processor_reference||receipt.object!=='refund'||receipt.livemode===true||!Number.isInteger(receipt.created)||receipt.created<=0||receipt.created>Math.floor(Date.now()/1000)+300||!['pending','requires_action','succeeded','failed','canceled'].includes(receipt.status))fail(502,'refund_lookup_not_verified');
+  const source=await env.DB.prepare('SELECT COALESCE(s.payment_intent,m.stripe_payment_intent_id) payment_intent FROM medicine_orders m LEFT JOIN rx_refund_sources s ON s.refund_id=? WHERE m.order_number=?').bind(r.id,r.order_number).first();
+  if(receipt.amount!==r.amount_pence||receipt.currency!=='gbp'||receipt.payment_intent!==source?.payment_intent)fail(409,'refund_receipt_does_not_match');
+  const reconciliation={termsApprovalReference:economics.approvalReference,termsVersion:economics.version,originalTermsReference:r.terms_reference};
+  const event={id:'lookup:'+r.processor_reference+':'+await digest({receipt,reconciliation}),created:receipt.created,data:{object:receipt},reconciliation};
+  const result=await applyRefundReceipt(env,event,'authenticated_test_api',{refundId:r.id,version:r.version,actorId:a.id,guard:{sql:'('+g.sql+') AND '+eg.sql,args:[...g.args,...eg.args]},sourceReference:JSON.stringify({action:'reconcile',eventId:event.id,...reconciliation})});
+  return {...publicRefund(await env.DB.prepare('SELECT * FROM rx_refunds WHERE id=?').bind(r.id).first()),reconciled:result.recorded===true||result.duplicate===true,duplicate:result.duplicate===true,stale:result.stale===true};
+ }
  if(parts[2]==='submit'&&request.method==='POST'){
   if(!['approved','unknown'].includes(r.state))fail(409,'approved_or_unknown_refund_required');
   if(r.amount_pence>auth.limit)fail(403,'refund_exceeds_approval_authority');
   if(env.SSTRX_ENVIRONMENT!=='synthetic'||env.SSTRX_REFUND_TEST_EXECUTION_ENABLED!=='true')fail(503,'refund_execution_not_authorised');
   const order=await env.DB.prepare('SELECT COALESCE(s.payment_intent,o.stripe_payment_intent_id) stripe_payment_intent_id FROM medicine_orders o LEFT JOIN rx_refund_sources s ON s.refund_id=? WHERE o.order_number=?').bind(r.id,r.order_number).first();if(!/^pi_/.test(order?.stripe_payment_intent_id||''))fail(409,'verified_processor_payment_reference_required');
-  const reserved=await env.DB.prepare(`UPDATE rx_refunds SET state='submitting',version=version+1,updated_at=? WHERE id=? AND version=? AND state IN ('approved','unknown') AND ${g.sql}`).bind(at(),r.id,r.version,...g.args).run();if(reserved.meta.changes!==1)fail(409,'refund_or_access_changed');
+  const economics=await validatedRefundEconomics(env,r.order_number),eg=economicsCondition(r.order_number,economics);
+  const reserved=await env.DB.prepare(`UPDATE rx_refunds SET state='submitting',version=version+1,updated_at=? WHERE id=? AND version=? AND state IN ('approved','unknown') AND ${g.sql} AND ${eg.sql}`).bind(at(),r.id,r.version,...g.args,...eg.args).run();if(reserved.meta.changes!==1)fail(409,'refund_or_access_changed');
   let response;try{response=await processorRequest(env,r,order.stripe_payment_intent_id);}catch(e){await env.DB.prepare("UPDATE rx_refunds SET state='unknown',last_error='processor_outcome_unknown',version=version+1,updated_at=? WHERE id=? AND state='submitting'").bind(at(),r.id).run();return {...publicRefund(await env.DB.prepare('SELECT * FROM rx_refunds WHERE id=?').bind(r.id).first()),reconcileUsingSameIdempotencyKey:true};}
   const receipt=await response.json().catch(()=>null);
   if(!response.ok||!receipt||!/^re_/.test(receipt.id||'')||receipt.amount!==r.amount_pence||receipt.currency!=='gbp'||receipt.payment_intent!==order.stripe_payment_intent_id){await env.DB.prepare("UPDATE rx_refunds SET state='unknown',last_error='processor_receipt_not_verified',version=version+1,updated_at=? WHERE id=? AND state='submitting'").bind(at(),r.id).run();fail(502,'refund_processor_outcome_unknown');}
@@ -114,21 +152,27 @@ export async function refundRoute(request,env,a,parts){
  }
  fail(404,'refund_action_not_found');
 }
-export async function applyRefundReceipt(env,event,source){
+export async function applyRefundReceipt(env,event,source,command=null){
  if(!['verified_stripe_webhook','authenticated_test_api'].includes(source))fail(403,'verified_processor_receipt_required');
  if(source==='authenticated_test_api'&&env.SSTRX_ENVIRONMENT!=='synthetic')fail(403,'synthetic_receipt_forbidden');
  const object=event.data?.object;if(!object||!/^re_/.test(object.id||'')||!Number.isInteger(event.created))fail(422,'valid_refund_receipt_required');text(event.id,200);
+ if(command){
+  if(source!=='authenticated_test_api'||!Number.isSafeInteger(command.actorId)||!Number.isSafeInteger(command.version)||!command.guard?.sql||!Array.isArray(command.guard.args))fail(403,'refund_reconciliation_command_required');
+  const active=await env.DB.prepare('SELECT 1 present WHERE '+command.guard.sql).bind(...command.guard.args).first();if(!active)fail(409,'refund_terms_or_access_changed');
+  const current=await env.DB.prepare('SELECT version FROM rx_refunds WHERE id=?').bind(command.refundId).first();if(current?.version!==command.version)fail(409,'refund_changed');
+ }
  const payload=await digest(event),prior=await env.DB.prepare('SELECT payload_digest FROM rx_refund_receipts WHERE event_id=?').bind(event.id).first();if(prior){if(prior.payload_digest!==payload)fail(409,'processor_event_conflict');return {duplicate:true};}
  const r=await env.DB.prepare('SELECT r.*,COALESCE(s.payment_intent,m.stripe_payment_intent_id) stripe_payment_intent_id FROM rx_refunds r JOIN medicine_orders m ON m.order_number=r.order_number LEFT JOIN rx_refund_sources s ON s.refund_id=r.id WHERE r.processor_reference=?').bind(object.id).first();if(!r)fail(404,'submitted_refund_not_found');
+ if(command&&(command.refundId!==r.id||command.version!==r.version))fail(409,'refund_changed');
  if(object.amount!==r.amount_pence||object.currency!=='gbp'||object.payment_intent!==r.stripe_payment_intent_id)fail(409,'refund_receipt_does_not_match');
  const last=await env.DB.prepare('SELECT MAX(occurred_at) at FROM rx_refund_receipts WHERE refund_id=?').bind(r.id).first();if(last?.at>event.created)return {stale:true};
  const next=object.status==='succeeded'?'completed':['failed','canceled'].includes(object.status)?'failed':object.status==='requires_action'?'requires_action':'submitted';
  if(r.state==='completed'&&next==='submitted')return {stale:true};
  if(r.state==='failed'&&next!=='failed')return {stale:true};
  const date=at(),v=r.version+1,sql=[
-  env.DB.prepare('UPDATE rx_refunds SET state=?,version=?,last_error=?,updated_at=? WHERE id=? AND version=? AND NOT EXISTS(SELECT 1 FROM rx_refund_receipts WHERE refund_id=? AND occurred_at>?)').bind(next,v,next==='failed'?'processor_refund_failed':null,date,r.id,r.version,r.id,event.created),
+  env.DB.prepare('UPDATE rx_refunds SET state=?,version=?,last_error=?,updated_at=? WHERE id=? AND version=? AND NOT EXISTS(SELECT 1 FROM rx_refund_receipts WHERE refund_id=? AND occurred_at>?)'+(command?' AND ('+command.guard.sql+')':'')).bind(next,v,next==='failed'?'processor_refund_failed':null,date,r.id,r.version,r.id,event.created,...command?command.guard.args:[]),
   env.DB.prepare('INSERT INTO rx_refund_receipts SELECT ?,?,?,?,?,?,? WHERE changes()=1').bind(event.id,r.id,object.id,payload,object.status,event.created,date),
-  env.DB.prepare('INSERT INTO rx_refund_events SELECT ?,?,?,?, ?,NULL,? WHERE EXISTS(SELECT 1 FROM rx_refund_receipts WHERE event_id=?)').bind(crypto.randomUUID(),r.id,v,next,event.id,date,event.id)
+  env.DB.prepare('INSERT INTO rx_refund_events SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM rx_refund_receipts WHERE event_id=?)').bind(crypto.randomUUID(),r.id,v,next,command?.sourceReference||event.id,command?.actorId||null,date,event.id)
  ];
  const terms=await env.DB.prepare('SELECT order_number FROM rx_economics WHERE order_number=?').bind(r.order_number).first();
  if(next==='completed'&&r.state!=='completed'){
