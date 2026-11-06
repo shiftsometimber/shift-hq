@@ -15,7 +15,7 @@ body.management-hq :is(h2,h3),body.rx-app :is(h2,h3){font-size:20px;line-height:
 body.management-hq :is(b,strong),body.rx-app :is(b,strong){font-weight:700!important}
 body.management-hq :is(button,summary,label,th,.eyebrow,.badge,.hq-action-kind,.hq-data-state,.hq-management-heading h2),body.rx-app :is(button,summary,label,th,.rx-kicker,.clinical-status){font-weight:600!important}
 body.management-hq :is(p,li,dd,dt,label,td,button,input,select,textarea,.sub,.hq-queue-note,.hq-action-bottom>span,.hq-source-row,.hq-owner-gaps p,.retrieval-hit p,.callout,.kv,.mini-row,.task-row span,.person span,.feed-item span,.timeline-event span,.cms-item span),body.rx-app :is(p,li,dd,dt,label,td,button,input,select,textarea){font-size:14px!important;line-height:1.5}
-body.management-hq :is(small,.cards span,.cards em,.hq-headlines span,.hq-headlines small,.hq-muted,.hq-action-top,.hq-action-bottom>span,.hq-source-row small,.hq-workload-row small,.user-chip,.secure,.order-lines span),body.rx-app :is(small,.rx-footnote,.rx-account,.rx-sidebar-foot,.rx-count span,.rx-search,#rx-notice,.rx-access-note){font-size:13px!important;color:var(--professional-secondary)}
+body.management-hq :is(small,.cards span,.cards em,.hq-headlines span,.hq-headlines small,.hq-muted,.hq-action-top,.hq-action-bottom>span,.hq-source-row small,.hq-workload-row small,.user-chip,.secure,.order-lines span),body.rx-app :is(small,.rx-footnote,.rx-account,.rx-sidebar-foot,.rx-count span,#rx-notice,.rx-access-note){font-size:13px!important;color:var(--professional-secondary)}
 body.management-hq :is(th,.eyebrow,.brand small,.badge,.hq-data-state,.hq-nav-count,.chips span),body.rx-app :is(th,.rx-kicker,.rx-top>span,.rx-section-head>span,.rx-bottom,.clinical-status){font-size:12px!important;line-height:1.5;letter-spacing:.04em}
 body.management-hq :is(.hq-headlines strong,.cards strong){font-size:32px;font-weight:600}
 body.management-hq aside,body.rx-app :is(.rx-top,.rx-sidebar){background:var(--professional-chrome);color:var(--professional-cream);border-color:var(--professional-rule)}
@@ -58,6 +58,7 @@ body.rx-app .rx-principle strong{color:var(--professional-cream)}
 body.rx-app .rx-top .rx-account button,body.rx-app .rx-page-head button,body.rx-app[data-functional="true"] .rx-page-head button{color:var(--professional-cream)!important;border-color:#707762}
 body.rx-app :is(.rx-signin,.rx-access-note,.rx-principle,.rx-bottom,.rx-sidebar){border-color:var(--professional-rule)}
 body.rx-app .rx-count strong{font-weight:600}
+body.rx-app label.rx-search{font-size:14px!important}
 body.management-hq :is(.reference,.order-reference,.case-reference,.hq-order-ref,[data-identifier]),body.rx-app :is(.reference,.order-reference,.case-reference,.rx-reference,[data-identifier]){font-family:"IBM Plex Mono",monospace!important;font-size:14px!important;font-weight:400!important;overflow-wrap:anywhere}
 body.management-hq :focus-visible,body.rx-app :focus-visible{outline:3px solid var(--professional-brand-hi)!important;outline-offset:3px}
 body.management-hq :is(button,a,input,select,textarea,summary):disabled,body.rx-app :is(button,input,select,textarea):disabled{cursor:default}

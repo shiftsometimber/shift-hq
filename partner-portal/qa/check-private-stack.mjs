@@ -38,11 +38,29 @@ try{
  async function call(host,p,{body,method,cookies=jar(),token=jwt}={}){const r=await edge.fetch(new Request('https://'+host+p,{method:method||(body===undefined?'GET':'POST'),headers:{Origin:'https://'+host,Cookie:[...cookies].map(([k,v])=>k+'='+v).join('; '),'Cf-Access-Jwt-Assertion':token,'CF-Connecting-IP':'203.0.113.42',...body instanceof FormData?{}:{'Content-Type':'application/json'}},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)}),env,ctx);for(const cookie of r.headers.getSetCookie()){const first=cookie.split(';')[0],at=first.indexOf('='),name=first.slice(0,at),value=first.slice(at+1);if(!value||/Max-Age=0(?:;|$)/i.test(cookie))cookies.delete(name);else cookies.set(name,value);}return r;}
  const json=async(r,status=200)=>{const d=await r.json();assert.equal(r.status,status,JSON.stringify(d));return d};
  for(const host of QA_ACCESS.hosts)assert.equal((await call(host,'/',{token:''})).status,403);report.checks.push('All four external hosts require signed Access assertions');
+ const professionalFontFiles=['SourceSansPro-Regular.woff','SourceSansPro-Semibold.woff','SourceSansPro-Bold.woff','IBMPlexMono-Regular.woff'];
+ for(const host of ['hq-qa.sstrx.co.uk','rx-qa.sstrx.co.uk'])for(const name of professionalFontFiles){
+  const path='/professional-fonts/'+name,response=await call(host,path);assert.equal(response.status,200);assert.equal(response.headers.get('Content-Type'),'font/woff');assert.deepEqual(new Uint8Array(await response.arrayBuffer()),new Uint8Array(await fs.readFile(new URL('../../professional-fonts/'+name,import.meta.url))));
+  assert.equal((await call(host,path,{token:''})).status,403);const head=await call(host,path,{method:'HEAD'});assert.equal(head.status,200);assert.equal((await head.arrayBuffer()).byteLength,0);
+ }
+ assert.equal((await call('my-qa.sstrx.co.uk','/professional-fonts/SourceSansPro-Regular.woff')).status,404);
+ assert.equal((await call('hq-qa.sstrx.co.uk','/professional-fonts/foreign.woff')).status,404);
+ assert.equal((await call('hq-qa.sstrx.co.uk','/professional-fonts/SourceSansPro-Regular.woff',{method:'POST'})).status,404);
+ report.professionalFonts={exactSourceBytes:true,protectedProfessionalHostsOnly:true,missingReviewerDenied:true,headHasNoBody:true};report.checks.push('Static professional font bytes survive the real QA asset route, require signed reviewer access and remain unavailable from the member host or arbitrary asset names');
+
  for(const [host,p,marker]of [['my-qa.sstrx.co.uk','/member-login','previewRegister'],['hq-qa.sstrx.co.uk','/','SHIFT HQ'],['rx-qa.sstrx.co.uk','/','Member sign-in'],['rx-qa.sstrx.co.uk','/professionals','partner-username']]){const r=await call(host,p);assert.equal(r.status,200);const h=await r.text();assert.ok(h.includes(marker),host+' retained UI missing');assert.ok(h.includes('FICTIONAL TEST SYSTEM'));assert.ok(h.includes('/assets/qa-reviewer-expiry.js'));assert.ok(Number(r.headers.get('X-SST-QA-Review-Expires'))>Math.floor(Date.now()/1000));}
  const memberEntry=await call('rx-qa.sstrx.co.uk','/member-sign-in');assert.equal(memberEntry.status,303);assert.equal(memberEntry.headers.get('Location'),'https://my-qa.sstrx.co.uk/member-login?returnTo=%2Fmember%2Fmy-shift');
  report.checks.push('Retained member, HQ and Rx sign-in pages render with explicit TEST notices');assert.equal((await call('my-qa.sstrx.co.uk','/assets/qa-reviewer-expiry.js')).status,200);assert.equal((await call('my-qa.sstrx.co.uk','/assets/qa-reviewer-expiry.js',{token:''})).status,403);
  await json(await call('my-qa.sstrx.co.uk','/v1/auth/login',{body:{email:access.accounts.member.email,password:access.accounts.member.password},cookies:memberJar}));assert.ok(memberJar.has('sst_session'));
  const me=await json(await call('my-qa.sstrx.co.uk','/v1/me',{cookies:memberJar}));assert.ok(me.user.id);
+ assert.equal(configs.clinical.vars.SSTRX_QA_PRICE_PAYMENTS_ENABLED,'true');
+ const missingPrice='00000000-0000-4000-8000-000000000098';
+ const priceApi=await call('my-qa.sstrx.co.uk','/v1/member/clinical-records/qa-price-checkout/'+missingPrice,{cookies:memberJar});assert.equal(priceApi.status,404);assert.equal((await priceApi.json()).error,'qa_price_checkout_not_found');
+ const pricePage=await call('my-qa.sstrx.co.uk','/member/qa-price-checkout/'+missingPrice,{cookies:memberJar});assert.equal(pricePage.status,404);assert.equal((await pricePage.json()).error,'qa_price_checkout_not_found');
+ const priceClient=await call('my-qa.sstrx.co.uk','/assets/clinical-records/qa-price-payment.js',{cookies:memberJar});assert.equal(priceClient.status,200);assert.ok((await priceClient.text()).includes('Reconcile the saved TEST receipt'));
+ assert.equal((await call('my-qa.sstrx.co.uk','/member/qa-price-checkout/'+missingPrice)).status,401);
+ report.qaAdditionalPaymentBinding={explicitQaFlag:true,memberApiRouted:true,memberPageRouted:true,ownedMissingPaymentDenied:true,nativeSignInRequired:true,actualClientServed:true,positivePaymentFlow:'Covered by separate native QA transport tests, not inferred from this binding check'};
+
  const snapshot=await json(await call('my-qa.sstrx.co.uk','/v1/member/my-shift',{cookies:memberJar}));assert.equal(snapshot.orders.length,3);
  const memberPage=await call('my-qa.sstrx.co.uk','/member/my-shift',{cookies:memberJar});assert.equal(memberPage.status,200);report.checks.push('Native member login retains its host-only session and reads all three same-account orders');
  let challenge=await json(await call('hq-qa.sstrx.co.uk','/v1/hq/auth/login',{body:{email:access.accounts.owner.email,password:access.accounts.owner.password},cookies:ownerJar}));assert.equal(challenge.mfaRequired,true);
@@ -144,6 +162,7 @@ try{
  assert.equal((await core.fetch(new Request('https://api.shiftsometimber.co.uk/v1/me'),{...coreEnv,SSTRX_QA_DATABASE_ID:'00000000-0000-4000-8000-000000000099'},ctx)).status,503);report.checks.push('A wrong database identity fails before native data/schema access');
  assert.equal((await core.fetch(new Request('https://api.shiftsometimber.co.uk/v1/me'),{...coreEnv,STRIPE_SECRET_KEY:'sk_live_FORBIDDEN_NOT_A_KEY'},ctx)).status,503);
  await json(await call('my-qa.sstrx.co.uk','/v1/hq/me',{cookies:ownerJar}),403);report.checks.push('Real-account registration, outgoing reset mail, foreign transport bindings and member-host HQ routes stay blocked');
+ if(process.env.SSTRX_QA_JOINED_VISUAL==='true')report.professionalViews=await(await import(pathToFileURL('/Users/shiftsometimberltd/SST/builds/sstrx-functional-v3-20261105/evidence/professional-joined-browser.mjs'))).observeProfessionalJoinedBrowsers({call,ownerCookies:ownerJar,clinicianCookies:clinicianJar,engines:['chromium']});
  await json(await call('my-qa.sstrx.co.uk','/v1/auth/logout',{body:{},cookies:memberJar}));await json(await call('my-qa.sstrx.co.uk','/v1/me',{cookies:memberJar}),401);report.checks.push('Sign-out removes the mapped cookie and revokes the native session');
  await Promise.all(pending);assert.equal(report.externalCalls,0);report.result='PASS';report.sameCanonicalDatabase=true;report.nativeMfaRetained=true;report.realMessagesSent=0;report.realTransactions=0;
 }catch(e){report.result='FAIL';report.error=e.stack;process.exitCode=1;}

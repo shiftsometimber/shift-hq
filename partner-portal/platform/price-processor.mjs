@@ -6,7 +6,10 @@ const endpoint='https://api.stripe.com';
 export function priceProcessor(env,collectionModel){
  if(env.LIFECYCLE_PAYMENT_TEST_TRANSPORT){
   if(env.SSTRX_ENVIRONMENT!=='synthetic'||env.STRIPE_MODE==='live'||env.SSTRX_PRICE_PAYMENT_MODE==='live')fail(503,'synthetic_price_transport_requires_isolation');
-  return {source:{kind:'fixture',mode:'test'},verifyAccount:async()=>{},send:(body,key,signal)=>env.LIFECYCLE_PAYMENT_TEST_TRANSPORT.fetch(new Request(endpoint+'/v1/checkout/sessions',{method:'POST',signal,headers:{'Content-Type':'application/x-www-form-urlencoded','Idempotency-Key':key,'Stripe-Version':PRICE_STRIPE_VERSION},body:body.toString()}))};
+  const qa=env.LIFECYCLE_PAYMENT_TEST_TRANSPORT.qaContract;
+  if(qa&&(qa!=='sstrx-durable-price-test-v1'||env.SSTRX_QA_PRICE_PAYMENTS_ENABLED!=='true'||env.SSTRX_QA_STACK!=='joined-v31'||env.STRIPE_MODE!=='test'||env.STRIPE_SECRET_KEY||env.SSTRX_PRICE_PAYMENT_COMMISSIONING))fail(503,'synthetic_price_transport_requires_isolation');
+  const source=qa?{kind:'qa',mode:'test',qaContract:qa,qaOrigin:'https://my-qa.sstrx.co.uk'}:{kind:'fixture',mode:'test'};
+  return {source,verifyAccount:async()=>{},send:(body,key,signal)=>env.LIFECYCLE_PAYMENT_TEST_TRANSPORT.fetch(new Request(endpoint+'/v1/checkout/sessions',{method:'POST',signal,headers:{'Content-Type':'application/x-www-form-urlencoded','Idempotency-Key':key,'Stripe-Version':PRICE_STRIPE_VERSION},body:body.toString()}))};
  }
  const mode=env.SSTRX_PRICE_PAYMENT_MODE;
  if(env.SSTRX_PRICE_PAYMENTS_ENABLED!=='true'||!['test','live'].includes(mode)||env.STRIPE_MODE!==mode||env.SSTRX_ENVIRONMENT!==(mode==='live'?'production':'synthetic'))fail(503,'price_payment_processor_not_commissioned');
@@ -30,6 +33,10 @@ export function priceCheckoutExpiry(planExpires,agreementExpires,at=Date.now()){
 }
 export function priceSessionMatches(session,source,{paymentId,lifecycleId,orderReference,amount,expires}){
  const prefix=source.mode==='live'?'cs_live_':'cs_test_';
+ if(source.kind==='qa'){
+  const m=session?.metadata;
+  return source.mode==='test'&&source.qaContract==='sstrx-durable-price-test-v1'&&source.qaOrigin==='https://my-qa.sstrx.co.uk'&&session?.qaContract===source.qaContract&&session.simulation===true&&session.livemode===false&&/^cs_test_QA_price_[a-f0-9]{32}$/.test(session.id||'')&&session.object==='checkout.session'&&session.mode==='payment'&&session.status==='open'&&session.client_reference_id===paymentId&&session.amount_total===amount&&session.currency==='gbp'&&session.expires_at===Math.floor(Date.parse(expires)/1000)&&m?.sst_price_payment_id===paymentId&&m?.sst_lifecycle_id===lifecycleId&&m?.order_reference===orderReference&&session.url===source.qaOrigin+'/member/qa-price-checkout/'+paymentId;
+ }
  if(!session||session.livemode!==(source.mode==='live')||!session.id?.startsWith(prefix)||session.client_reference_id!==paymentId||session.amount_total!==amount||session.currency!=='gbp'||!/^https:\/\/checkout\.stripe\.com\//.test(session.url||''))return false;
  if(source.kind==='stripe'){
   if(session.object!=='checkout.session'||session.mode!=='payment'||session.status!=='open'||session.expires_at!==Math.floor(Date.parse(expires)/1000))return false;

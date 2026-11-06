@@ -29,7 +29,7 @@ export function qaStatementTransport(env){return {async fetch(request){
   if(saved.from_at!==fromAt||saved.to_at!==toAt||await digest(statement)!==saved.payload_digest)return deny('qa_statement_receipt_corrupt');
   return Response.json(statement,{headers:{'Cache-Control':'no-store, private'}});
  }
- const receipts=[];let captures=0,refunds=0;
+ const receipts=[];let captures=0,refunds=0,additionalCaptures=0;
  if(await present(env.DB,'qa_simulated_checkouts')){
   const pending=await env.DB.prepare("SELECT COUNT(*) n FROM qa_simulated_checkouts WHERE outcome='processing' AND event_created>=? AND event_created<?").bind(start/1000,end/1000).first();
   if(pending.n)return deny('qa_provider_period_has_unresolved_payment');
@@ -39,6 +39,23 @@ export function qaStatementTransport(env){return {async fetch(request){
    let session;try{session=JSON.parse(row.session_json)}catch{return deny('qa_provider_capture_corrupt')}
    if(!fictional(row.email)||!/^cs_test_QA_[a-f0-9]{32}$/.test(row.id)||session.id!==row.id||session.object!=='checkout.session'||session.livemode!==false||session.simulation!==true||session.currency!=='gbp'||session.client_reference_id!==row.order_number||session.metadata?.order_number!==row.order_number||session.metadata?.order_type!=='medicine'||Number(session.metadata?.user_id)!==row.member_id||!Number.isSafeInteger(session.amount_total)||session.amount_total<=0||row.event_id!=='evt_test_QA_'+row.id||row.event_type!=='checkout.session.completed'||!Number.isSafeInteger(row.event_created))return deny('qa_provider_capture_corrupt');
    receipts.push({id:row.event_id,kind:'capture',amountPence:session.amount_total,occurredAt:new Date(row.event_created*1000).toISOString()});captures++;
+  }
+ }
+ if(await present(env.DB,'qa_simulated_price_outcomes')){
+  if(!await present(env.DB,'qa_simulated_price_checkouts'))return deny('qa_provider_price_source_missing');
+  // These are independent provider receipts. Do not read application payments,
+  // price-plan state or ledger amounts to calculate a statement.
+  const rows=(await env.DB.prepare('SELECT o.*,q.id session_id,q.lifecycle_id,q.order_number,q.member_id,q.idempotency_key,q.request_digest,q.session_json,u.email FROM qa_simulated_price_outcomes o LEFT JOIN qa_simulated_price_checkouts q ON q.payment_id=o.payment_id LEFT JOIN users u ON u.id=q.member_id WHERE o.occurred_at>=? AND o.occurred_at<? ORDER BY o.event_id LIMIT 1001').bind(start/1000,end/1000).all()).results||[];
+  if(rows.length>1000)return deny('qa_statement_source_limit',503);
+  for(const row of rows){
+   let event,session;try{event=JSON.parse(row.event_json);session=JSON.parse(row.session_json)}catch{return deny('qa_provider_price_receipt_corrupt')}
+   const object=event.data?.object,expectedId='cs_test_QA_price_'+(await digest(row.payment_id)).slice(0,32),expectedEvent='evt_test_QA_price_'+(await digest(row.payment_id)).slice(0,32);
+   const type=row.action==='complete'?'checkout.session.completed':row.action==='expire'?'checkout.session.expired':row.action==='fail'?'checkout.session.async_payment_failed':null;
+   if(!fictional(row.email)||!type||row.session_id!==expectedId||session.id!==row.session_id||session.object!=='checkout.session'||session.mode!=='payment'||session.livemode!==false||session.simulation!==true||session.qaContract!=='sstrx-durable-price-test-v1'||session.url!=='https://my-qa.sstrx.co.uk/member/qa-price-checkout/'+row.payment_id||session.client_reference_id!==row.payment_id||session.metadata?.sst_price_payment_id!==row.payment_id||session.metadata?.sst_lifecycle_id!==row.lifecycle_id||session.metadata?.order_reference!==row.order_number||session.currency!=='gbp'||!Number.isSafeInteger(session.amount_total)||session.amount_total<=0||!/^[a-f0-9]{64}$/.test(row.request_digest||'')||row.idempotency_key!=='rx-price:'+row.lifecycle_id+':'+row.payment_id||row.event_id!==expectedEvent||event.id!==row.event_id||event.type!==type||event.livemode!==false||event.created!==row.occurred_at||!Number.isSafeInteger(event.created)||await digest(event)!==row.payload_digest||object?.id!==session.id||object.client_reference_id!==row.payment_id||object.metadata?.sst_price_payment_id!==row.payment_id||object.metadata?.sst_lifecycle_id!==row.lifecycle_id||object.metadata?.order_reference!==row.order_number||object.amount_total!==session.amount_total||object.currency!=='gbp'||object.livemode!==false||object.simulation!==true)return deny('qa_provider_price_receipt_corrupt');
+   if(row.action==='complete'){
+    if(object.payment_status!=='paid'||!/^pi_test_QA_[a-f0-9]{32}$/.test(object.payment_intent||''))return deny('qa_provider_price_receipt_corrupt');
+    receipts.push({id:event.id,kind:'additional_capture',amountPence:session.amount_total,occurredAt:new Date(event.created*1000).toISOString()});captures++;additionalCaptures++;
+   }else if(object.payment_status==='paid')return deny('qa_provider_price_receipt_corrupt');
   }
  }
  if(await present(env.DB,'qa_simulated_refunds')){
@@ -52,7 +69,7 @@ export function qaStatementTransport(env){return {async fetch(request){
  }
  receipts.sort((a,b)=>a.id.localeCompare(b.id));
  const totalPence=receipts.reduce((n,r)=>n+r.amountPence,0);if(!Number.isSafeInteger(totalPence))return deny('qa_statement_total_invalid');
- const statement={reference,fromAt,toAt,currency:'GBP',netReceivedPence:totalPence,simulation:true,source:'durable_qa_processor_receipts',coverage:'medicine_original_payments_and_refunds',captureCount:captures,refundCount:refunds,receiptDigest:await digest(receipts),generatedAt:new Date().toISOString(),bankBalanceRepresented:false};
+ const statement={reference,fromAt,toAt,currency:'GBP',netReceivedPence:totalPence,simulation:true,source:'durable_qa_processor_receipts',coverage:'medicine_original_and_additional_payments_and_refunds',captureCount:captures,additionalCaptureCount:additionalCaptures,additionalPaymentRefundsSupported:false,refundCount:refunds,receiptDigest:await digest(receipts),generatedAt:new Date().toISOString(),bankBalanceRepresented:false};
  await env.DB.prepare('INSERT OR IGNORE INTO qa_simulated_statements VALUES(?,?,?,?,?,?)').bind(reference,fromAt,toAt,JSON.stringify(statement),await digest(statement),statement.generatedAt).run();
  const retained=await env.DB.prepare('SELECT statement_json,payload_digest FROM qa_simulated_statements WHERE reference=?').bind(reference).first(),value=JSON.parse(retained.statement_json);
  if(await digest(value)!==retained.payload_digest)return deny('qa_statement_receipt_corrupt');
