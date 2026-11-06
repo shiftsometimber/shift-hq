@@ -1,5 +1,5 @@
 import unittest
-from deployed_restore import APPROVED_SOURCE_ID, validate_config, fingerprint, extract_database_id
+from deployed_restore import APPROVED_SOURCE_ID, validate_config, fingerprint, extract_database_id, ordered_restore_sql
 
 
 def snapshot(extra=""):
@@ -48,6 +48,38 @@ class RestoreChecks(unittest.TestCase):
         for receipt in ['{"database_id":"' + APPROVED_SOURCE_ID + '"}', 'Request timed out']:
             with self.assertRaises(RuntimeError):
                 extract_database_id(receipt)
+
+    def test_restore_creates_late_parent_before_any_insert_and_preserves_semicolon(self):
+        sql = snapshot("CREATE TABLE child(id TEXT, parent_id TEXT REFERENCES parent(id));"
+                       "INSERT INTO child VALUES('semi;colon','P');"
+                       "CREATE TABLE parent(id TEXT PRIMARY KEY);INSERT INTO parent VALUES('P');")
+        # Native exports use LF-separated complete statements.
+        sql = sql.replace(";", ";\n").replace("semi;\ncolon", "semi;colon")
+        ordered = ordered_restore_sql(sql)
+        self.assertLess(ordered.index("CREATE TABLE parent"), ordered.index("INSERT INTO child"))
+        self.assertLess(ordered.index("INSERT INTO parent"), ordered.index("INSERT INTO child"))
+        self.assertEqual(fingerprint(sql), fingerprint(ordered))
+
+    def test_trigger_definition_and_saved_history_are_preserved_without_replaying_hook(self):
+        sql = snapshot("CREATE TABLE audit(id TEXT);INSERT INTO audit VALUES('saved');"
+                       "CREATE TRIGGER protect_audit BEFORE UPDATE ON audit BEGIN "
+                       "SELECT RAISE(ABORT,'immutable; audit');END;")
+        sql = sql.replace(";", ";\n").replace("immutable;\n audit", "immutable; audit")
+        self.assertEqual(fingerprint(sql), fingerprint(ordered_restore_sql(sql)))
+
+    def test_unknown_statement_is_rejected_before_remote_copy_creation(self):
+        sql = snapshot().replace(";", ";\n") + "DELETE FROM orders;\n"
+        with self.assertRaisesRegex(ValueError, "Unsupported SQL"):
+            ordered_restore_sql(sql)
+
+    def test_explicit_autoincrement_watermark_survives_ordering_and_is_compared(self):
+        sql = snapshot("CREATE TABLE jobs(id INTEGER PRIMARY KEY AUTOINCREMENT);"
+                       "INSERT INTO jobs VALUES(1);DELETE FROM sqlite_sequence;"
+                       "INSERT INTO sqlite_sequence VALUES('jobs',200);")
+        expected = fingerprint(sql)
+        self.assertEqual(expected["autoIncrementSequences"], [["jobs", 200]])
+        self.assertEqual(expected, fingerprint(ordered_restore_sql(sql)))
+        self.assertNotEqual(expected, fingerprint(sql.replace("'jobs',200", "'jobs',201")))
 
 
 if __name__ == "__main__":

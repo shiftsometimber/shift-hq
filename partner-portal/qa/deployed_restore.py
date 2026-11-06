@@ -80,8 +80,11 @@ def fingerprint(sql_text):
         ).fetchall()
         if marker != [("joined-v31", APPROVED_SOURCE_ID, 1)]:
             raise ValueError("Export is not the approved synthetic database")
+        sequence_exists = db.execute("SELECT 1 FROM sqlite_master WHERE name='sqlite_sequence'").fetchone()
+        sequences = [list(r) for r in db.execute("SELECT name,seq FROM sqlite_sequence ORDER BY name")] if sequence_exists else []
         return {"tables": tables, "tableCount": len(tables),
                 "rowCount": sum(t["rows"] for t in tables.values()),
+                "autoIncrementSequences": sequences,
                 "foreignKeyViolations": violations,
                 "digest": sha(json.dumps(tables, sort_keys=True).encode()),
                 "excludedProviderInternals": ["sqlite_*", "_cf_*"],
@@ -97,6 +100,68 @@ def extract_database_id(output):
     if not match or match.group(1) == APPROVED_SOURCE_ID:
         raise RuntimeError("Created copy identity unconfirmed; do not replay create")
     return match.group(1)
+
+
+def ordered_restore_sql(sql_text):
+    """Create all parents before data; restore hooks only after saved history.
+
+    D1 enforces foreign keys even during imports. Its native export can place a
+    child table's INSERT before the referenced parent's CREATE. Statements are
+    parsed with SQLite's completion parser, not split on semicolons in data or
+    trigger bodies. The complete logical fingerprint must remain identical.
+    """
+    statements, buffer = [], ""
+    for character in sql_text:
+        buffer += character
+        if character == ";" and sqlite3.complete_statement(buffer):
+            statements.append(buffer.strip())
+            buffer = ""
+    if buffer.strip():
+        raise ValueError("Incomplete SQL export; do not restore")
+    tables, inserts, after, pragmas, sequence_reset = [], {}, [], [], []
+    db = sqlite3.connect(":memory:")
+    try:
+        db.execute("PRAGMA foreign_keys=OFF")
+        db.executescript(sql_text)
+        known = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        parents = {name: {row[2] for row in db.execute("PRAGMA foreign_key_list(" + quote_identifier(name) + ")")
+                          if row[2] in known and row[2] != name} for name in known}
+        order, pending = [], set(known)
+        while pending:
+            available = sorted(name for name in pending if not (parents[name] & pending))
+            if not available:
+                # Cycles require the export's existing defer_foreign_keys mode.
+                available = sorted(pending)
+            order.extend(available)
+            pending.difference_update(available)
+        for statement in statements:
+            if re.match(r"^CREATE\s+(?:VIRTUAL\s+)?TABLE\b", statement, re.I):
+                tables.append(statement)
+            elif re.match(r"^INSERT\s+INTO\b", statement, re.I):
+                match = re.match(r'^INSERT\s+INTO\s+("(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]|[A-Za-z_][A-Za-z_0-9]*)', statement, re.I)
+                if not match:
+                    raise ValueError("Unrecognised export INSERT target")
+                name = match.group(1)
+                if name[0] in '"`[':
+                    name = name[1:-1].replace('""', '"')
+                if name not in known:
+                    raise ValueError("Export INSERT target is not in its schema")
+                inserts.setdefault(name, []).append(statement)
+            elif re.match(r"^CREATE\s+(?:UNIQUE\s+)?(?:INDEX|TRIGGER|VIEW)\b", statement, re.I):
+                after.append(statement)
+            elif re.fullmatch(r"PRAGMA\s+defer_foreign_keys\s*=\s*(?:TRUE|ON|1)\s*;", statement, re.I):
+                pragmas.append(statement)
+            elif re.fullmatch(r'DELETE\s+FROM\s+(?:sqlite_sequence|"sqlite_sequence")\s*;', statement, re.I):
+                sequence_reset.append(statement)
+            else:
+                raise ValueError("Unsupported SQL export statement; manual review required")
+        data = [s for name in order if name != "sqlite_sequence" for s in inserts.get(name, [])]
+        ordered = "\n".join(pragmas + tables + data + sequence_reset + inserts.get("sqlite_sequence", []) + after) + "\n"
+        if fingerprint(ordered) != fingerprint(sql_text):
+            raise ValueError("Restore ordering changed application rows or schema")
+        return ordered
+    finally:
+        db.close()
 
 
 class Drill:
@@ -161,6 +226,10 @@ class Drill:
         self.command("source-export", ["d1", "export", SOURCE_NAME, "--remote",
                      "--output", str(source_sql), "--skip-confirmation"], config)
         original = fingerprint(source_sql.read_text())
+        restore_sql = self.output / "restore-ordered.sql"
+        restore_sql.write_text(ordered_restore_sql(source_sql.read_text()))
+        self.record["orderedRestoreSqlDigest"] = sha(restore_sql.read_bytes())
+        self.record["restoreOrderingLogicalEqualityVerified"] = True
         self.record["snapshotCompletedAt"] = utc()
         self.record["sourceSqlDigest"] = sha(source_sql.read_bytes())
         self.record["expected"] = original
@@ -178,7 +247,7 @@ class Drill:
         recovery_started = time.monotonic()
         try:
             self.command("restore-import", ["d1", "execute", self.record["copyName"],
-                         "--remote", "--file", str(source_sql), "--yes"], copy_config, 180)
+                         "--remote", "--file", str(restore_sql), "--yes"], copy_config, 180)
             restored_sql = self.output / "restored.sql"
             self.command("restored-export", ["d1", "export", self.record["copyName"],
                          "--remote", "--output", str(restored_sql), "--skip-confirmation"], copy_config)
