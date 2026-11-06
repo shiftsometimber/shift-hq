@@ -186,7 +186,7 @@ async function handle(request,env) {
     if(path==='/api/identity'&&request.method==='GET')return json({user:{id:own.identity.user.id,role:own.identity.user.role,name:own.staff.details?.name||own.staff.name||own.identity.user.name,mfaEnabled:own.identity.user.mfaEnabled===true},partner:{kind:own.staff.kind,orgId:own.staff.orgId}});
     if(!allowedPath(path,request.method,own.staff.kind))return json({message:'This function is outside your partner workspace.'},403);
     // Only contract query parameters reach the authority. No actor, org or role override.
-    const search=new URLSearchParams();for(const name of ['view','cursor',...(path.startsWith('/api/clinical/platform')?['q']:[])])if(url.searchParams.has(name))search.set(name,url.searchParams.get(name));
+    const search=new URLSearchParams();for(const name of ['view','cursor',...(path.startsWith('/api/clinical/platform')?['q']:[]),...(path==='/api/clinical/platform/integrations/status'?['orderReference']:[])])if(url.searchParams.has(name))search.set(name,url.searchParams.get(name));
     const headers=new Headers(authHeaders(own.token));headers.set('X-Shift-Portal-Origin',ORIGIN);
     for(const name of ['Sec-Fetch-Dest'])if(request.headers.has(name))headers.set(name,request.headers.get(name));
     const upstreamPath=API+path.replace('/api/clinical','/clinical');

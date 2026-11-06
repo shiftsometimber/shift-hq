@@ -13,6 +13,7 @@ async function admitted(env){
 async function schema(DB){
  await DB.prepare('CREATE TABLE IF NOT EXISTS qa_simulated_transport_events(id TEXT PRIMARY KEY,kind TEXT NOT NULL,member_id INTEGER NOT NULL,request_digest TEXT NOT NULL,response_json TEXT NOT NULL,created_at TEXT NOT NULL)').run();
  await DB.prepare('CREATE TABLE IF NOT EXISTS qa_simulated_checkouts(id TEXT PRIMARY KEY,order_number TEXT NOT NULL UNIQUE,member_id INTEGER NOT NULL,request_digest TEXT NOT NULL,session_json TEXT NOT NULL,outcome TEXT NOT NULL DEFAULT \'open\',event_type TEXT,event_id TEXT,created_at TEXT NOT NULL,completed_at TEXT)').run();
+ await DB.prepare('ALTER TABLE qa_simulated_checkouts ADD COLUMN event_created INTEGER').run().catch(()=>{});
 }
 export async function qaCheckout(env,id){
  await admitted(env);await schema(env.DB);
@@ -58,11 +59,11 @@ export async function qaCompleteCheckout(request,env,ctx,medicineRoutes,authenti
  const b=await request.json().catch(()=>null);if(!b||Object.keys(b).some(k=>k!=='action')||!['complete','expire'].includes(b.action))return json({error:'simulation_action_required'},400);
  const kind=b.action==='complete'?'checkout.session.completed':'checkout.session.expired',eventId='evt_test_QA_'+row.id;
  if(row.event_type&&row.event_type!==kind)return json({error:'simulated_outcome_already_selected'},409);
- await env.DB.prepare("UPDATE qa_simulated_checkouts SET outcome='processing',event_type=?,event_id=? WHERE id=? AND outcome='open'").bind(kind,eventId,row.id).run();
+ await env.DB.prepare("UPDATE qa_simulated_checkouts SET outcome='processing',event_type=?,event_id=?,event_created=COALESCE(event_created,?) WHERE id=? AND outcome='open'").bind(kind,eventId,Math.floor(Date.now()/1000),row.id).run();
  const stored=await qaCheckout(env,row.id);if(stored.event_type!==kind)return json({error:'simulated_outcome_already_selected'},409);
  if(['paid','expired'].includes(stored.outcome))return json({simulation:true,duplicate:true,orderNumber:stored.order_number,outcome:stored.outcome,nativeStatus:stored.order_status});
  const session={...JSON.parse(stored.session_json),payment_status:b.action==='complete'?'paid':'unpaid',payment_intent:b.action==='complete'?'pi_test_QA_'+stored.id.slice(11):null};
- const event={id:eventId,type:kind,livemode:false,data:{object:session}},raw=JSON.stringify(event),seconds=Math.floor(Date.now()/1000),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(QA_CALLBACK_KEY),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+ const event={created:stored.event_created,id:eventId,type:kind,livemode:false,data:{object:session}},raw=JSON.stringify(event),seconds=Math.floor(Date.now()/1000),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(QA_CALLBACK_KEY),{name:'HMAC',hash:'SHA-256'},false,['sign']);
  const signature=Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(seconds+'.'+raw))),x=>x.toString(16).padStart(2,'0')).join('');
  const response=await medicineRoutes(new Request('https://api.shiftsometimber.co.uk/v1/commerce/stripe/webhook',{method:'POST',headers:{'Content-Type':'application/json','Stripe-Signature':'t='+seconds+',v1='+signature},body:raw}),env,ctx);
  if(!response?.ok)return json({error:'simulated_receipt_requires_reconciliation',simulation:true,orderNumber:row.order_number},503);
