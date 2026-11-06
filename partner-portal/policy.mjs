@@ -2,6 +2,7 @@
 // for professional checks, organisation approval, assignments, consent and grants.
 const uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
 export function allowedPath(path, method, kind) {
+  if(kind==='oversight'&&method==='POST'&&/^\/api\/clinical\/platform\/commercial\/[A-Za-z0-9_-]{1,100}\/capture$/.test(path))return true;
   if(kind==='oversight'&&((method==='GET'&&/^\/api\/clinical\/platform\/finance-exceptions(?:\/[A-Za-z0-9_.:%-]{1,600})?$/.test(path))||(method==='POST'&&/^\/api\/clinical\/platform\/finance-exceptions\/[A-Za-z0-9_.:%-]{1,600}\/(?:assign|cover|resolve)$/.test(path))))return true;
   if(kind==='oversight'&&method==='POST'&&new RegExp('^/api/clinical/platform/lifecycle/'+uuid+'/'+uuid+'/(?:price-plan|price-refund|financial-resolution)$').test(path))return true;
   if(kind==='oversight'&&method==='POST'&&new RegExp('^/api/clinical/platform/refunds/'+uuid+'/reconcile$').test(path))return true;

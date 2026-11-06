@@ -2,7 +2,8 @@ import {setupStubProvider} from '../qa/stub-provider-setup.mjs';
 import {providerReceiptRoute} from './provider-receipts.mjs';
 import {passwordSignInAllowed} from '../password-signin.mjs';
 import {functionalCaseRoute} from './functional-case-routes.mjs';
-import {refundRoute} from './refunds.mjs';
+import {refundRoute,financeGuard} from './refunds.mjs';
+import {originalCaptureContext,originalCaptureEntry,recordOriginalCapture} from './capture-ledger.mjs';
 import {financeOperationsRoute} from './finance-operations.mjs';
 import {lifecycleRoute} from './prescription-lifecycle.mjs';
 import {auditExportRoute} from './audit-export.mjs';
@@ -211,13 +212,18 @@ export async function platformRoute(request,env){
    if(!a.commercial)fail(403,'owner_commercial_access_required');
    const orderNumber=text(p[1]);const order=await env.DB.prepare('SELECT * FROM medicine_orders WHERE order_number=?').bind(orderNumber).first();if(!order)fail(404,'order_not_found');
    if(request.method==='GET'&&p.length===2){const t=await env.DB.prepare('SELECT * FROM rx_economics WHERE order_number=?').bind(orderNumber).first();if(!t)return json({state:'costs_not_recorded',sellingPence:order.total_pence,currency:order.currency,orderKind:order.reorder_of_order_id?'repeat':'first',contributionPence:null});const entries=await all(env.DB.prepare('SELECT * FROM rx_finance_entries WHERE order_number=? ORDER BY occurred_at,id').bind(orderNumber));return json({terms:JSON.parse(t.terms_json),entries,reconciliation:reconcileEconomics(JSON.parse(t.terms_json),entries)});}
+   if(request.method==='POST'&&p.length===3&&p[2]==='capture'){const b=await input(request);if(Object.keys(b).length)fail(422,'server_verified_capture_only');return json(await recordOriginalCapture(env,a,order,financeGuard(env,a)));}
    if(request.method==='POST'&&p[2]==='terms'){
-    const b=await input(request),terms=economicsTerms(b);if(terms.sellingPence!==order.total_pence||terms.orderKind!==(order.reorder_of_order_id?'repeat':'first'))fail(409,'terms_must_match_order');const g=authCondition(a,at());
-    const rs=await env.DB.batch([env.DB.prepare(`INSERT OR IGNORE INTO rx_economics SELECT ?,1,?,? WHERE ${g.sql}`).bind(orderNumber,JSON.stringify(terms),at(),...g.args),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,NULL,'economics',?,'terms_recorded',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),orderNumber,JSON.stringify({approvalReference:terms.approvalReference,costSourceReference:terms.costSourceReference}),at())]);if(rs[0].meta.changes!==1)fail(409,'order_terms_already_recorded_or_access_changed');return json({recorded:true,paymentRouteChanged:false,moneyMoved:false},201);
+    const b=await input(request),terms=economicsTerms(b);if(terms.sellingPence!==order.total_pence||terms.orderKind!==(order.reorder_of_order_id?'repeat':'first'))fail(409,'terms_must_match_order');
+    const capture=await originalCaptureContext(env,order),g=financeGuard(env,a),date=at(),auditId=crypto.randomUUID(),guard=capture.state==='ready'?{sql:g.sql+' AND '+capture.guard.sql,args:[...g.args,...capture.guard.args]}:g;
+    const commands=[env.DB.prepare(`INSERT OR IGNORE INTO rx_economics SELECT ?,1,?,? WHERE ${guard.sql}`).bind(orderNumber,JSON.stringify(terms),date,...guard.args),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,NULL,'economics',?,'terms_recorded',?,? WHERE changes()=1").bind(auditId,String(a.id),orderNumber,JSON.stringify({approvalReference:terms.approvalReference,costSourceReference:terms.costSourceReference,...capture.state==='ready'?{originalCapture:{entryId:capture.entryId,receiptId:capture.receiptId,receiptDigest:capture.receiptDigest,amountPence:capture.amountPence}}:{}}),date)];
+    if(capture.state==='ready')commands.push(originalCaptureEntry(env.DB,capture,auditId,date));
+    const rs=await env.DB.batch(commands);if(rs[0].meta.changes!==1)fail(409,'order_terms_capture_or_access_changed');
+    return json({recorded:true,paymentRouteChanged:false,moneyMoved:false,captureLedger:capture.state==='ready'?{state:'recorded',amountPence:capture.amountPence,entryId:capture.entryId}:capture},201);
    }
    if(request.method==='POST'&&p[2]==='entry'){
     const b=await input(request);if(env.SSTRX_FUNCTIONAL_V3_ENABLED==='true'&&['refund','refund_reversal'].includes(b.kind))fail(403,'processor_reconciled_refund_required');if(!['member_payment','refund','partner_settlement','adjustment_credit','clinical_fee','pharmacy_invoice','delivery_invoice','commission_received',...EXPENSE_KINDS].includes(b.kind)||!Number.isSafeInteger(b.amountPence)||b.amountPence<0)fail(422,'valid_finance_entry_required');
-    text(b.eventReference);text(b.sourceReference);if(!Number.isFinite(Date.parse(b.occurredAt)))fail(422,'entry_time_required');
+    text(b.eventReference);text(b.sourceReference);if(b.eventReference.startsWith('medicine-capture:'))fail(403,'native_capture_receipt_required');if(!Number.isFinite(Date.parse(b.occurredAt)))fail(422,'entry_time_required');
     const existing=await env.DB.prepare('SELECT * FROM rx_finance_entries WHERE event_reference=?').bind(b.eventReference).first();if(existing){if(existing.order_number!==orderNumber||existing.kind!==b.kind||existing.amount_pence!==b.amountPence||existing.source_reference!==b.sourceReference)fail(409,'finance_reference_conflict');return json({duplicate:true,moneyMoved:false});}
     const g=authCondition(a,at()),rs=await env.DB.batch([env.DB.prepare(`INSERT INTO rx_finance_entries SELECT ?,?,?,?,?,?,?,?,? WHERE ${g.sql}`).bind(crypto.randomUUID(),orderNumber,b.eventReference,b.kind,b.amountPence,'GBP',b.sourceReference,b.occurredAt,at(),...g.args),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,NULL,'finance_entry',?,'entry_recorded',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),orderNumber,JSON.stringify({eventReference:b.eventReference,sourceReference:b.sourceReference}),at())]);if(rs[0].meta.changes!==1)fail(409,'access_changed');return json({recorded:true,moneyMoved:false},201);
    }

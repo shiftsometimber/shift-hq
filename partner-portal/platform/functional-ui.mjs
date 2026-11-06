@@ -77,6 +77,18 @@ export function functionalClient(){
    const [d,exceptionData]=await Promise.all([api('refunds'),api('finance-exceptions')]);if(turn!==generation)return;host.replaceChildren();
    const create=card('Request a refund'),form=node('form'),order=field(form,'Order reference'),amount=field(form,'Refund amount in pence','number'),reason=field(form,'Reason'),terms=field(form,'Accepted terms reference'),source=field(form,'Refund payment source','text',[{id:'',label:'Original payment'},...(d.paymentSources||[]).map(p=>({id:p.id,label:p.orderReference+' · Extra payment '+new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(p.amountPence/100)}))]);source.required=false;amount.min='1';amount.step='1';let command;
    submit(form,'Record refund request',async()=>{command=command||{clientReference:reference(),orderReference:order.value.trim(),amountPence:Number(amount.value),reason:reason.value.trim(),termsReference:terms.value.trim(),...source.value?{paymentSourceId:source.value}:{}};await api('refunds',command);command=null;await finance();});create.append(form);host.append(create);
+   if(d.fullCommercial&&d.captureWork){
+    const payments=fold('Original payments awaiting a ledger link');
+    if(d.captureWork.state!=='available')payments.append(node('p','The original-payment receipt source is not available in this view.'));
+    for(const payment of d.captureWork.records||[]){
+     const c=card(payment.orderReference);c.append(node('p',new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(payment.amountPence/100)));
+     if(payment.state==='ready'){const f=node('form');submit(f,'Record verified original payment',async()=>{await api('commercial/'+encodeURIComponent(payment.orderReference)+'/capture',{});byId('rx-notice').textContent='The existing verified payment is linked to the ledger. No new payment was taken.';await finance();});c.append(f);}
+     else c.append(node('p',payment.state==='terms_required'?'Record the approved order costs and commercial terms before linking this payment.':'This payment source needs finance review before it can be linked.'));
+     payments.append(c);
+    }
+    if(d.captureWork.hasMore)payments.append(node('p','This view shows the first 100 payments needing attention. Further records remain.'));
+    host.append(payments);
+   }
    for(const r of d.refunds){const c=card(r.orderReference+' · '+r.state);c.append(node('p',new Intl.NumberFormat('en-GB',{style:'currency',currency:r.currency}).format(r.amountPence/100)),node('p',r.state==='completed'?'Payment provider completion confirmed.':'Processor completion has not been confirmed.'));
     if(r.state==='requested'){const f=node('form'),approval=field(f,'Finance approval reference'),due=field(f,'Exception response due','datetime-local');submit(f,'Approve refund',async()=>{await api('refunds/'+r.id+'/approve',{version:r.version,approvalReference:approval.value.trim(),exceptionDueAt:ukTime(due.value)});await finance();});c.append(f);}
     if(['submitted','unknown','requires_action'].includes(r.state)&&r.processorReference&&d.canReconcileKnownReceipt===true&&r.amountPence<=d.approvalLimitPence){const f=node('form');submit(f,'Check provider receipt',async()=>{const current=await api('refunds/'+r.id);if(current.processorReference!==r.processorReference||!['submitted','unknown','requires_action','completed'].includes(current.state))throw Error('This refund changed. Refresh the finance records before continuing.');await api('refunds/'+r.id+'/reconcile',{version:current.version});await finance();});c.append(f);}
