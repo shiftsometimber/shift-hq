@@ -3,12 +3,20 @@ import {fail,readObject} from './domain.mjs';
 import {sessionHash} from '../service/member-kernel.mjs';
 import {platformActor} from './service.mjs';
 import {authCondition} from '../service/clinical-kernel.mjs';
+import {passwordSignInAllowed} from '../password-signin.mjs';
 const SUBJECT='My Shift support [thread-v1]',format='my-shift-support-1';
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const now=()=>new Date().toISOString();
 function thread(row){const t=JSON.parse(row.body);if(t.format!==format||!Number.isInteger(t.version)||!Array.isArray(t.messages))fail(503,'support_thread_unavailable');return t;}
 function view(row,body=false){const t=thread(row);return{reference:row.reference,status:row.status,version:t.version,updatedAt:row.updated_at,unread:t.messages.some(m=>m.kind==='support'&&m.version>(t.memberReadVersion||0)),...(body?{messages:t.messages.map(({actorId,...m})=>m)}:{}),recipient:'SHIFT support',orderReference:t.orderReference||null,clinical:false};}
 async function available(env){if(!await env.DB.prepare("SELECT 1 ok FROM sqlite_master WHERE type='table' AND name='support_tickets'").first())fail(503,'existing_support_queue_unavailable');}
+function supportWriteGuard(env,actor,date){
+ if(actor.mfa)return authCondition(actor,date);
+ if(!passwordSignInAllowed(env,actor.user,Date.parse(date)))fail(403,'support_role_required');
+ // The existing, time-limited owner/test exception applies to support replies
+ // only. Clinical, prescribing and pharmacy write guards remain unchanged.
+ return {sql:"EXISTS(SELECT 1 FROM hq_users h JOIN hq_sessions ss ON ss.hq_user_id=h.id WHERE h.id=? AND h.email=? AND h.role=? AND h.status='active' AND h.mfa_enabled=0 AND ss.token_hash=? AND ss.revoked_at IS NULL AND julianday(ss.expires_at)>julianday(?))",args:[actor.id,actor.user.email,actor.role,actor.sessionHash,date]};
+}
 export async function supportList(env,id){await available(env);const {results=[]}=await env.DB.prepare('SELECT reference,status,body,updated_at FROM support_tickets WHERE user_id=? AND subject=? ORDER BY updated_at DESC LIMIT 101').bind(id,SUBJECT).all();return{tickets:results.slice(0,100).map(r=>view(r)),hasMore:results.length>100};}
 async function save(env,row,next,status,guard,preserveTime=false,actor){
  const at=preserveTime?row.updated_at:now(),auditAt=now();
@@ -44,6 +52,6 @@ export async function hqMyShiftSupport(request,env){
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{'Cache-Control':'no-store','Access-Control-Allow-Origin':'https://hq.shiftsometimber.co.uk','Access-Control-Allow-Credentials':'true','Access-Control-Allow-Methods':'GET, POST','Access-Control-Allow-Headers':'Content-Type','Vary':'Origin'}});
   const a=await platformActor(request,env);if(a.response)return a.response;if(!a.internal||!['owner','admin','support','operations'].includes(a.role))fail(403,'support_role_required');await available(env);
   const reference=path.slice(root.length+1);if(!reference&&request.method==='GET'){const {results=[]}=await env.DB.prepare('SELECT * FROM support_tickets WHERE subject=? ORDER BY updated_at DESC LIMIT 100').bind(SUBJECT).all();return json({tickets:results.map(r=>({...view(r,true),memberId:r.user_id})),notificationsSent:false});}
-  if(request.method!=='POST'||!/^MS-\d+-[a-f0-9-]{36}$/i.test(reference))fail(405,'method_not_allowed');const b=await readObject(request,6500),text=message(b),row=await env.DB.prepare('SELECT * FROM support_tickets WHERE reference=? AND subject=?').bind(reference,SUBJECT).first();if(!row)fail(404,'support_not_found');const t=thread(row),previous=t.messages.find(m=>m.id===b.clientReference);if(previous){if(previous.kind!=='support'||previous.actorId!==a.id||previous.body!==text)fail(409,'message_reference_changed');return json({...view(row,true),duplicate:true});}if(t.version!==b.version)fail(409,'support_changed');if(t.messages.length>=200)fail(409,'support_thread_full');t.messages.push({id:b.clientReference,version:++t.version,kind:'support',author:'SHIFT support',actorId:a.id,body:text,at:now()});return json(await save(env,row,t,'awaiting_member',authCondition(a,now()),false,{id:a.id,kind:'support'}));
+  if(request.method!=='POST'||!/^MS-\d+-[a-f0-9-]{36}$/i.test(reference))fail(405,'method_not_allowed');const b=await readObject(request,6500),text=message(b),row=await env.DB.prepare('SELECT * FROM support_tickets WHERE reference=? AND subject=?').bind(reference,SUBJECT).first();if(!row)fail(404,'support_not_found');const t=thread(row),previous=t.messages.find(m=>m.id===b.clientReference);if(previous){if(previous.kind!=='support'||previous.actorId!==a.id||previous.body!==text)fail(409,'message_reference_changed');return json({...view(row,true),duplicate:true});}if(t.version!==b.version)fail(409,'support_changed');if(t.messages.length>=200)fail(409,'support_thread_full');t.messages.push({id:b.clientReference,version:++t.version,kind:'support',author:'SHIFT support',actorId:a.id,body:text,at:now()});return json(await save(env,row,t,'awaiting_member',supportWriteGuard(env,a,now()),false,{id:a.id,kind:'support'}));
  }catch(e){return json({error:e.status?e.message:'support_unavailable'},e.status||503);}
 }

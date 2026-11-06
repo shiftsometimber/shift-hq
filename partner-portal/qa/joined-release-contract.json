@@ -1,0 +1,16 @@
+{
+  "kind": "Joined source qualification; not live acceptance",
+  "rxParent": "3958e29760c2821e9798bb480140183d1eac7663",
+  "hqParent": "06fbb34847e6bb7ad060f01a0b40e9b82f7f7506",
+  "coreCommit": "d8bcc8627292385717763e8f8b89a09241327127",
+  "coreApiSha256": "a74f005ce0dd6d7ad862651f5962a11094f18f99cc3450d2652c737dec6d3ba1",
+  "checks": {
+    "rxHqComponents": 186,
+    "uiComponents": 23,
+    "coreContracts": 10,
+    "nativeAuthWorkflow": "PASS; external transports simulated",
+    "crossRepositorySameDatabase": "PASS"
+  },
+  "deploymentAuthorisation": "Matt requested publication and working release; applicable technical/clinical gates still required",
+  "productionDeployed": false
+}

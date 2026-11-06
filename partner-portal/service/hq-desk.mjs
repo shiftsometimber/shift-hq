@@ -1,7 +1,9 @@
 import {hqConversationAlerts} from '../platform/messages.mjs';
+import {hqOperatingPicture} from './hq-operating-picture.mjs';
 import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition} from './clinical-kernel.mjs';
 import {ensureSharedSchema} from './schema.mjs';
-import {overview} from '../platform/service.mjs';
+import {overview,platformActor} from '../platform/service.mjs';
+import {financeGuard} from '../platform/refunds.mjs';
 const BASE='/v1/hq/clinical/partner-desk';
 const now=()=>new Date().toISOString(),rows=async q=>(await q.all()).results||[];
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private','Access-Control-Allow-Origin':'https://hq.shiftsometimber.co.uk','Access-Control-Allow-Credentials':'true','Vary':'Origin','X-Content-Type-Options':'nosniff'}});
@@ -9,18 +11,11 @@ const fail=(status,message)=>{throw Object.assign(Error(message),{status})};
 async function input(request){if(!request.headers.get('Content-Type')?.startsWith('application/json'))fail(415,'json_required');const text=await request.text();if(text.length>6000)fail(413,'request_too_large');try{return JSON.parse(text)}catch{fail(400,'invalid_json')}}
 const text=(v,max=2000)=>{if(typeof v!=='string'||!v.trim()||v.length>max||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(v))fail(422,'valid_message_required');return v.trim()};
 async function actor(request,env){
- const data=await existingHqIdentity(request,env);if(data.response)return {response:data.response};
- const user=data.user;if(!user||!user.mfaEnabled)fail(403,'mfa_required');
- const token=(request.headers.get('Cookie')||'').match(/(?:^|;\s*)sst_hq_session=([^;]+)/)?.[1];if(!token)fail(401,'session_required');
- const sessionHash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))),x=>x.toString(16).padStart(2,'0')).join('');
- const proof={id:user.id,role:user.role,mfa:true,sessionHash};
- if(['owner','admin','operations'].includes(user.role))return {user,...proof,internal:true};
- if(user.role!=='clinical')fail(403,'partner_role_required');
- const entry=await env.DB.prepare('SELECT state_json FROM partner_staff WHERE hq_user_id=?').bind(user.id).first();
- const staff=entry?JSON.parse(entry.state_json):null;
- if(!staff||staff.status!=='active'||!credentialsCurrent(staff,now()))fail(403,'verified_partner_required');
- await currentPartner(env,staff);return {user,staff,...proof,internal:false};
+ const a=await platformActor(request,env);if(a.response)return a;
+ if(a.internal&&!['owner','admin','operations'].includes(a.role))fail(403,'partner_role_required');
+ return a;
 }
+function deskGuard(env,a,date){return a.mfa?authCondition(a,date):financeGuard(env,a);}
 async function ownsOrder(env,a,number){
  if(a.internal)return !!await env.DB.prepare('SELECT id FROM medicine_orders WHERE order_number=?').bind(number).first();
  if(a.staff.kind==='clinician')return !!await env.DB.prepare(`SELECT r.id FROM clinical_member_records r JOIN clinical_case_assignments x ON x.record_id=r.id WHERE r.order_number=? AND x.hq_user_id=? AND x.active=1 AND x.expires_at>? AND r.review_sharing=1`).bind(number,a.user.id,now()).first()&&permission(a.staff,'weight_management','review',now());
@@ -35,6 +30,12 @@ export async function hqDeskRoute(request,env){
   if(request.method==='POST'&&origin!=='https://hq.shiftsometimber.co.uk')fail(403,'origin_required');
   const a=await actor(request,env);if(a.response)return a.response;await ensureSharedSchema(env.DB);
   const parts=url.pathname.slice(BASE.length).split('/').filter(Boolean);
+  if(parts[0]==='operations'&&parts.length===1&&request.method==='GET'){
+   if(!a.internal)fail(403,'hq_access_required');
+   if(env.HQ_V3_TEST_MODE!=='true'||env.SSTRX_ENVIRONMENT!=='synthetic'||env.SSTRX_PLATFORM_ENABLED!=='true')fail(503,'isolated_test_environment_required');
+   if((url.searchParams.get('partition')||'TEST')!=='TEST')fail(403,'test_partition_required');
+   return json(await hqOperatingPicture(env,a));
+  }
   if(parts[0]==='questions'&&parts.length===1&&request.method==='GET'){
    if(!a.internal)fail(403,'hq_access_required');
    const questions=await rows(env.DB.prepare("SELECT id,order_number,status,priority,'SHIFT HQ' owner_name,created_at,updated_at FROM partner_hq_threads WHERE status='awaiting_hq' ORDER BY CASE priority WHEN 'urgent' THEN 0 ELSE 1 END,created_at LIMIT 101"));
@@ -50,7 +51,7 @@ export async function hqDeskRoute(request,env){
    const record=await env.DB.prepare('SELECT id,order_number FROM clinical_member_records WHERE id=?').bind(b.recordId).first();if(!record)fail(404,'record_not_found');
    const entry=await env.DB.prepare('SELECT state_json FROM partner_staff WHERE hq_user_id=?').bind(b.staffUserId).first(),staff=entry?JSON.parse(entry.state_json):null;
    if(b.active){if(!staff||staff.kind!=='clinician'||!permission(staff,'weight_management','review',now()))fail(403,'verified_clinician_required');await currentPartner(env,staff);}
-   const date=now(),expiry=new Date(Date.now()+7*86400000).toISOString(),g=authCondition(a,date),id=crypto.randomUUID();
+   const date=now(),expiry=new Date(Date.now()+7*86400000).toISOString(),g=deskGuard(env,a,date),id=crypto.randomUUID();
    const result=await env.DB.batch([env.DB.prepare(`INSERT INTO clinical_case_assignments(record_id,hq_user_id,active,expires_at) SELECT ?,?,?,? WHERE ${g.sql} ON CONFLICT(record_id,hq_user_id) DO UPDATE SET active=excluded.active,expires_at=excluded.expires_at`).bind(record.id,b.staffUserId,b.active?1:0,expiry,...g.args),env.DB.prepare("INSERT INTO clinical_member_audit SELECT ?,?,?,'hq_assignment_changed',?,? WHERE changes()=1").bind(id,record.id,a.user.id,JSON.stringify({reviewerHqUserId:b.staffUserId,active:b.active,expiresAt:expiry,source:'hq_partner_desk'}),date)]);
    if(result[0].meta?.changes!==1)fail(409,'assignment_or_access_changed');return json({assigned:b.active,expiresAt:expiry,notificationsSent:false});
   }
@@ -74,7 +75,7 @@ export async function hqDeskRoute(request,env){
    if(a.internal){if(!Number.isInteger(b.staffUserId))fail(422,'assigned_partner_required');const r=await env.DB.prepare('SELECT state_json FROM partner_staff WHERE hq_user_id=?').bind(b.staffUserId).first();recipient=r?JSON.parse(r.state_json):null;if(!recipient||recipient.status!=='active'||!credentialsCurrent(recipient,now()))fail(403,'verified_partner_required');await currentPartner(env,recipient);if(!await ownsOrder(env,{internal:false,staff:recipient,user:{id:b.staffUserId}},order))fail(403,'assigned_partner_required');}
    if(!await ownsOrder(env,a,order))fail(404,'order_not_found');
    const subject=text(b.subject,120),body=text(b.message),id=crypto.randomUUID(),date=now();const priority=b.priority==='urgent'?'urgent':'normal';
-   const status=a.internal?'awaiting_partner':'awaiting_hq',g=authCondition(a,date);const result=await env.DB.batch([env.DB.prepare(`INSERT INTO partner_hq_threads SELECT ?,?,?,?,?,?,?,1,?,? WHERE ${g.sql} AND EXISTS(SELECT 1 FROM partner_staff WHERE id=? AND version=?)`).bind(id,order,recipient.orgId,recipient.id,subject,priority,status,date,date,...g.args,recipient.id,recipient.version),env.DB.prepare("INSERT INTO partner_hq_messages SELECT ?,?,1,?,?,?,? WHERE changes()=1").bind(crypto.randomUUID(),id,a.user.id,a.internal?'hq':'partner',body,date),...env.SSTRX_SECURE_MESSAGES_ENABLED==='true'?hqConversationAlerts(env,{id,staff_id:recipient.id,version:1},a,date):[]]);
+   const status=a.internal?'awaiting_partner':'awaiting_hq',g=deskGuard(env,a,date);const result=await env.DB.batch([env.DB.prepare(`INSERT INTO partner_hq_threads SELECT ?,?,?,?,?,?,?,1,?,? WHERE ${g.sql} AND EXISTS(SELECT 1 FROM partner_staff WHERE id=? AND version=?)`).bind(id,order,recipient.orgId,recipient.id,subject,priority,status,date,date,...g.args,recipient.id,recipient.version),env.DB.prepare("INSERT INTO partner_hq_messages SELECT ?,?,1,?,?,?,? WHERE changes()=1").bind(crypto.randomUUID(),id,a.user.id,a.internal?'hq':'partner',body,date),...env.SSTRX_SECURE_MESSAGES_ENABLED==='true'?hqConversationAlerts(env,{id,staff_id:recipient.id,version:1},a,date):[]]);
    if(result[0].meta?.changes!==1)fail(409,'partner_or_access_changed');
    return json({id,status,version:1,notificationsSent:false},201);
   }
@@ -84,7 +85,7 @@ export async function hqDeskRoute(request,env){
    if(parts.length===2&&request.method==='GET')return json({thread:t,messages:await rows(env.DB.prepare('SELECT version,actor_kind,body,created_at FROM partner_hq_messages WHERE thread_id=? ORDER BY version').bind(t.id))});
    if(parts[2]==='reply'&&parts.length===3&&request.method==='POST'){
     const b=await input(request);if(b.version!==t.version)fail(409,'thread_changed');const message=text(b.message),version=t.version+1,date=now(),status=b.close===true?'closed':a.internal?'awaiting_partner':'awaiting_hq';
-    const g=authCondition(a,date);const result=await env.DB.batch([env.DB.prepare(`UPDATE partner_hq_threads SET version=?,status=?,updated_at=? WHERE id=? AND version=? AND ${g.sql}`).bind(version,status,date,t.id,t.version,...g.args),env.DB.prepare("INSERT INTO partner_hq_messages SELECT ?,?,?,?,?,?,? WHERE changes()=1").bind(crypto.randomUUID(),t.id,version,a.user.id,a.internal?'hq':'partner',message,date),...env.SSTRX_SECURE_MESSAGES_ENABLED==='true'?hqConversationAlerts(env,{...t,version},a,date):[]]);
+    const g=deskGuard(env,a,date);const result=await env.DB.batch([env.DB.prepare(`UPDATE partner_hq_threads SET version=?,status=?,updated_at=? WHERE id=? AND version=? AND ${g.sql}`).bind(version,status,date,t.id,t.version,...g.args),env.DB.prepare("INSERT INTO partner_hq_messages SELECT ?,?,?,?,?,?,? WHERE changes()=1").bind(crypto.randomUUID(),t.id,version,a.user.id,a.internal?'hq':'partner',message,date),...env.SSTRX_SECURE_MESSAGES_ENABLED==='true'?hqConversationAlerts(env,{...t,version},a,date):[]]);
     if(result[0].meta?.changes!==1)fail(409,'thread_changed');return json({status,version,notificationsSent:false});
    }
   }
