@@ -4,9 +4,10 @@ import {fail,text,digest,readObject} from './domain.mjs';
 import {permission,authCondition,internalPrescriptionDocument} from '../service/clinical-kernel.mjs';
 import {currentClinicalGuard} from './functional-casework.mjs';
 import {financeGuard} from './refunds.mjs';
-import {memberPricePlans} from './price-adjustments.mjs';
+import {memberPricePlans,ensurePriceSchema} from './price-adjustments.mjs';
 const at=()=>new Date().toISOString(),all=async q=>(await q.all()).results||[];
 const defs=[
+ ['rx_lifecycle_payment_sources','(SELECT r.id FROM clinical_member_records r JOIN rx_lifecycle_payments p ON p.order_number=r.order_number AND p.member_id=r.user_id WHERE p.id=NEW.payment_id)','NEW.payment_id',"'price_processor_source_bound'","'payment_workflow'","'service'",'0',"json_object('paymentId',NEW.payment_id,'source',json(NEW.source_json))",'NEW.created_at'],
  ['rx_lifecycle_price_plan_history',"json_extract(NEW.plan_json,'$.record_id')","NEW.lifecycle_id||':'||NEW.version","'price_approval_snapshot'","json_extract(NEW.plan_json,'$.approved_by')","'hq'",'NEW.version',"json_object('approvalReference',json_extract(NEW.plan_json,'$.approval_reference'))",'NEW.created_at'],
  ['rx_lifecycle_price_plans','NEW.record_id','NEW.lifecycle_id',"'replacement_price_approved'",'NEW.approved_by',"'hq'",'NEW.version',"json_object('approvalReference',NEW.approval_reference,'termsReference',NEW.terms_reference)",'NEW.created_at','UPDATE'],
  ['rx_lifecycle_payment_receipts','(SELECT record_id FROM rx_lifecycle_price_plans p JOIN rx_lifecycle_payments t ON t.lifecycle_id=p.lifecycle_id WHERE t.id=NEW.payment_id)','NEW.event_id',"'price_payment_'||NEW.state","'processor'","'service'",'0',"json_object('paymentId',NEW.payment_id,'payloadDigest',NEW.payload_digest)",'NEW.received_at'],
@@ -37,6 +38,7 @@ function insertSQL(d,alias='NEW',imported=false){
 }
 export async function ensureAuditSchema(DB){
  DB=DB.__sstrxBaseDB||DB;if(ready.has(DB))return ready.get(DB);const task=(async()=>{
+  await ensurePriceSchema(DB);
   await DB.prepare(`CREATE TABLE IF NOT EXISTS rx_audit_journal(scope_key TEXT NOT NULL,sequence INTEGER NOT NULL,record_id TEXT NOT NULL,order_number TEXT,source_table TEXT NOT NULL,source_reference TEXT NOT NULL,action TEXT NOT NULL,actor_id TEXT NOT NULL,actor_kind TEXT NOT NULL,org_id TEXT,version INTEGER NOT NULL,detail_json TEXT NOT NULL,source_created_at TEXT NOT NULL,history_import INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(scope_key,sequence),UNIQUE(scope_key,source_table,source_reference,version,action))`).run();
   await DB.prepare(`CREATE TABLE IF NOT EXISTS rx_audit_seals(scope_key TEXT NOT NULL,sequence INTEGER NOT NULL,previous_hash TEXT NOT NULL,entry_hash TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(scope_key,sequence))`).run();
   await DB.prepare(`CREATE TABLE IF NOT EXISTS rx_export_receipts(id TEXT PRIMARY KEY,record_id TEXT NOT NULL,actor_id TEXT NOT NULL,actor_kind TEXT NOT NULL,org_id TEXT,purpose TEXT NOT NULL,content_digest TEXT NOT NULL,checkpoint_json TEXT NOT NULL,created_at TEXT NOT NULL)`).run();

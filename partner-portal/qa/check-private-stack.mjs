@@ -1,0 +1,55 @@
+// Executes the actual built Worker modules with fictional persisted native
+// records and a signed local Access assertion. No browser/provider acceptance.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {DatabaseSync} from 'node:sqlite';
+import {pathToFileURL} from 'node:url';
+import assert from 'node:assert/strict';
+import {wrapDatabase} from '../test/database.mjs';
+import {totp} from './native-accounts.mjs';
+import {QA_ACCESS} from './access-config.mjs';
+const out=new URL('../../.partner-qa/hosted/',import.meta.url),privateDir=new URL('../../.partner-qa/native-roles/private/',import.meta.url),access=JSON.parse(await fs.readFile(new URL('test-access.json',privateDir),'utf8'));
+const temp=new URL('qualification.sqlite',out);await fs.copyFile(new URL('native-test.sqlite',privateDir),temp);await fs.chmod(temp,0o600);
+const sql=new DatabaseSync(temp.pathname,{enableDoubleQuotedStringLiterals:true}),{DB}=wrapDatabase(sql),oldFetch=globalThis.fetch,report={startedAt:new Date().toISOString(),scope:'Exact built modules, native fictional identities and SQLite-backed canonical records; Access keys and storage bindings simulated locally.',result:'NOT RUN',checks:[],externalCalls:0};
+const b64=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+try{
+ const keys=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
+ const jwk={...await crypto.subtle.exportKey('jwk',keys.publicKey),kid:'test-stack',use:'sig',alg:'RS256'},now=Math.floor(Date.now()/1000),payload=b64({alg:'RS256',typ:'JWT',kid:jwk.kid})+'.'+b64({iss:QA_ACCESS.issuer,aud:[QA_ACCESS.audience],type:'app',email:QA_ACCESS.emails[0],iat:now,exp:now+600}),jwt=payload+'.'+Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',keys.privateKey,new TextEncoder().encode(payload))).toString('base64url');
+ globalThis.fetch=async url=>{if(String(url)===QA_ACCESS.issuer+'/cdn-cgi/access/certs')return Response.json({keys:[jwk]});report.externalCalls++;throw Error('External transport forbidden in private stack qualification')};
+ const core=(await import(new URL('core.bundle.mjs',out))).default,clinical=(await import(new URL('clinical.bundle.mjs',out))).default,edge=(await import(new URL('edge.bundle.mjs',out))).default;
+ const marker='00000000-0000-4000-8000-000000000031';sql.exec("CREATE TABLE IF NOT EXISTS sstrx_qa_environment(environment TEXT PRIMARY KEY,database_id TEXT NOT NULL,synthetic_only INTEGER NOT NULL CHECK(synthetic_only=1));");sql.prepare('INSERT OR REPLACE INTO sstrx_qa_environment VALUES(?,?,1)').run('joined-v31',marker);
+ const base={SSTRX_ENVIRONMENT:'synthetic',SSTRX_QA_STACK:'joined-v31',SSTRX_QA_DATABASE_ID:marker,DEPLOYMENT_ENVIRONMENT:'test',STRIPE_MODE:'test'},pending=[],ctx={waitUntil(p){pending.push(p)}};
+ const coreEnv={...base,DB,HQ_V3_TEST_MODE:'true',HQ_CATALOGUE_V31_TEST_MODE:'true',AUTO_VERIFY_EMAIL:'false',TURNSTILE_REQUIRED:'false',HQ_MFA_ENCRYPTION_KEY:access.environmentSecrets.mfaEncryptionKey};
+ const coreService={fetch:r=>core.fetch(r,coreEnv,ctx)};
+ const objectIndex=JSON.parse(await fs.readFile(new URL('objects.json',privateDir),'utf8')),bucket={async get(key){const item=objectIndex.find(x=>x.key===key);return item?{body:new Uint8Array(await fs.readFile(new URL('objects/'+item.file,privateDir))),httpMetadata:item.httpMetadata}:null},async put(){throw Error('Qualification storage writes not expected')}};
+ const clinicalEnv={...base,DB,HQ_AUTH:coreService,CLINICAL_PRIVATE_FILES:bucket,PARTNER_PRIVATE_FILES:bucket};
+ for(const key of ['PARTNER_OPERATIONS_ENABLED','PARTNER_LOGIN_ENABLED','PARTNER_FULFILMENT_ENABLED','CLINICAL_CASEWORK_ENABLED','CLINICAL_REVIEW_READY','PRESCRIPTION_WORKFLOW_ENABLED','PRESCRIPTION_SIGNING_ENABLED','SHARED_ORDER_WORKFLOW_ENABLED','CLINICAL_MEMBER_RECORDS_ENABLED','NOTIFICATION_EVENTS_ENABLED','PARTNER_NOTIFICATION_REVIEW_ENABLED','PARTNER_TRACKING_READ_ENABLED','PARTNER_MEMBER_REPLIES_ENABLED','SSTRX_PLATFORM_ENABLED','SSTRX_PAID_RECORD_LINK_ENABLED','SSTRX_TEST_SIGNING','SSTRX_FUNCTIONAL_V3_ENABLED','MY_SHIFT_REDESIGN_ENABLED','SSTRX_SECURE_MESSAGES_ENABLED','SSTRX_AUDIT_V3_ENABLED','HQ_V3_TEST_MODE'])clinicalEnv[key]='true';
+ clinicalEnv.PARTNER_INTERNAL_SETUP_ONLY='false';clinicalEnv.PARTNER_CLINICAL_APPROVER_IDS='2';clinicalEnv.PRESCRIPTION_SIGNATURE_POLICY_REFERENCE='FICTIONAL-TEST-ONLY';
+ const env={...base,CORE:coreService,HQ_AUTH:coreService,CLINICAL:{fetch:r=>clinical.fetch(r,clinicalEnv,ctx)},PORTAL_SESSION_KEY:access.environmentSecrets.portalSessionKey,PARTNER_ACCESS_ENABLED:'true',SSTRX_PORTAL_ENABLED:'true',ASSETS:{async fetch(request){const p=new URL(request.url).pathname,file=new URL('assets'+p,out);if(!file.pathname.startsWith(new URL('assets/',out).pathname))return new Response('Not found',{status:404});try{const b=await fs.readFile(file);return new Response(b,{headers:{'Content-Type':p.endsWith('.html')?'text/html':p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':'application/octet-stream'}})}catch{return new Response('Not found',{status:404})}}}};
+ const jar=()=>new Map(),memberJar=jar(),ownerJar=jar(),clinicianJar=jar(),dispenserJar=jar();
+ async function call(host,p,{body,cookies=jar(),token=jwt}={}){const r=await edge.fetch(new Request('https://'+host+p,{method:body===undefined?'GET':'POST',headers:{Origin:'https://'+host,Cookie:[...cookies].map(([k,v])=>k+'='+v).join('; '),'Cf-Access-Jwt-Assertion':token,'CF-Connecting-IP':'203.0.113.42','Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}),env,ctx);for(const cookie of r.headers.getSetCookie()){const first=cookie.split(';')[0],at=first.indexOf('='),name=first.slice(0,at),value=first.slice(at+1);if(!value||/Max-Age=0(?:;|$)/i.test(cookie))cookies.delete(name);else cookies.set(name,value);}return r;}
+ const json=async(r,status=200)=>{const d=await r.json();assert.equal(r.status,status,JSON.stringify(d));return d};
+ for(const host of QA_ACCESS.hosts)assert.equal((await call(host,'/',{token:''})).status,403);report.checks.push('All four external hosts require signed Access assertions');
+ for(const [host,p,marker]of [['my-qa.sstrx.co.uk','/member-login','previewRegister'],['hq-qa.sstrx.co.uk','/','SHIFT HQ'],['rx-qa.sstrx.co.uk','/','partner-username']]){const r=await call(host,p);assert.equal(r.status,200);const h=await r.text();assert.ok(h.includes(marker),host+' retained UI missing');assert.ok(h.includes('FICTIONAL TEST SYSTEM'));}
+ report.checks.push('Retained member, HQ and Rx sign-in pages render with explicit TEST notices');
+ await json(await call('my-qa.sstrx.co.uk','/v1/auth/login',{body:{email:access.accounts.member.email,password:access.accounts.member.password},cookies:memberJar}));assert.ok(memberJar.has('sst_session'));
+ const me=await json(await call('my-qa.sstrx.co.uk','/v1/me',{cookies:memberJar}));assert.ok(me.user.id);
+ const snapshot=await json(await call('my-qa.sstrx.co.uk','/v1/member/my-shift',{cookies:memberJar}));assert.equal(snapshot.orders.length,3);
+ const memberPage=await call('my-qa.sstrx.co.uk','/member/my-shift',{cookies:memberJar});assert.equal(memberPage.status,200);report.checks.push('Native member login retains its host-only session and reads all three same-account orders');
+ let challenge=await json(await call('hq-qa.sstrx.co.uk','/v1/hq/auth/login',{body:{email:access.accounts.owner.email,password:access.accounts.owner.password},cookies:ownerJar}));assert.equal(challenge.mfaRequired,true);
+ await json(await call('hq-qa.sstrx.co.uk','/v1/hq/auth/mfa/verify',{body:{challenge:challenge.challenge,code:totp(access.accounts.owner.totpSecret)},cookies:ownerJar}));
+ const who=await json(await call('hq-qa.sstrx.co.uk','/v1/hq/me',{cookies:ownerJar}));assert.equal(who.user.role,'owner');assert.equal(who.user.mfaEnabled,true);
+ const purchases=await json(await call('hq-qa.sstrx.co.uk','/v1/hq/management/v3/purchases',{cookies:ownerJar})),operations=await json(await call('hq-qa.sstrx.co.uk','/v1/hq/clinical/partner-desk/operations',{cookies:ownerJar}));
+ for(const order of snapshot.orders){const line=purchases.orders.find(x=>x.order_ref===order.reference),ops=operations.records.find(x=>x.order_ref===order.reference);assert.ok(line&&ops);assert.equal(line.rx_case_ref,order.recordId);assert.equal(ops.case_ref,order.recordId);}
+ report.checks.push('Native owner password and MFA open HQ commercial/operations metadata with the same member case/order references');
+ for(const [role,cookies,page]of [['clinician',clinicianJar,'/workspace/clinical'],['otherDispenser',dispenserJar,'/workspace/dispensing']]){let r=await call('rx-qa.sstrx.co.uk','/api/login',{body:{username:access.accounts[role].username,password:access.accounts[role].password},cookies});await json(r);r=await call('rx-qa.sstrx.co.uk','/api/mfa',{body:{code:totp(access.accounts[role].totpSecret)},cookies});await json(r);assert.ok(cookies.has('__Host-shift_partner'));r=await call('rx-qa.sstrx.co.uk',page,{cookies});assert.equal(r.status,200,await r.clone().text());}
+ report.checks.push('Assigned prescriber and dispensing partner complete native password/TOTP through the opaque host-bound Rx gateway');
+ await json(await call('my-qa.sstrx.co.uk','/v1/auth/register',{body:{email:'real-address@not-a-test.example',password:'Fictional-should-not-register-42!'}}),403);
+ await json(await call('my-qa.sstrx.co.uk','/v1/auth/request-password-reset',{body:{email:access.accounts.member.email}}),403);
+ assert.equal((await core.fetch(new Request('https://api.shiftsometimber.co.uk/v1/me'),{...coreEnv,SSTRX_QA_DATABASE_ID:'00000000-0000-4000-8000-000000000099'},ctx)).status,503);report.checks.push('A wrong database identity fails before native data/schema access');
+ assert.equal((await core.fetch(new Request('https://api.shiftsometimber.co.uk/v1/me'),{...coreEnv,STRIPE_SECRET_KEY:'sk_live_FORBIDDEN_NOT_A_KEY'},ctx)).status,503);
+ await json(await call('my-qa.sstrx.co.uk','/v1/hq/me',{cookies:ownerJar}),403);report.checks.push('Real-account registration, outgoing reset mail, foreign transport bindings and member-host HQ routes stay blocked');
+ await json(await call('my-qa.sstrx.co.uk','/v1/auth/logout',{body:{},cookies:memberJar}));await json(await call('my-qa.sstrx.co.uk','/v1/me',{cookies:memberJar}),401);report.checks.push('Sign-out removes the mapped cookie and revokes the native session');
+ await Promise.all(pending);assert.equal(report.externalCalls,0);report.result='PASS';report.sameCanonicalDatabase=true;report.nativeMfaRetained=true;report.realMessagesSent=0;report.realTransactions=0;
+}catch(e){report.result='FAIL';report.error=e.stack;process.exitCode=1;}
+finally{globalThis.fetch=oldFetch;sql.close();await fs.rm(temp,{force:true});report.completedAt=new Date().toISOString();await fs.writeFile(new URL('qualification.json',out),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));}

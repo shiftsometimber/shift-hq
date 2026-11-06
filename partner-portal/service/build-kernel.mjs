@@ -65,15 +65,15 @@ export async function buildKernel(){
  // Bind newly created WebAuthn challenges to their actual browser origin.
  once('async function newChallenge(env, context, kind, key = null, document = null) {','async function newChallenge(env, context, kind, key = null, document = null, portalOrigin = RP_ORIGIN) {\n  if(kind===\'sign\')await requireNoSupplyHold(env,context.record.order_number);');
  once('return { id, challenge, expiresAt: expires, rpId: RP_ID,','await rememberSigningOrigin(env.DB,id,portalOrigin);\n  return { id, challenge, expiresAt: expires, rpId: new URL(portalOrigin).hostname,');
- once('await newChallenge(env, context, "register")','await newChallenge(env, context, "register",null,null,signingOrigin(request))');
- once('await newChallenge(env, context, "sign", key, doc)','await newChallenge(env, context, "sign", key, doc,signingOrigin(request))');
+ once('await newChallenge(env, context, "register")','await newChallenge(env, context, "register",null,null,signingOrigin(request,env))');
+ once('await newChallenge(env, context, "sign", key, doc)','await newChallenge(env, context, "sign", key, doc,signingOrigin(request,env))');
  once('async function verifyRegistration(proof, challenge) {','async function verifyRegistration(proof, challenge, portalOrigin = RP_ORIGIN) {');
  once('clientData(proof.clientDataJSON, "webauthn.create", challenge);','clientData(proof.clientDataJSON, "webauthn.create", challenge,portalOrigin);');
  once('await authenticator(bytes, true)','await authenticator(bytes, true,new URL(portalOrigin).hostname)');
- once('await verifyRegistration(b.proof, c.challenge)','await verifyRegistration(b.proof, c.challenge,await challengeOrigin(env.DB,c.id,signingOrigin(request)))');
+ once('await verifyRegistration(b.proof, c.challenge)','await verifyRegistration(b.proof, c.challenge,await challengeOrigin(env.DB,c.id,signingOrigin(request,env)))');
  once('{ historical = false } = {}) {','{ historical = false, portalOrigin = RP_ORIGIN } = {}) {');
  once('let origin = RP_ORIGIN;','let origin = portalOrigin;');
- once('await verifyAssertion(b.proof, c.challenge, key, actor2.id)','await verifyAssertion(b.proof, c.challenge, key, actor2.id,{portalOrigin:await challengeOrigin(env.DB,c.id,signingOrigin(request))})');
+ once('await verifyAssertion(b.proof, c.challenge, key, actor2.id)','await verifyAssertion(b.proof, c.challenge, key, actor2.id,{portalOrigin:await challengeOrigin(env.DB,c.id,signingOrigin(request,env))})');
  once('if(!["https://partner.shiftsometimber.co.uk","https://hq.shiftsometimber.co.uk"].includes(origin))','if(!["https://partner.shiftsometimber.co.uk","https://hq.shiftsometimber.co.uk","https://sstrx.shiftsometimber.co.uk"].includes(origin))');
  once('const paid = ["paid", "succeeded", "completed", "fulfilled"].includes(order.status) && /^cs_live_/.test(order.stripe_checkout_session_id || "");','const paid = paidClinicalOrder(env,order);');
  source=source.replaceAll("toLocaleString('en-GB')","toLocaleString('en-GB',{timeZone:'Europe/London'})");
