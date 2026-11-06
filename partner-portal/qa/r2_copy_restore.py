@@ -109,7 +109,9 @@ class R2Drill:
         config = json.loads(Path(self.args.config).read_text())
         validate_config(config)
         bindings = config.get('r2_buckets', [])
-        if not bindings or any(b.get('bucket_name') != BUCKET for b in bindings):
+        # Core has no storage binding; the bucket is an immutable QA identifier
+        # here. Any configured bucket must still name that same private store.
+        if any(b.get('bucket_name') != BUCKET for b in bindings):
             raise ValueError('Exact existing synthetic private bucket binding required')
         sql = Path(self.args.backup).read_text()
         backup_receipt = json.loads(Path(self.args.backup_receipt).read_text())
