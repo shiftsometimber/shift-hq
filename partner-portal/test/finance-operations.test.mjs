@@ -87,3 +87,13 @@ test('Recipient revocation during assignment and concurrent command retries cann
   for(const table of ['rx_finance_exception_history','rx_finance_exception_commands'])assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM '+table).get().n,1);
  }finally{f.close();}
 });
+test('Finance management leaves the legacy exception row shape unchanged and native refund approval still works',async()=>{
+ const f=await setup();try{
+  assert.equal(f.sql.prepare('PRAGMA table_info(rx_finance_exceptions)').all().length,8);
+  f.sql.prepare("UPDATE medicine_orders SET stripe_payment_intent_id='pi_FICTIONAL_BACKWARD_COMPATIBILITY' WHERE order_number=?").run(ORDER);
+  const created=await json(await f.hq('/platform/refunds',1,{orderReference:ORDER,amountPence:10,reason:'Fictional refund',termsReference:'TEST-TERMS',clientReference:crypto.randomUUID()}));
+  const approved=await json(await f.hq('/platform/refunds/'+created.id+'/approve',1,{version:created.version,approvalReference:'TEST-FINANCE-APPROVAL',exceptionDueAt:new Date(Date.now()+3600000).toISOString()}));
+  assert.equal(approved.state,'approved');
+  assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM rx_finance_exceptions WHERE kind='refund_watch'").get().n,1);
+ }finally{f.close();}
+});

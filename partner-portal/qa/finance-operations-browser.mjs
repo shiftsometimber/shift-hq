@@ -26,7 +26,7 @@ for(const [engine,type] of [['chromium',chromium],['webkit',webkit]]){
    const request=route.request(),url=new URL(request.url());
    if(url.origin!=='https://finance.fixture.test')throw Error('Unexpected external browser request');
    if(url.pathname==='/finance'){
-    await route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html lang="en"><meta name="viewport" content="width=device-width"><style>*{box-sizing:border-box}body{margin:0;background:#050505;color:#E7E3DA;font:16px Arial}main{max-width:100%;padding:12px}'+FUNCTIONAL_CSS+'</style><body class="rx-app" data-functional="true"><button data-rx-view="finance">Refresh Finance</button><p id="rx-notice" role="status"></p><main><section id="rx-finance"><div id="rx-finance-content"></div></section></main><script>'+FUNCTIONAL_CLIENT+'</script></body></html>'});return;
+    await route.fulfill({status:200,contentType:'text/html; charset=utf-8',body:'<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>*{box-sizing:border-box}body{margin:0;background:#050505;color:#E7E3DA;font:16px Arial}main{max-width:100%;padding:12px}'+FUNCTIONAL_CSS+'</style><body class="rx-app" data-functional="true"><button data-rx-view="finance">Refresh Finance</button><p id="rx-notice" role="status"></p><main><section id="rx-finance"><div id="rx-finance-content"></div></section></main><script>'+FUNCTIONAL_CLIENT+'</script></body></html>'});return;
    }
    if(!url.pathname.startsWith('/api/clinical/platform/'))throw Error('Unexpected internal finance request');
    const suffix=url.pathname.slice('/api/clinical'.length),body=request.method()==='POST'?request.postDataJSON():undefined;
@@ -37,6 +37,7 @@ for(const [engine,type] of [['chromium',chromium],['webkit',webkit]]){
   await page.goto('https://finance.fixture.test/finance');const item=()=>page.locator('[data-finance-exception="TEST-VARIANCE"]');
   await item().waitFor();assert.equal(await page.getByLabel('Refund payment source',{exact:true}).inputValue(),'');
   checks.push({name:'Original payment retains an empty explicit selector value',pass:true});
+  await item().getByText('Resolve against confirmed financial evidence',{exact:true}).click();
   assert.match(await item().innerText(),/Awaiting verified matching financial evidence/);
   assert.equal(await item().getByRole('button',{name:'Resolve verified finance exception'}).count(),0);
   checks.push({name:'No financial completion control without verified evidence',pass:true});
@@ -45,12 +46,13 @@ for(const [engine,type] of [['chromium',chromium],['webkit',webkit]]){
   await ownership.getByLabel('Ownership approval reference').fill('TEST-BROWSER-COVER');await ownership.getByLabel('Reason for this ownership change').fill('Fictional staff cover');
   await ownership.getByRole('button',{name:'Save finance ownership'}).click();
   await page.waitForFunction(()=>document.querySelector('[data-finance-exception="TEST-VARIANCE"]')?.innerText.includes('Cover:'));
-  const saved=f.sql.prepare("SELECT * FROM rx_finance_exceptions WHERE id='TEST-VARIANCE'").get();
+  const saved=f.sql.prepare("SELECT e.*,m.cover_owner_id FROM rx_finance_exceptions e LEFT JOIN rx_finance_exception_management m ON m.exception_id=e.id WHERE e.id='TEST-VARIANCE'").get();
   assert.equal(saved.owner_user_id,1);assert.equal(saved.cover_owner_id,2);assert.equal(saved.due_at,due);
   checks.push({name:'Actual cover UI persists primary owner, cover owner and original commitment',pass:true});
   await item().getByRole('button',{name:'View saved ownership history'}).click();await page.waitForFunction(()=>document.body.innerText.includes('TEST-BROWSER-COVER'));
   assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_finance_exception_history').get().n,1);
   checks.push({name:'Saved ownership history renders the retained approval reference',pass:true});
+  for(const width of [390,1366]){await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
   f.sql.prepare("INSERT INTO rx_reconciliation_runs VALUES('TEST-MATCHED','2026-11-01T00:00:00Z','2026-11-02T00:00:00Z','TEST-MATCHED-RECEIPT',0,'matched',?)").run(new Date().toISOString());
   await page.getByRole('button',{name:'Refresh Finance'}).click();await item().waitFor();
   await item().getByText('Resolve against confirmed financial evidence',{exact:true}).click();

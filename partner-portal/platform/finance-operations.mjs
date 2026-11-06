@@ -6,6 +6,7 @@ const now=()=>new Date().toISOString();
 const rows=async query=>(await query.all()).results||[];
 const pending=new WeakMap();
 const schema=[
+ `CREATE TABLE IF NOT EXISTS rx_finance_exception_management(exception_id TEXT PRIMARY KEY REFERENCES rx_finance_exceptions(id),version INTEGER NOT NULL,original_due_at TEXT NOT NULL,cover_owner_id INTEGER,last_management_reference TEXT NOT NULL,resolved_at TEXT,resolution_reference TEXT)`,
  `CREATE TABLE IF NOT EXISTS rx_finance_exception_commands(client_reference TEXT PRIMARY KEY,exception_id TEXT NOT NULL REFERENCES rx_finance_exceptions(id),payload_digest TEXT NOT NULL,result_json TEXT NOT NULL,created_at TEXT NOT NULL)`,
  `CREATE TABLE IF NOT EXISTS rx_finance_exception_history(id INTEGER PRIMARY KEY AUTOINCREMENT,exception_id TEXT NOT NULL REFERENCES rx_finance_exceptions(id),version INTEGER NOT NULL,actor_id INTEGER NOT NULL,action TEXT NOT NULL,source_reference TEXT NOT NULL,previous_digest TEXT NOT NULL,payload_digest TEXT NOT NULL,event_json TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(exception_id,version))`,
  `CREATE TRIGGER IF NOT EXISTS rx_finance_exception_history_no_update BEFORE UPDATE ON rx_finance_exception_history BEGIN SELECT RAISE(ABORT,'immutable_finance_exception_history');END`,
@@ -18,10 +19,6 @@ export async function ensureFinanceOperations(DB){
  if(pending.has(DB))return pending.get(DB);
  const task=(async()=>{
   await ensureRefundSchema(DB);
-  const columns=new Set((await rows(DB.prepare('PRAGMA table_info(rx_finance_exceptions)'))).map(x=>x.name));
-  for(const [column,definition] of [['version','INTEGER NOT NULL DEFAULT 1'],['original_due_at','TEXT'],['cover_owner_id','INTEGER'],['last_management_reference','TEXT'],['resolved_at','TEXT'],['resolution_reference','TEXT']]){
-   if(!columns.has(column))await DB.prepare('ALTER TABLE rx_finance_exceptions ADD COLUMN '+column+' '+definition).run();
-  }
   for(const sql of schema)await DB.prepare(sql).run();
  })();
  pending.set(DB,task);try{await task}catch(error){pending.delete(DB);throw error}
@@ -33,8 +30,8 @@ async function guard(env,actor){
  g.sql+=" AND EXISTS(SELECT 1 FROM hq_sessions live WHERE live.hq_user_id=? AND live.token_hash=? AND live.revoked_at IS NULL AND julianday(live.expires_at)>julianday('now'))";
  g.args.push(actor.id,actor.sessionHash);
  if(!actor.commercial){
-  g.sql+=" AND EXISTS(SELECT 1 FROM rx_finance_authorities WHERE hq_user_id=? AND expires_at>?)";
-  g.args.push(actor.id,now());
+  g.sql+=" AND EXISTS(SELECT 1 FROM rx_finance_authorities WHERE hq_user_id=? AND julianday(expires_at)>julianday('now'))";
+  g.args.push(actor.id);
  }
  if(!await env.DB.prepare('SELECT 1 allowed WHERE '+g.sql).bind(...g.args).first())fail(403,'finance_access_required');
  return g;
@@ -44,6 +41,7 @@ const view=row=>({id:row.id,orderReference:row.order_number,kind:row.kind,state:
  originalDueAt:row.original_due_at||row.due_at,dueAt:row.due_at,
  source:JSON.parse(row.detail_json),createdAt:row.created_at,
  resolvedAt:row.resolved_at,resolutionReference:row.resolution_reference});
+const joinedExceptions="SELECT e.*,COALESCE(m.version,1) version,m.original_due_at,m.cover_owner_id,m.last_management_reference,m.resolved_at,m.resolution_reference FROM rx_finance_exceptions e LEFT JOIN rx_finance_exception_management m ON m.exception_id=e.id";
 async function financeOwner(env,id){
  if(!Number.isSafeInteger(id))fail(422,'active_finance_owner_required');
  const owner=await env.DB.prepare("SELECT id FROM hq_users u WHERE id=? AND status='active' AND (role IN ('owner','admin') OR (role='operations' AND EXISTS(SELECT 1 FROM rx_finance_authorities f WHERE f.hq_user_id=u.id AND f.expires_at>?)))").bind(id,now()).first();
@@ -84,12 +82,12 @@ export async function financeOperationsRoute(request,env,actor,parts){
  if(env.SSTRX_FUNCTIONAL_V3_ENABLED!=='true')fail(404,'functional_finance_not_open');
  const g=await guard(env,actor);
  if(request.method==='GET'&&parts.length===1){
-  const exceptions=await rows(env.DB.prepare("SELECT * FROM rx_finance_exceptions WHERE state IN ('open','watching') AND "+g.sql+" ORDER BY due_at,id LIMIT 200").bind(...g.args));
+  const exceptions=await rows(env.DB.prepare(joinedExceptions+" WHERE e.state IN ('open','watching') AND "+g.sql+" ORDER BY e.due_at,e.id LIMIT 200").bind(...g.args));
   const owners=await rows(env.DB.prepare("SELECT id,name FROM hq_users u WHERE status='active' AND (role IN ('owner','admin') OR (role='operations' AND EXISTS(SELECT 1 FROM rx_finance_authorities f WHERE f.hq_user_id=u.id AND f.expires_at>?))) AND "+g.sql+" ORDER BY name").bind(now(),...g.args));
   const matchedStatements=await rows(env.DB.prepare("SELECT id,source_reference sourceReference,from_at fromAt,to_at toAt,created_at createdAt FROM rx_reconciliation_runs WHERE state='matched' AND variance_pence=0 AND "+g.sql+" ORDER BY created_at DESC LIMIT 100").bind(...g.args));
   return {exceptions:exceptions.map(view),owners,matchedStatements,moneyMoved:false};
  }
- const row=await env.DB.prepare('SELECT * FROM rx_finance_exceptions WHERE id=? AND '+g.sql).bind(text(parts[1]),...g.args).first();
+ const row=await env.DB.prepare(joinedExceptions+' WHERE e.id=? AND '+g.sql).bind(text(parts[1]),...g.args).first();
  if(!row)fail(404,'finance_exception_not_found');
  if(request.method==='GET'&&parts.length===2)return {exception:view(row),history:await history(env,row.id),moneyMoved:false};
  if(request.method!=='POST'||parts.length!==3||!['assign','cover','resolve'].includes(parts[2]))fail(404,'finance_exception_action_not_found');
@@ -136,7 +134,8 @@ export async function financeOperationsRoute(request,env,actor,parts){
   before:view(row),after:view(next),resolution,previousDigest:last?.payload_digest||'',createdAt:date};
  const eventDigest=await digest(event),result={exception:view(next),moneyMoved:false,resolutionEvidence:resolution};
  const writes=await env.DB.batch([
-  env.DB.prepare(`UPDATE rx_finance_exceptions SET state=?,owner_user_id=?,due_at=?,version=?,original_due_at=?,cover_owner_id=?,last_management_reference=?,resolved_at=?,resolution_reference=? WHERE id=? AND version=? AND state=? AND owner_user_id=? AND due_at=? AND ${g.sql}${sourceGuard}`).bind(next.state,next.owner_user_id,next.due_at,next.version,next.original_due_at,next.cover_owner_id,next.last_management_reference,next.resolved_at,next.resolution_reference,row.id,row.version,row.state,row.owner_user_id,row.due_at,...g.args,...sourceArgs),
+  env.DB.prepare(`UPDATE rx_finance_exceptions SET state=?,owner_user_id=?,due_at=? WHERE id=? AND COALESCE((SELECT version FROM rx_finance_exception_management WHERE exception_id=?),1)=? AND state=? AND owner_user_id=? AND due_at=? AND ${g.sql}${sourceGuard}`).bind(next.state,next.owner_user_id,next.due_at,row.id,row.id,row.version,row.state,row.owner_user_id,row.due_at,...g.args,...sourceArgs),
+  env.DB.prepare('INSERT INTO rx_finance_exception_management SELECT ?,?,?,?,?,?,? WHERE changes()=1 ON CONFLICT(exception_id) DO UPDATE SET version=excluded.version,original_due_at=excluded.original_due_at,cover_owner_id=excluded.cover_owner_id,last_management_reference=excluded.last_management_reference,resolved_at=excluded.resolved_at,resolution_reference=excluded.resolution_reference').bind(row.id,next.version,next.original_due_at,next.cover_owner_id,next.last_management_reference,next.resolved_at,next.resolution_reference),
   env.DB.prepare('INSERT INTO rx_finance_exception_history(exception_id,version,actor_id,action,source_reference,previous_digest,payload_digest,event_json,created_at) SELECT ?,?,?,?,?,?,?,?,? WHERE changes()=1').bind(row.id,next.version,actor.id,action,body.sourceReference,last?.payload_digest||'',eventDigest,JSON.stringify(event),date),
   env.DB.prepare('INSERT INTO rx_finance_exception_commands SELECT ?,?,?,?,? WHERE changes()=1').bind(body.clientReference,row.id,payloadDigest,JSON.stringify(result),date)
  ]);
