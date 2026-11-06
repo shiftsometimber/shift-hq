@@ -119,6 +119,38 @@ function paymentTransport(){return {calls:[],async fetch(request){const b=Object
 function priceReceipt(f,type='checkout.session.completed',paid='paid',id=crypto.randomUUID()){
  const p=f.sql.prepare('SELECT * FROM rx_lifecycle_payments ORDER BY rowid DESC LIMIT 1').get();return {id:'evt_'+id,type,created:Math.floor(Date.now()/1000),livemode:false,data:{object:{id:p.session_id||'cs_test_FICTIONAL_ADJUSTMENT',client_reference_id:p.id,metadata:{sst_price_payment_id:p.id,sst_lifecycle_id:p.lifecycle_id,order_reference:p.order_number},amount_total:p.amount_pence,currency:'gbp',payment_intent:'pi_FICTIONAL_PRICE_CHANGE',payment_status:paid}}};
 }
+for(const [mode,unknown] of [['test',false],['live',false],['test',true]])test('RX-PROC '+mode+' protocol '+(unknown?'unknown result':'checkout')+' uses exact commissioned account and signed receipt; every HTTP request is intercepted',async()=>{
+ const f=await priceSetup();try{
+  const accountId='acct_FICTIONAL000',calls=[],secret='whsec_FICTIONAL_PROCESSOR_ONLY';let session,wrongReconciliationAccount=false;
+  f.afterAgreement=async(_f,p)=>{
+   const original=globalThis.fetch;
+   Object.assign(f.env,{SSTRX_ENVIRONMENT:mode==='live'?'production':'synthetic',STRIPE_MODE:mode,SSTRX_PRICE_PAYMENTS_ENABLED:'true',SSTRX_PRICE_PAYMENT_MODE:mode,STRIPE_SECRET_KEY:['rk',mode,'FICTIONALONLY'].join('_'),STRIPE_PRICE_WEBHOOK_SECRET:secret,SSTRX_PRICE_PAYMENT_COMMISSIONING:JSON.stringify({version:1,mode,accountId,collectionModel:'shift_collects',approvalReference:'FICTIONAL-COMMISSIONING',sandboxEvidenceReference:'FICTIONAL-INTERCEPTED-WIRE-TEST',expiresAt:new Date(Date.now()+3600000).toISOString()})});
+   globalThis.fetch=async(url,options={})=>{
+    assert.equal(new URL(url).origin,'https://api.stripe.com');calls.push({path:new URL(url).pathname,method:options.method||'GET'});assert.equal(options.redirect,'error');
+    if(new URL(url).pathname==='/v1/account')return Response.json({id:wrongReconciliationAccount?'acct_WRONG':accountId});
+    if((options.method||'GET')==='GET'&&new URL(url).pathname==='/v1/checkout/sessions/'+session.id)return Response.json({...session,payment_intent:'pi_FICTIONAL_WIRE_'+mode,payment_status:'paid'});
+    assert.equal(new URL(url).pathname,'/v1/checkout/sessions');const b=Object.fromEntries(new URLSearchParams(options.body));assert.equal(b['line_items[0][price_data][unit_amount]'],'50');assert.equal(b['payment_method_types[0]'],undefined);assert.equal(b['payment_intent_data[metadata][sst_price_payment_id]'],b.client_reference_id);assert(Number(b.expires_at)*1000-Date.now()>1800000);assert.match(options.headers['Idempotency-Key'],/^rx-price:/);
+    const metadata=Object.fromEntries(Object.entries(b).filter(([key])=>key.startsWith('metadata[')).map(([key,value])=>[key.slice(9,-1),value]));
+    session={id:'cs_'+mode+'_FICTIONAL_WIRE_ONLY',object:'checkout.session',mode:'payment',status:'open',livemode:mode==='live',client_reference_id:b.client_reference_id,amount_total:50,currency:'gbp',metadata,expires_at:Number(b.expires_at),url:'https://checkout.stripe.com/c/pay/FICTIONAL_ONLY'};
+    if(unknown)throw Error('FICTIONAL response lost after provider acceptance');return Response.json(session);
+   };
+   try{
+    const request={agreed:true,version:p.version+1,amountPence:1};const result=await j(await f.payment(request));assert.equal(result.state,unknown?'unknown':'checkout_open');await j(await f.payment(request));assert.equal(calls.filter(c=>c.method==='POST').length,1);
+    const row=f.sql.prepare('SELECT * FROM rx_lifecycle_payments').get(),source=JSON.parse(f.sql.prepare('SELECT source_json FROM rx_lifecycle_payment_sources').get().source_json);assert.equal(source.accountId,accountId);assert.equal(source.mode,mode);assert.equal(source.kind,'stripe');assert.throws(()=>f.sql.exec("UPDATE rx_lifecycle_payment_sources SET source_json='{}'"),/immutable_processor_source/);
+    const event={id:'evt_FICTIONAL_WIRE_'+mode+'_'+unknown,type:'checkout.session.async_payment_succeeded',created:Math.floor(Date.now()/1000),livemode:mode==='live',data:{object:{...session,payment_intent:'pi_FICTIONAL_WIRE_'+mode,payment_status:'paid'}}};
+    await assert.rejects(applyPricePaymentEvent(f.env,event),mode==='live'?/not_authorised/:/source_mismatch/);
+    // Disabling NEW Checkout creation must not discard a genuine late webhook.
+    f.env.SSTRX_PRICE_PAYMENTS_ENABLED='false';const raw=JSON.stringify(event),ts=Math.floor(Date.now()/1000),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']),sig=Buffer.from(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(ts+'.'+raw))).toString('hex');
+    const signed=()=>stripePriceWebhook(new Request('https://api.shiftsometimber.co.uk/v1/hq/clinical/platform/processor/adjustments',{method:'POST',headers:{'Stripe-Signature':'t='+ts+',v1='+sig},body:raw}),f.env);
+    if(unknown){wrongReconciliationAccount=true;assert.equal((await j(await signed(),503)).error,'price_receipt_account_reconciliation_required');assert.equal(f.sql.prepare('SELECT state FROM rx_lifecycle_payments').get().state,'unknown');assert.equal(calls.filter(c=>c.method==='POST').length,1);wrongReconciliationAccount=false;}
+    assert.equal((await j(await signed())).state,'paid');assert.equal((await j(await signed())).duplicate,true);assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM rx_finance_entries WHERE event_reference=?").get('price-payment:'+row.id).n,1);assert.equal(calls.filter(c=>c.method==='POST').length,1);
+    assert(f.sql.prepare("SELECT 1 FROM rx_audit_journal WHERE source_table='rx_lifecycle_payment_sources'").get());
+   }finally{globalThis.fetch=original;f.env.SSTRX_ENVIRONMENT='synthetic';f.env.STRIPE_MODE='test';}
+  };
+  await replacementSignature(f,'FICTIONAL processor wire protocol only',200,12);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM medicine_orders').get().n,1);assert.equal(f.sql.prepare("SELECT SUM(amount_pence) n FROM rx_finance_entries WHERE kind='member_payment'").get().n,150);
+  if(!unknown)await retainEvidence(f,'processor-'+mode+'-intercepted-price-adjustment');
+ }finally{f.close();}
+});
 test('RX-PRICE1 increased-price amendment requires the exact finance plan, member consent and verified top-up; one existing order and linked history survive',async()=>{
  const f=await priceSetup();try{const t=paymentTransport();f.env.LIFECYCLE_PAYMENT_TEST_TRANSPORT=t;
   f.afterAgreement=async(_f,p,cookie)=>{let d=await j(await f.payment({agreed:true,version:p.version+1}));assert.equal(d.state,'checkout_open');await j(await f.payment({agreed:true,version:p.version+1}));assert.equal(t.calls.length,1);

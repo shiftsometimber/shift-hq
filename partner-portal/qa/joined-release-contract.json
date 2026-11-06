@@ -1,19 +1,21 @@
 {
-  "kind": "Joined v3.1 source qualification; not live acceptance",
-  "rxHqParent": "91ce1bc0f983c31ac1b9164d9b55d4bc29978c01",
-  "hqV31Parent": "a1ac9af5ef3ed4fd1b96e17a828c17df78aa0ef6",
-  "coreCommit": "91edfb8b652cdefdb997b056b494892f17020bfd",
+  "kind": "Commissioning-gated processor source qualification; not live acceptance",
+  "rxHqParent": "ec12f3aa96b11c94ad68b46530b2043b85842437",
+  "coreCommit": "d53d333bad6af30238e923ee8a2510bb23073dfc",
+  "coreTree": "5f185a695c0cbde3b608c63fec1c317e7deddafa",
   "coreApiSha256": "d745b1c2d2453f6604cbf640a363b38607d738f0f2a55694a883573e8c49d5af",
   "checks": {
-    "rxHqComponents": 187,
+    "rxHqComponents": 195,
     "hqUi": 25,
-    "coreCommerce": 76,
-    "total": 288,
-    "nativeAuthWorkflow": "PASS; external transports simulated",
-    "crossRepositoryPurchaseAndCatalogue": "PASS; same database and actual handlers"
+    "coreCommerce": 79,
+    "total": 299,
+    "nativeAuthWorkflow": "PASS; simulated external transports",
+    "sharedDatabaseContract": "PASS; actual Core/RX/My Shift handlers"
   },
-  "ownerReleaseRequested": true,
+  "processorTesting": "All test and live protocol branches intercept global fetch; zero real Stripe requests or charges",
+  "processorEnabledInProduction": false,
+  "sourceApproval": "Matt authorised building, publishing and switch-on; applicable commissioning and named checks remain required",
   "productionDeployed": false,
-  "fullNamedAcceptance": "132 scenarios NOT RUN on exact hosted release",
-  "remainingHostedAccess": "Existing connection Access applications/policies read denied HTTP 403; not retried"
+  "fullNamedAcceptance": "132 NOT RUN on exact hosted release",
+  "corePublicationReconciled": "Concurrent publisher already wrote identical tested legacy merge; no duplicate commit or push was attempted"
 }
