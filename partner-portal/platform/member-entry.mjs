@@ -76,13 +76,24 @@ export function installMemberMessages({myShift=true}={}){
   }catch{if(!alive||version!==generation)return;unread=null;const link=document.getElementById('mt-secure-messages-link');if(link){link.textContent='Messages';link.setAttribute('aria-label','Messages — unread status unavailable');}}
   finally{pending=false;}
  }
+ // Journey allows either weight or waist. Do not submit an untouched reading
+ // form; the canonical API still validates every record independently.
+ const measurementSubmit=event=>{
+  const form=event.target;if(!form?.matches?.('[data-tj-record-form]'))return;
+  const readings=[...form.querySelectorAll('[name=weight],[name=weightKg],[name=stones],[name=pounds],[name=waistCm]')].filter(input=>!input.disabled);
+  if(!readings.length||readings.some(input=>input.value.trim()!==''))return;
+  event.preventDefault();event.stopImmediatePropagation();
+  const status=document.querySelector('[data-tj-status]');if(status)status.textContent='Add a weight or waist reading before saving.';
+  readings[0].focus();
+ };
+ document.addEventListener('submit',measurementSubmit,true);
  const accountChanged=()=>{generation++;ready=false;unread=null;clear();};document.addEventListener('sst:account-changed',accountChanged);
  const observer=new MutationObserver(mount);observer.observe(document.body,{childList:true,subtree:true});
  const resume=e=>{if(e.persisted){window.removeEventListener('pageshow',resume);marker.remove();installMemberMessages({myShift});}};
  window.addEventListener('pageshow',resume);
  const timer=setInterval(refresh,60000);
  window.addEventListener('focus',refresh);window.addEventListener('hashchange',mount);window.addEventListener('popstate',mount);document.addEventListener('sstrx-message-change',refresh);
- window.addEventListener('pagehide',()=>{alive=false;ready=false;clear();observer.disconnect();clearInterval(timer);window.removeEventListener('focus',refresh);window.removeEventListener('hashchange',mount);window.removeEventListener('popstate',mount);document.removeEventListener('sstrx-message-change',refresh);document.removeEventListener('sst:account-changed',accountChanged);},{once:true});
+ window.addEventListener('pagehide',()=>{alive=false;ready=false;clear();observer.disconnect();clearInterval(timer);window.removeEventListener('focus',refresh);window.removeEventListener('hashchange',mount);window.removeEventListener('popstate',mount);document.removeEventListener('sstrx-message-change',refresh);document.removeEventListener('sst:account-changed',accountChanged);document.removeEventListener('submit',measurementSubmit,true);},{once:true});
  mount();refresh();
 }
 export const MEMBER_ENTRY_CLIENT='('+installMemberMessages.toString()+')();';
