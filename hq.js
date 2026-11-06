@@ -12,7 +12,7 @@
     const deepLink = new URLSearchParams(location.search);
     const requestedView = deepLink.get('view');
     let requestedEvent = /^\d+$/.test(deepLink.get('event') || '') ? deepLink.get('event') : null;
-    let radarEvents=[];
+    let radarEvents=[],tickerDesk;
     let knowledgeRevision=0,knowledgeController;
     let openedDeepLink=false;
     const radarDestinations=['medicine_news','dossier','ticker_knowledge','ticker_treatments','knowledge_links','member_watch','member_email','member_push','search','sitemap','social_instagram','social_facebook','social_linkedin','social_x'];
@@ -146,6 +146,7 @@
     function radarQueuePath(eventId){return '/v1/hq/radar/queue'+(eventId?'?event='+encodeURIComponent(eventId):'');}
 
     async function loadRadar(){
+      tickerDesk?.load();
       try {
         const [qj,mj,fj,pj]=await Promise.all([radarCall(radarQueuePath(requestedEvent)),radarCall('/v1/hq/radar/medicines'),radarCall('/v1/hq/radar/forward'),radarCall('/v1/hq/radar/publication-jobs')]);
         const events=qj.events||[], meds=mj.medicines||[], forward=fj.milestones||[], jobs=pj.jobs||[];radarEvents=events;
@@ -422,6 +423,7 @@
     installEvidenceDeskView();
     installKnowledgeLoadState();
     window.installManagementHQ?.();
+    tickerDesk=window.HQTickerControls?.install({root:$('#radar'),call:radarCall,principal:()=>S.me,api:API});window.HQActiveTickerDesk=tickerDesk;
     window.installGpDirectoryHQ?.();
     window.installGpMemberEditorHQ?.();
     if(requestedView==='radar'){

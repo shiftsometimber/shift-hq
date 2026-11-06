@@ -6,6 +6,12 @@ on:
     paths:
       - 'hq.js'
       - 'hq-management.js'
+      - 'hq-ticker-controls.js'
+      - 'hq-ticker-controls.test.cjs'
+      - 'hq-v3-foundation.js'
+      - 'hq-v3-foundation.css'
+      - 'hq-catalogue-v31.js'
+      - 'hq-v31-business.js'
       - 'hq-operations.js'
       - 'hq-operations.css'
       - 'hq-operations.test.cjs'
@@ -29,11 +35,12 @@ jobs:
         run: |
           node --check hq.js
           node --check hq-management.js
+          node --check hq-ticker-controls.js
           node --check hq-operations.js
           node --check hq-v111.js
           node --check turnstile-auth-v1.js
       - name: Verify HQ source states and session-bound rendering
-        run: node --test hq-operations.test.cjs
+        run: node --test hq-operations.test.cjs hq-v3-foundation.test.cjs hq-catalogue-v31.test.cjs hq-v31-business.test.cjs hq-ticker-controls.test.cjs
       - name: Protect V1.11 runtime and Radar shell wiring
         run: |
           # Reviewed HQ management baseline: role-aware CRM startup plus login guards, commerce
