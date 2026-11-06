@@ -18,8 +18,8 @@ export function priceProcessor(env,collectionModel){
  const headers={Authorization:'Bearer '+key,'Stripe-Version':PRICE_STRIPE_VERSION};
  const source={kind:'stripe',mode,accountId:p.accountId,policyVersion:p.version,approvalReference:p.approvalReference,sandboxEvidenceReference:p.sandboxEvidenceReference,commissionedUntil:p.expiresAt};
  return {source,async verifyAccount(){
-  try{const r=await fetch(endpoint+'/v1/account',{headers,redirect:'error',signal:AbortSignal.timeout(15000)}),account=await r.json();if(!r.ok||account.id!==p.accountId)throw Error();}catch{fail(503,'price_processor_account_unverified')}
- },send:(body,idempotencyKey,signal)=>fetch(endpoint+'/v1/checkout/sessions',{method:'POST',headers:{...headers,'Content-Type':'application/x-www-form-urlencoded','Idempotency-Key':idempotencyKey},body:body.toString(),signal,redirect:'error'})};
+  try{const r=await fetch(endpoint+'/v1/account',{headers,redirect:'manual',signal:AbortSignal.timeout(15000)}),account=await r.json();if(!r.ok||account.id!==p.accountId)throw Error();}catch{fail(503,'price_processor_account_unverified')}
+ },send:(body,idempotencyKey,signal)=>fetch(endpoint+'/v1/checkout/sessions',{method:'POST',headers:{...headers,'Content-Type':'application/x-www-form-urlencoded','Idempotency-Key':idempotencyKey},body:body.toString(),signal,redirect:'manual'})};
 }
 export function priceCheckoutExpiry(planExpires,agreementExpires,at=Date.now()){
  const expires=Math.floor(Math.min(at+31*60000,Date.parse(planExpires),Date.parse(agreementExpires))/1000);
@@ -46,7 +46,7 @@ export async function confirmUncertainPriceSession(env,source,payment,event){
  if(!new RegExp('^[sr]k_'+mode+'_[A-Za-z0-9_]+$').test(key||''))fail(503,'price_receipt_reconciliation_credentials_required');
  const headers={Authorization:'Bearer '+key,'Stripe-Version':PRICE_STRIPE_VERSION};
  try{
-  const get=async path=>{const r=await fetch(endpoint+path,{headers,redirect:'error',signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error();return r.json()};
+  const get=async path=>{const r=await fetch(endpoint+path,{headers,redirect:'manual',signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error();return r.json()};
   if((await get('/v1/account')).id!==source.accountId)throw Error();
   const reported=event.data.object,s=await get('/v1/checkout/sessions/'+encodeURIComponent(reported.id)),m=s.metadata;
   if(s.id!==reported.id||s.object!=='checkout.session'||s.mode!=='payment'||s.livemode!==(mode==='live')||s.client_reference_id!==payment.id||s.amount_total!==payment.amount_pence||s.currency!=='gbp'||m?.sst_price_payment_id!==payment.id||m?.sst_lifecycle_id!==payment.lifecycle_id||m?.order_reference!==payment.order_number||m?.sst_processor_account!==source.accountId||m?.sst_processor_policy!==String(source.policyVersion))throw Error();

@@ -19,7 +19,7 @@ const encode=v=>Buffer.from(JSON.stringify(v)).toString('base64url');
 async function token(claims={},header={},key=first){const input=encode({alg:'RS256',typ:'JWT',kid:key1.kid,...header})+'.'+encode({...base,...claims});return input+'.'+Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key.privateKey,new TextEncoder().encode(input))).toString('base64url');}
 function boundary(handler={fetch:()=>new Response('native')},options={}){
  let calls=0;
- const app=createQaAccessBoundary(handler,{now:()=>instant,fetchKeys:async(url,init)=>{calls++;assert.equal(url,QA_ACCESS.issuer+'/cdn-cgi/access/certs');assert.equal(init.redirect,'error');return Response.json({keys:[key1]});},...options});
+ const app=createQaAccessBoundary(handler,{now:()=>instant,fetchKeys:async(url,init)=>{calls++;assert.equal(url,QA_ACCESS.issuer+'/cdn-cgi/access/certs');assert.equal(init.redirect,'manual');return Response.json({keys:[key1]});},...options});
  return {app,calls:()=>calls};
 }
 const env={SSTRX_ENVIRONMENT:'synthetic'};
@@ -40,6 +40,13 @@ test('QA: malformed assertions, algorithms and token-provided key URLs are rejec
  for(const t of ['not.jwt','a.b.c','a'.repeat(16001),await token({}, {alg:'none'}),await token({}, {jku:'https://evil.invalid/keys'}),await token({}, {x5u:'https://evil.invalid/cert'}),await token({}, {crit:['unknown']})])assert.equal((await b.app.fetch(request(t),env)).status,403);
  assert.equal(b.calls(),0);
 });
+test('QA: the optional JWT typ header can be absent; changed types, algorithms and signatures still fail closed',async()=>{
+ let native=0;const b=boundary({fetch(){native++;return new Response('native')}});
+ assert.equal((await b.app.fetch(request(await token({}, {typ:undefined})),env)).status,200);
+ for(const h of [{typ:'not-a-jwt'},{alg:'none',typ:undefined},{kid:'private.bad.key',typ:undefined}])assert.equal((await b.app.fetch(request(await token({},h)),env)).status,403);
+ assert.equal((await b.app.fetch(request(await token({}, {typ:undefined},second)),env)).status,403);
+ assert.equal(native,1);
+});
 test('QA: exact issuer, application audience, app type and bounded valid session are mandatory',async()=>{
  const b=boundary();
  for(const change of [{iss:'https://other.cloudflareaccess.com'},{aud:['another-app']},{type:'org'},{exp:seconds},{exp:seconds+1801},{iat:seconds+31},{nbf:seconds+1},{exp:'future'},{iat:null}])assert.equal((await b.app.fetch(request(await token(change)),env)).status,403,JSON.stringify(change));
@@ -47,6 +54,15 @@ test('QA: exact issuer, application audience, app type and bounded valid session
 });
 test('QA: a different signed identity or service token does not inherit the reviewer policy',async()=>{
  const b=boundary();for(const email of ['other@example.invalid','',null])assert.equal((await b.app.fetch(request(await token({email})),env)).status,403);assert.equal(b.calls(),0);
+});
+test('QA: handover failure diagnostics contain static codes and never disclose assertions or identity values',async()=>{
+ const b=boundary();
+ for(const [claims,code]of [[{aud:['private-wrong-audience']},'assertion_audience'],[{exp:seconds+1801},'assertion_session_limit'],[{email:'private-reviewer@example.invalid'},'assertion_reviewer']]){
+  const t=await token(claims),r=await b.app.fetch(request(t),env),d=await r.json();
+  assert.equal(r.status,403);assert.deepEqual(d,{error:'qa_access_required',check:code});
+  assert.ok(!JSON.stringify(d).includes(t));for(const value of Object.values(claims).flat())assert.ok(!JSON.stringify(d).includes(String(value)));
+ }
+ assert.deepEqual(await(await b.app.fetch(request(null),env)).json(),{error:'qa_access_required',check:'assertion_missing'});assert.equal(b.calls(),0);
 });
 test('QA: cryptographically forged and changed signatures cannot reach the backend',async()=>{
  let native=0;const b=boundary({fetch(){native++;return new Response();}}),good=await token();
@@ -68,6 +84,13 @@ test('QA: key outage, malformed key feed and weak keys fail closed before native
  for(const fetchKeys of [async()=>{throw Error('offline');},async()=>new Response('bad json'),async()=>Response.json({keys:[]}),async()=>Response.json({keys:[{...key1,n:'AQAB'}]})]){
   const b=boundary({fetch(){native++;return new Response();}},{fetchKeys});assert.equal((await b.app.fetch(request(await token()),env)).status,503);
  }assert.equal(native,0);
+});
+test('QA: Workers-compatible key retrieval never follows a redirect or accepts its key body',async()=>{
+ let reads=0,native=0;const b=boundary({fetch(){native++;return new Response('native')}},{fetchKeys:async(url,init)=>{
+  reads++;assert.equal(url,QA_ACCESS.issuer+'/cdn-cgi/access/certs');assert.equal(init.redirect,'manual');
+  return new Response(JSON.stringify({keys:[key1]}),{status:302,headers:{Location:'https://private-redirect.invalid/keys','Content-Type':'application/json'}});
+ }});
+ const r=await b.app.fetch(request(await token()),env);assert.equal(r.status,503);assert.deepEqual(await r.json(),{error:'qa_access_unavailable',check:'keys_http_302'});assert.equal(reads,1);assert.equal(native,0);
 });
 test('QA: expired key cache is not used during outage; unknown-key refresh is rate limited and supports rotation',async()=>{
  let time=instant,calls=0,offline=false;
