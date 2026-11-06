@@ -7,6 +7,12 @@ export function installMemberMessages(){
  const clear=()=>document.getElementById('mt-secure-messages-link')?.remove();
  function mount(){
   if(!alive||!ready)return clear();
+  // The retained app renders More locally. Its visible tab must use the
+  // canonical account entry rather than the old built-in tools panel.
+  for(const a of document.querySelectorAll('a[data-mt-shop-tab="more"]')){
+   const u=new URL(a.getAttribute('href')||'',location.origin);
+   if(u.origin===location.origin&&u.pathname==='/member/dashboard'&&u.searchParams.get('timber')==='stuff'&&!u.searchParams.has('tools'))a.setAttribute('href','/member/settings');
+  }
   const header=document.querySelector('.mt-shop-brand');if(!header)return;
   let link=document.getElementById('mt-secure-messages-link');
   if(!link){link=document.createElement('a');link.id='mt-secure-messages-link';link.href='/member/messages';link.style.cssText='color:#E7E3DA;background:#050505;border:1px solid #707762;border-radius:8px;padding:10px 12px;min-height:44px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap';header.append(link);}

@@ -20,6 +20,7 @@ export async function previewSelection(request,env,now=Date.now()){
 function eligible(url,method){
  if(url.origin!==ORIGIN||!['GET','POST','HEAD'].includes(method))return false;
  const p=url.pathname;if(/^\/v1\/member\/my-shift(?:\/|$)/.test(p))return true;
+ if(['GET','HEAD'].includes(method)&&(p==='/v1/my-timber/boot'||/^\/assets\/member-experience\/v7-native\.(?:mjs|css)$/.test(p)))return true;
  if(!['GET','HEAD'].includes(method))return false;
  return /^\/member\/(?:my-shift(?:\/|$)|settings$|messages$|care$|dashboard$)/.test(p)||/^\/assets\/clinical-records\/(?:my-shift\.(?:css|mjs)|member-password-settings\.mjs|member-entry\.mjs)$/.test(p)||p==='/assets/member-experience/v7-retained-script.mjs'&&url.searchParams.get('source')==='/assets/clinical-records/my-shift.mjs';
 }
