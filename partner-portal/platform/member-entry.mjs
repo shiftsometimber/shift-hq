@@ -31,6 +31,7 @@ export function installMemberMessages(){
    }
    const pwa=document.getElementById('pwaReminderSettings');
    if(pwa&&location.pathname==='/member/settings'&&!document.getElementById('notifications')){
+    pwa.hidden=true;
     const section=document.createElement('section');section.id='notifications';section.className='mt-v7-card';section.dataset.nativeNotificationOptions='';
     const heading=document.createElement('h2');heading.textContent='Notifications and reminders';
     const copy=document.createElement('p');copy.textContent='Treatment reminders are managed in My treatment. Daily check-in notifications are not currently available inside this app.';
