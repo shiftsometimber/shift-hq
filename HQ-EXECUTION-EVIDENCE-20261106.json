@@ -436,5 +436,271 @@
       "hosted132Status": "NOT QUALIFIED",
       "externalCommunicationsSent": 0
     }
-  ]
+  ],
+  "hqLoaderSourceAndPrivateDeployment20261106": {
+    "recordedAt": "2026-11-06T20:28:46.912466+00:00",
+    "source": {
+      "hq": "7ad2a2c5d5cc426463ada763bea24b8f5890f066",
+      "core": "6dfdf4154d0757395210664a117ee478146414b3"
+    },
+    "scope": "Local tests qualified; isolated private QA deployed and served modules independently verified. Full hosted acceptance remains NOT RUN.",
+    "components": {
+      "pass": 252,
+      "fail": 0,
+      "skip": 0
+    },
+    "hqFocused": {
+      "pass": 63,
+      "fail": 0,
+      "skip": 0
+    },
+    "memberBrowsers": {
+      "chromium": 44,
+      "webkit": 44
+    },
+    "loaderBrowsers": {
+      "chromium": 24,
+      "webkit": 24,
+      "scope": "Actual modules with fictional controlled transport; desktop and phone viewport"
+    },
+    "exactFinalUploadQualification": {
+      "checks": 12,
+      "pass": true,
+      "externalCalls": 0,
+      "actualServedClinicalIncluded": true
+    },
+    "aiHardStops": {
+      "blockedActionTypes": 8,
+      "auditedBlocks": 8,
+      "permittedDraftReviewIdempotent": true,
+      "executionPermitted": false
+    },
+    "demographicSourceMap": {
+      "observedAt": "2026-11-06T20:00:34.743842+00:00",
+      "source": "Actual isolated QA D1 schema, not a mock",
+      "databaseMarkerVerified": true,
+      "sourceTable": "users",
+      "fields": {
+        "date_of_birth": true,
+        "postcode": true,
+        "region": false,
+        "nation": false
+      },
+      "regionTaxonomyMapped": false,
+      "owner": "Member data owner / engineering",
+      "clinicalAssessmentBodiesRead": false,
+      "coverage": {
+        "state": "suppressed",
+        "reason": "Population or a non-empty coverage cell is below five; raw counts withheld"
+      }
+    },
+    "privateDeployment": {
+      "startedAt": "2026-11-06T20:26:00.044405+00:00",
+      "source": {
+        "hq": "7ad2a2c5d5cc426463ada763bea24b8f5890f066",
+        "core": "6dfdf4154d0757395210664a117ee478146414b3"
+      },
+      "scope": "Existing isolated synthetic QA only; overwrite guard retained; current clinical runtime preserved",
+      "before": {
+        "core": {
+          "id": "9174aae5-d5d7-4cad-80b5-28252d6a91ac",
+          "source": "wrangler",
+          "strategy": "percentage",
+          "author_email": "matobrien@hotmail.co.uk",
+          "annotations": {
+            "workers/triggered_by": "deployment"
+          },
+          "versions": [
+            {
+              "version_id": "0b51eb7c-a9c5-460f-abed-14184dadbea1",
+              "percentage": 100
+            }
+          ],
+          "created_on": "2026-11-06T19:36:50.514631Z"
+        },
+        "clinical": {
+          "id": "c0777b09-4989-4a41-b7a8-2a3ea3dc8dae",
+          "source": "wrangler",
+          "strategy": "percentage",
+          "author_email": "matobrien@hotmail.co.uk",
+          "annotations": {
+            "workers/triggered_by": "deployment"
+          },
+          "versions": [
+            {
+              "version_id": "6b716d1f-f87c-47a6-be64-ca29481dba42",
+              "percentage": 100
+            }
+          ],
+          "created_on": "2026-11-06T19:47:05.574516Z"
+        },
+        "edge": {
+          "id": "7f5d496d-938a-4fb2-9b20-fc5b485a23ed",
+          "source": "wrangler",
+          "strategy": "percentage",
+          "author_email": "matobrien@hotmail.co.uk",
+          "annotations": {
+            "workers/triggered_by": "deployment"
+          },
+          "versions": [
+            {
+              "version_id": "a7308b39-8955-4e5b-9b7d-624db3afbf70",
+              "percentage": 100
+            }
+          ],
+          "created_on": "2026-11-06T19:37:20.43437Z"
+        }
+      },
+      "steps": {
+        "core": {
+          "submittedAt": "2026-11-06T20:26:10.220372+00:00",
+          "sha256": "6be3057e10517044910b3cc1e2afc40cb4e7b114c54d8afccd173159effab6e7",
+          "rollbackVersion": "0b51eb7c-a9c5-460f-abed-14184dadbea1",
+          "exitCode": 0,
+          "readBack": {
+            "id": "1a495ed5-0ce7-45ec-957f-11a602863826",
+            "source": "wrangler",
+            "strategy": "percentage",
+            "author_email": "matobrien@hotmail.co.uk",
+            "annotations": {
+              "workers/triggered_by": "deployment"
+            },
+            "versions": [
+              {
+                "version_id": "467015ba-6ca0-4dfb-ad60-3fdcd9d78009",
+                "percentage": 100
+              }
+            ],
+            "created_on": "2026-11-06T20:26:18.782684Z"
+          },
+          "verified100Percent": true
+        },
+        "edge": {
+          "submittedAt": "2026-11-06T20:26:29.018422+00:00",
+          "sha256": "425861c84adcf9bddbdd29efd02dc0ce790b581ee671838665d073044ee99c5e",
+          "rollbackVersion": "a7308b39-8955-4e5b-9b7d-624db3afbf70",
+          "exitCode": 0,
+          "readBack": {
+            "id": "4dc400a4-b4a2-4d2c-befc-44c842193769",
+            "source": "wrangler",
+            "strategy": "percentage",
+            "author_email": "matobrien@hotmail.co.uk",
+            "annotations": {
+              "workers/triggered_by": "deployment"
+            },
+            "versions": [
+              {
+                "version_id": "7a4390ce-a0c4-4a77-989a-36f453260147",
+                "percentage": 100
+              }
+            ],
+            "created_on": "2026-11-06T20:26:41.724317Z"
+          },
+          "verified100Percent": true
+        }
+      },
+      "productionDeployed": false,
+      "seedReset": false,
+      "outgoingMessages": 0,
+      "realTransactions": 0,
+      "hostedAcceptance": "NOT RUN after this deployment",
+      "after": {
+        "core": {
+          "id": "1a495ed5-0ce7-45ec-957f-11a602863826",
+          "source": "wrangler",
+          "strategy": "percentage",
+          "author_email": "matobrien@hotmail.co.uk",
+          "annotations": {
+            "workers/triggered_by": "deployment"
+          },
+          "versions": [
+            {
+              "version_id": "467015ba-6ca0-4dfb-ad60-3fdcd9d78009",
+              "percentage": 100
+            }
+          ],
+          "created_on": "2026-11-06T20:26:18.782684Z"
+        },
+        "clinical": {
+          "id": "c0777b09-4989-4a41-b7a8-2a3ea3dc8dae",
+          "source": "wrangler",
+          "strategy": "percentage",
+          "author_email": "matobrien@hotmail.co.uk",
+          "annotations": {
+            "workers/triggered_by": "deployment"
+          },
+          "versions": [
+            {
+              "version_id": "6b716d1f-f87c-47a6-be64-ca29481dba42",
+              "percentage": 100
+            }
+          ],
+          "created_on": "2026-11-06T19:47:05.574516Z"
+        },
+        "edge": {
+          "id": "4dc400a4-b4a2-4d2c-befc-44c842193769",
+          "source": "wrangler",
+          "strategy": "percentage",
+          "author_email": "matobrien@hotmail.co.uk",
+          "annotations": {
+            "workers/triggered_by": "deployment"
+          },
+          "versions": [
+            {
+              "version_id": "7a4390ce-a0c4-4a77-989a-36f453260147",
+              "percentage": 100
+            }
+          ],
+          "created_on": "2026-11-06T20:26:41.724317Z"
+        }
+      },
+      "initialReadBack": "First immediate content read returned earlier bytes; original failed check retained. Subsequent independent no-cache read matched all exact qualified modules without redeployment.",
+      "artifactReadBack": {
+        "core": {
+          "exactQualifiedBytes": true,
+          "modules": [
+            {
+              "name": "core.bundle.mjs",
+              "sha256": "6be3057e10517044910b3cc1e2afc40cb4e7b114c54d8afccd173159effab6e7",
+              "bytes": 2297322
+            }
+          ]
+        },
+        "clinical": {
+          "exactQualifiedBytes": true,
+          "modules": [
+            {
+              "name": "clinical.bundle.mjs",
+              "sha256": "6613b2884c06927e46789d575545bbbe5adb5b4ca130679939372ac2233a6001",
+              "bytes": 1027089
+            }
+          ]
+        },
+        "edge": {
+          "exactQualifiedBytes": true,
+          "modules": [
+            {
+              "name": "edge.bundle.mjs",
+              "sha256": "425861c84adcf9bddbdd29efd02dc0ce790b581ee671838665d073044ee99c5e",
+              "bytes": 311734
+            }
+          ]
+        }
+      },
+      "result": "PASS_DEPLOYED_PRIVATE_QA",
+      "clinicalRetained": true,
+      "completedAt": "2026-11-06T20:28:46.912466+00:00"
+    },
+    "remaining": {
+      "tickerLifecycle": "NEXT implementation; existing runtime and control route found",
+      "hostedCurrentAcceptance": "NOT RUN; reviewer browser session required",
+      "regionMapping": "Unavailable; users region/nation fields absent; postcode mapping not yet connected",
+      "persistentLearningProducers": "Unavailable until lawful purpose and real producer connected",
+      "installedPhones": "NOT RUN; last stage",
+      "realDispensingOperators": "Matt next week"
+    },
+    "productionDeployed": false,
+    "realTransactions": 0,
+    "externalMessagesSent": 0
+  }
 }
