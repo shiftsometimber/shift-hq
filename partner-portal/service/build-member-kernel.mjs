@@ -15,6 +15,7 @@ export async function buildMemberKernel(){
  once('if (!unchanged && (order.discount_pence !== 0 || order.discount_code))','if (!unchanged && !context.lifecycle && (order.discount_pence !== 0 || order.discount_code))');
  once('return { variant, quote: {','return lifecycleQuote(env,context,variant,packs,{');
  once('  } };\n}\n__name(quoteFor','  });\n}\n__name(quoteFor');
+ once("async function save(submit=false,form){const captured=epoch","async function save(submit=false,form){notice.textContent='';const captured=epoch");
  const information='  statements.push(...notificationEventStatements(env, record, { id, kind, source: "case", sourceId: id, at: date }));';
  if(source.split(information).length!==2)throw Error('Member information transaction anchor changed');
  source=source.replace(information,'  statements.push(...await informationStatements(env,record,actor,reviewer,b,id,kind,assessment,date));\n'+information);

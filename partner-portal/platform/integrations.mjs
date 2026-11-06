@@ -38,7 +38,7 @@ export async function selectFutureSupplier(DB,{orgId,service,contractId,version,
  else if(r.meta.changes!==1)fail(409,'routing_changed');
  return {version:version+1,contractId,historicalOrdersChanged:0};
 }
-export async function captureOrderRoute(DB,{orderNumber,memberId,clinicalOrgId,pharmacyOrgId,contractId,prescriptionId,variantId,service,authorisationReference}){
+export async function captureOrderRoute(DB,{orderNumber,memberId,clinicalOrgId,pharmacyOrgId,contractId,prescriptionId,variantId,service,authorisationReference},environment={}){
  await ensurePlatformSchema(DB);serviceKey(service);text(authorisationReference);
  const prior=await row(DB,'SELECT * FROM rx_order_routes WHERE order_number=?',orderNumber);
  if(prior){if(prior.member_id!==memberId||prior.contract_id!==contractId||prior.prescription_id!==prescriptionId||prior.pharmacy_org_id!==pharmacyOrgId)fail(409,'historical_supplier_route_immutable');return prior;}
@@ -48,7 +48,7 @@ export async function captureOrderRoute(DB,{orderNumber,memberId,clinicalOrgId,p
  const task=await row(DB,'SELECT state_json FROM partner_fulfilment WHERE order_number=? AND member_id=? AND partner_id=?',orderNumber,memberId,pharmacyOrgId);
  const rx=task?JSON.parse(task.state_json):null;
  if(!rx||rx.prescriptionId!==prescriptionId||rx.area!==service)fail(409,'signed_native_pharmacy_task_required');
- const signed=await internalPrescriptionDocument({DB,PRESCRIPTION_SIGNING_ENABLED:'true',PRESCRIPTION_WORKFLOW_ENABLED:'true'},rx);if(!signed?.current||signed.document.prescriber.organisationId!==clinicalOrgId||signed.document.treatment.variantId!==variantId)fail(409,'current_verified_prescription_route_required');
+ const signed=await internalPrescriptionDocument({...environment,DB,PRESCRIPTION_SIGNING_ENABLED:'true',PRESCRIPTION_WORKFLOW_ENABLED:'true'},rx);if(!signed?.current||signed.document.prescriber.organisationId!==clinicalOrgId||signed.document.treatment.variantId!==variantId)fail(409,'current_verified_prescription_route_required');
  const mapping=await row(DB,'SELECT * FROM rx_product_mappings WHERE contract_id=? AND variant_id=?',contractId,variantId);
  if(!mapping)fail(409,'verified_product_mapping_required');
  const created=now();await DB.prepare('INSERT INTO rx_order_routes VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(orderNumber,memberId,clinicalOrgId,pharmacyOrgId,contractId,contract.version,service,prescriptionId,JSON.stringify(mapping),authorisationReference,created).run();
