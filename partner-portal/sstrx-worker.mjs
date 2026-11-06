@@ -9,6 +9,7 @@ import {signAccessRequest} from './platform/access-requests.mjs';
 import {readObject} from './platform/domain.mjs';
 const ORIGIN='https://sstrx.shiftsometimber.co.uk',native=createPortal(ORIGIN);
 const paths=new Set(['overview','clinical','prescriptions','dispensing','delivery','patients','messages','reports','settings','diagnostics']);
+function memberEntrance(){return `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Welcome · SST Rx</title><link rel="stylesheet" href="/assets/sstrx.css"></head><body class="rx-app rx-login"><header class="rx-top"><img class="rx-logo" src="/assets/sstrx-logo.png" alt="SST Rx"><span>PART OF THE SHIFT FAMILY</span></header><main class="rx-entry"><section class="rx-intro"><p>YOUR ACCOUNT. YOUR CARE.</p><h1>Welcome to SST Rx</h1><p>One joined-up SHIFT journey, with the right access for you.</p></section><section class="rx-signin"><h2>I'm a member</h2><p>Orders, care and secure messages. Continue with your existing My Timber account.</p><a class="rx-access-cta" href="/member-sign-in">Member sign-in</a><p>You will sign in securely through My Timber.</p><hr><h2>I'm a professional</h2><p>Authorised clinician and pharmacy access.</p><a class="rx-access-cta" href="/professionals">Professional sign-in</a><p><a href="/request-access">Request professional access</a></p></section></main></body></html>`;}
 async function handle(request,env){
  const url=new URL(request.url);if(url.origin!==ORIGIN)return new Response('Not found',{status:404});
  // Derive security headers from the retained gateway; never set a parent-domain cookie.
@@ -18,6 +19,11 @@ async function handle(request,env){
  if(url.pathname==='/assets/access-request.js'&&['GET','HEAD'].includes(request.method))return secure(ACCESS_REQUEST_CLIENT,'text/javascript; charset=utf-8');
  if(url.pathname==='/assets/sstrx.js'&&['GET','HEAD'].includes(request.method))return secure(SST_RX_CLIENT+RX_MESSAGE_CLIENT,'text/javascript; charset=utf-8');
  const open=env.SSTRX_PORTAL_ENABLED==='true';
+ if(env.MY_SHIFT_REDESIGN_ENABLED==='true'&&['GET','HEAD'].includes(request.method)){
+  if(url.pathname==='/')return secure(memberEntrance());
+  if(url.pathname==='/member-sign-in')return new Response(null,{status:303,headers:{Location:'https://shiftsometimber.co.uk/member-login?returnTo=%2Fmember%2Fmy-shift','Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'}});
+  if(url.pathname==='/professionals')return secure(signInPage(open&&env.PARTNER_ACCESS_ENABLED==='true'));
+ }
  if(url.pathname==='/'&&['GET','HEAD'].includes(request.method))return secure(signInPage(open&&env.PARTNER_ACCESS_ENABLED==='true').replace('<div class="rx-access-note">','<a class="rx-access-cta" href="/request-access">Request access</a><div class="rx-access-note">'));
  if(url.pathname==='/request-access'&&['GET','HEAD'].includes(request.method))return secure(accessRequestPage(env.SSTRX_ACCESS_REQUESTS_ENABLED==='true'));
  if(url.pathname==='/api/access-request'){

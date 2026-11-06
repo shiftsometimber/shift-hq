@@ -1,0 +1,8 @@
+{
+  "scope": "Exact retained first-party native programme, test fixture/build qualification only. No credentials or production member data.",
+  "sourceSha256": "0691596521b774c43b63218236b3358449126ebbdc27d60fdaa198ca7e21a14a",
+  "sourceBytes": 1127022,
+  "nativeClientSha256": "a77a897d939f76b74cbb5c9e20ad5b2dc833c070aa081c033786cf420cef5b8e",
+  "sourceModule": "v7-release-20261103/programme.mjs",
+  "servingProgrammeBeforeWholeAppRepairs": "ab77669d03e4198f80d3f02a226638b7e1f69cad87d01f2f532b0a34df6f5385"
+}

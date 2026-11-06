@@ -1,3 +1,4 @@
+import {passwordSignInAllowed} from '../password-signin.mjs';
 import {listConversations,readConversation,sendSecureMessage,markConversationRead,messageAlertDrafts} from './messages.mjs';
 import {createDiagnosticOrder} from './diagnostics.mjs';
 import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition,newStaff} from '../service/clinical-kernel.mjs';
@@ -11,10 +12,10 @@ const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control
 const all=async q=>(await q.all()).results||[];
 const input=request=>readObject(request);
 export async function platformActor(request,env){
- const identity=await existingHqIdentity(request,env);if(identity.response)return {response:identity.response};const u=identity.user;if(!u?.mfaEnabled)fail(403,'mfa_required');
+ const identity=await existingHqIdentity(request,env);if(identity.response)return {response:identity.response};const u=identity.user;if(!u?.mfaEnabled&&!passwordSignInAllowed(env,u))fail(403,'mfa_required');
  const token=(request.headers.get('Cookie')||'').match(/(?:^|;\s*)sst_hq_session=([^;]+)/)?.[1];if(!token)fail(401,'session_required');
  const {digest}=await import('./domain.mjs');const sessionHash=await digest(token);
- if(['owner','admin','operations','support'].includes(u.role))return {id:u.id,user:u,role:u.role,mfa:true,sessionHash,internal:true,commercial:['owner','admin'].includes(u.role)};
+ if(['owner','admin','operations','support'].includes(u.role))return {id:u.id,user:u,role:u.role,mfa:u.mfaEnabled===true,sessionHash,internal:true,commercial:['owner','admin'].includes(u.role)};
  if(u.role!=='clinical')fail(403,'platform_role_required');
  const r=await env.DB.prepare('SELECT state_json FROM partner_staff WHERE hq_user_id=?').bind(u.id).first(),staff=r?JSON.parse(r.state_json):null;
  if(!staff||staff.status!=='active'||!credentialsCurrent(staff,at())){
@@ -37,7 +38,7 @@ async function ownsCase(env,a,id){
 export async function overview(env,a,search=""){
  const filters=a.internal?'1=1':a.staff.kind==='clinical_admin'?`r.review_sharing=1 AND EXISTS(SELECT 1 FROM clinical_case_assignments x JOIN partner_staff ps ON ps.hq_user_id=x.hq_user_id WHERE x.record_id=r.id AND ps.org_id=? AND x.active=1 AND x.expires_at>?)`:a.staff.kind==='clinician'?`r.review_sharing=1 AND EXISTS(SELECT 1 FROM clinical_case_assignments x WHERE x.record_id=r.id AND x.hq_user_id=? AND x.active=1 AND x.expires_at>?)`:`f.partner_id=?`;
  const args=a.internal?[]:a.staff.kind==='clinical_admin'?[a.orgId,at()]:a.staff.kind==='clinician'?[a.id,at()]:[a.orgId];
- const source=await all(env.DB.prepare(`SELECT r.id recordId,r.order_number orderNumber,r.user_id memberId,r.updated_at updatedAt,cs.version caseVersion,cs.updated_at caseUpdatedAt,rx.version rxVersion,json_extract(rx.state_json,'$.status') rxStatus,CASE WHEN json_extract(rx.state_json,'$.status')='issued' THEN 'prescription_issued' ELSE cs.status END clinicalStatus,f.partner_id pharmacyOrgId,json_extract(f.state_json,'$.status') pharmacyStatus,f.version pharmacyVersion,f.updated_at pharmacyUpdatedAt,COALESCE(json_extract(f.state_json,'$.area'),'weight_management') service,m.medicine_name medicine,m.clinical_status sharedStatus,
+ const source=await all(env.DB.prepare(`SELECT r.id recordId,r.order_number orderNumber,r.user_id memberId,r.updated_at updatedAt,cs.version caseVersion,cs.updated_at caseUpdatedAt,rx.version rxVersion,json_extract(rx.state_json,'$.status') rxStatus,CASE WHEN json_extract(rx.state_json,'$.status')='issued' THEN 'prescription_issued' ELSE cs.status END clinicalStatus,f.partner_id pharmacyOrgId,json_extract(f.state_json,'$.status') pharmacyStatus,json_extract(f.state_json,'$.dispensedAt') dispensedAt,f.version pharmacyVersion,f.updated_at pharmacyUpdatedAt,COALESCE(json_extract(f.state_json,'$.area'),'weight_management') service,m.medicine_name medicine,m.clinical_status sharedStatus,
  (SELECT COUNT(*) FROM rx_supply_holds h WHERE h.order_number=r.order_number AND h.state='open') openHolds,
  EXISTS(SELECT 1 FROM clinical_case_assignments x WHERE x.record_id=r.id AND x.active=1 AND x.expires_at>?) assigned,
  (SELECT COUNT(*) FROM partner_workflow_sync s WHERE s.order_number=r.order_number AND s.status='pending') syncPending,
@@ -48,7 +49,7 @@ export async function overview(env,a,search=""){
  const records=await coordinateRecords(env,a,source.slice(0,200).map(r=>({...r,url:(a.staff?.kind==='dispensing'?'/workspace/dispensing#':'/workspace/clinical#')+r.recordId})));
  const counts={};for(const r of records)counts[r.action.kind]=(counts[r.action.kind]||0)+1;
  const config=a.orgId?await all(env.DB.prepare('SELECT service,config_json,version,updated_at FROM rx_service_config WHERE org_id=?').bind(a.orgId)):[];
- return {apiVersion:API_VERSION,observedAt:at(),source:'existing_clinical_order_and_fulfilment_records',role:a.staff?.kind||a.role,records,counts,coordination:{unowned:records.filter(r=>r.action.unowned).length,overdue:records.filter(r=>r.action.overdue).length,deadlineNotConfigured:records.filter(r=>r.action.deadlineState==='not_configured').length,held:records.filter(r=>r.openHolds).length,notificationsSent:false},coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),commercialAvailable:a.commercial};
+ return {apiVersion:API_VERSION,observedAt:at(),source:'existing_clinical_order_and_fulfilment_records',memberExperienceCandidate:env.MY_SHIFT_REDESIGN_ENABLED==='true',role:a.staff?.kind||a.role,records,counts,coordination:{unowned:records.filter(r=>r.action.unowned).length,overdue:records.filter(r=>r.action.overdue).length,deadlineNotConfigured:records.filter(r=>r.action.deadlineState==='not_configured').length,held:records.filter(r=>r.openHolds).length,notificationsSent:false},coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),commercialAvailable:a.commercial};
 }
 export async function platformRoute(request,env){
  const url=new URL(request.url);if(url.pathname!==BASE&&!url.pathname.startsWith(BASE+'/'))return null;
