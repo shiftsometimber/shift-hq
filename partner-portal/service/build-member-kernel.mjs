@@ -1,3 +1,4 @@
+import {buildNativeCacheClient} from '../platform/native-cache-recovery.mjs';
 import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 export async function buildMemberKernel(){
@@ -13,5 +14,9 @@ export async function buildMemberKernel(){
  if(source.split(anchor).length!==2)throw Error('Member payment gate changed');source=source.replace(anchor,'const paid = paidClinicalOrder(env,order);');
  source+='\nexport {authenticate,sessionHash,memberPrescription,memberFulfilment,memberView,memberTracking};\n';
  await fs.writeFile(new URL('./member-kernel.mjs',import.meta.url),source);
+ const nativeInput=await fs.readFile(new URL('../test/fixtures/native-cache-v268.js',import.meta.url),'utf8'),native=buildNativeCacheClient(nativeInput);
+ const nativeDirectory=new URL('../../.partner-qa/',import.meta.url);await fs.mkdir(nativeDirectory,{recursive:true});
+ await fs.writeFile(new URL('native-cache.bundle.mjs',nativeDirectory),native.source);
+
 }
 if(process.argv[1]&&new URL(import.meta.url).pathname===process.argv[1])await buildMemberKernel();
