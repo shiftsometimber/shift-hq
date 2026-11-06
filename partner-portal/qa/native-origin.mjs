@@ -30,10 +30,12 @@ export function createQaNativeOrigin(handler,{host}={},accessOptions){
  const native={async fetch(request,env,ctx){
   const url=new URL(request.url),supplied=request.headers.get('Origin');
   const cataloguePage=host==='hq-qa.sstrx.co.uk'&&url.pathname==='/hq/catalogue-controls'&&['GET','HEAD'].includes(request.method);
+  const legacyCrm=host==='hq-qa.sstrx.co.uk'&&url.pathname.startsWith('/v1/crm/');
+  const authConfig=host==='hq-qa.sstrx.co.uk'&&url.pathname==='/v1/auth/turnstile-config'&&request.method==='GET';
   if(url.origin!==origin||!url.pathname.startsWith('/v1/')&&!cataloguePage||request.headers.get('Sec-Fetch-Site')==='cross-site'||supplied&&supplied!==origin||!['GET','HEAD'].includes(request.method)&&supplied!==origin)return denied();
   if(host==='my-qa.sstrx.co.uk'&&url.pathname.startsWith('/v1/hq/'))return denied();
-  if(host==='hq-qa.sstrx.co.uk'&&!url.pathname.startsWith('/v1/hq/')&&!cataloguePage)return denied();
-  const logical=url.pathname.startsWith('/v1/hq/')||cataloguePage?'https://hq.shiftsometimber.co.uk':'https://shiftsometimber.co.uk';
+  if(host==='hq-qa.sstrx.co.uk'&&!url.pathname.startsWith('/v1/hq/')&&!cataloguePage&&!legacyCrm&&!authConfig)return denied();
+  const logical=url.pathname.startsWith('/v1/hq/')||cataloguePage||legacyCrm||authConfig?'https://hq.shiftsometimber.co.uk':'https://shiftsometimber.co.uk';
   const headers=new Headers(request.headers);headers.delete('Host');
   if(supplied)headers.set('Origin',logical);
   // The public origin has already been checked. Native CSRF/session/role checks
