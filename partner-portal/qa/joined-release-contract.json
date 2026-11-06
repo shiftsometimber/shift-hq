@@ -1,16 +1,19 @@
 {
-  "kind": "Joined source qualification; not live acceptance",
-  "rxParent": "3958e29760c2821e9798bb480140183d1eac7663",
-  "hqParent": "06fbb34847e6bb7ad060f01a0b40e9b82f7f7506",
-  "coreCommit": "d8bcc8627292385717763e8f8b89a09241327127",
-  "coreApiSha256": "a74f005ce0dd6d7ad862651f5962a11094f18f99cc3450d2652c737dec6d3ba1",
+  "kind": "Joined v3.1 source qualification; not live acceptance",
+  "rxHqParent": "91ce1bc0f983c31ac1b9164d9b55d4bc29978c01",
+  "hqV31Parent": "a1ac9af5ef3ed4fd1b96e17a828c17df78aa0ef6",
+  "coreCommit": "91edfb8b652cdefdb997b056b494892f17020bfd",
+  "coreApiSha256": "d745b1c2d2453f6604cbf640a363b38607d738f0f2a55694a883573e8c49d5af",
   "checks": {
-    "rxHqComponents": 186,
-    "uiComponents": 23,
-    "coreContracts": 10,
+    "rxHqComponents": 187,
+    "hqUi": 25,
+    "coreCommerce": 76,
+    "total": 288,
     "nativeAuthWorkflow": "PASS; external transports simulated",
-    "crossRepositorySameDatabase": "PASS"
+    "crossRepositoryPurchaseAndCatalogue": "PASS; same database and actual handlers"
   },
-  "deploymentAuthorisation": "Matt requested publication and working release; applicable technical/clinical gates still required",
-  "productionDeployed": false
+  "ownerReleaseRequested": true,
+  "productionDeployed": false,
+  "fullNamedAcceptance": "132 scenarios NOT RUN on exact hosted release",
+  "remainingHostedAccess": "Existing connection Access applications/policies read denied HTTP 403; not retried"
 }
