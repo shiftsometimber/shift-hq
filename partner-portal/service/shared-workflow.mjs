@@ -93,7 +93,7 @@ export async function drainSharedWorkflow(env,{orderNumber,limit=50}={}){
 // or produce a misleading warning about the current member's order.
 export async function completeSharedResponse(response,request,env){
  if(!response||!response.ok||env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return response;
- const path=new URL(request.url).pathname,fulfilment=path.match(/\/clinical\/partners\/fulfilment\/([A-Za-z0-9_-]{1,100})(?:\/|$)/),record=path.match(/\/(?:clinical|clinical-records)\/(?:prescriptions\/)?([a-f0-9-]{36})(?:\/|$)/i);
+ const path=new URL(request.url).pathname,fulfilment=path.match(/\/clinical\/partners\/fulfilment\/([A-Za-z0-9_-]{1,100})(?:\/|$)/),record=path.match(/\/(?:clinical|clinical-records)\/(?:prescriptions\/)?([a-f0-9-]{36})(?:\/|$)/i)||path.match(/\/clinical\/platform\/(?:cases|lifecycle)\/([a-f0-9-]{36})(?:\/|$)/i);
  let orderNumber=fulfilment?.[1];
  if(record){const linked=await env.DB.prepare('SELECT order_number FROM clinical_member_records WHERE id=?').bind(record[1]).first();orderNumber=linked?.order_number;}
  if(!orderNumber)return response;

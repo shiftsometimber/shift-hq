@@ -5,9 +5,10 @@ const json=async(response,status=200)=>{const t=await response.text();assert.equ
 export async function reviewAndPropose(f){
  await json(await f.hq('/partner-desk/assign',1,{recordId:RECORD,staffUserId:3,active:true}));
  const cookie=await f.login('CLNTEST');
- await json(await f.partner('/'+RECORD+'/action',cookie,{version:0,assessmentVersion:1,action:'start_review'}));
- await json(await f.partner('/'+RECORD+'/action',cookie,{version:1,assessmentVersion:1,action:'review_evidence',evidenceId:'front-photo-fixture',outcome:'approve'}));
- await json(await f.partner('/'+RECORD+'/action',cookie,{version:2,assessmentVersion:1,action:'decision',outcome:'proceed',identityVerified:true,independentMeasurementsVerified:true,verification:'Fictional checks, no patient or legal clinical decision',handover:{...f.handover,medicine:'Synthetic medicine'},rationale:'Fictional sandbox decision only',message:'Fictional review complete'}));
+ const version=()=>f.sql.prepare('SELECT version FROM clinical_case_state WHERE record_id=?').get(RECORD).version;
+ await json(await f.partner('/'+RECORD+'/action',cookie,{version:version(),assessmentVersion:1,action:'start_review'}));
+ const medical=JSON.parse(f.sql.prepare('SELECT evidence_json FROM clinical_member_versions WHERE record_id=? AND version=1').get(RECORD).evidence_json).filter(e=>e.kind!=='photo_id');for(const file of medical)await json(await f.partner('/'+RECORD+'/action',cookie,{version:version(),assessmentVersion:1,action:'review_evidence',evidenceId:file.id,outcome:'approve'}));
+ await json(await f.partner('/'+RECORD+'/action',cookie,{version:version(),assessmentVersion:1,action:'decision',outcome:'proceed',identityVerified:true,independentMeasurementsVerified:true,verification:'Fictional checks, no patient or legal clinical decision',handover:{...f.handover,medicine:'Synthetic medicine'},rationale:'Fictional sandbox decision only',message:'Fictional review complete'}));
  assert.equal(f.order().clinical_status,'approved');
  const proposal=await json(await f.partner('/prescriptions/'+RECORD+'/proposal',cookie,{version:0,partnerId:'pharmacy-org',expiresAt:new Date(Date.now()+86400000).toISOString(),reason:'Fictional proposed treatment',clinicalRationale:'Fictional test only',treatment:{variantId:11,packs:1,quantity:'One fictional pack',dose:'Fictional dose',route:'Oral test formulation',directions:'Fictional directions. Not for clinical use.'}}));
  return {cookie,proposal:proposal.prescription};

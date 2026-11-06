@@ -1,4 +1,10 @@
 import {passwordSignInAllowed} from '../password-signin.mjs';
+import {functionalCaseRoute} from './functional-case-routes.mjs';
+import {refundRoute} from './refunds.mjs';
+import {lifecycleRoute} from './prescription-lifecycle.mjs';
+import {auditExportRoute} from './audit-export.mjs';
+import {informationExceptions} from './functional-casework.mjs';
+import {catalogueSignoff} from './catalogue.mjs';
 import {listConversations,readConversation,sendSecureMessage,markConversationRead,messageAlertDrafts} from './messages.mjs';
 import {createDiagnosticOrder} from './diagnostics.mjs';
 import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition,newStaff} from '../service/clinical-kernel.mjs';
@@ -46,10 +52,10 @@ export async function overview(env,a,search=""){
  m.reorder_of_order_id repeatOfOrderId
  FROM clinical_member_records r JOIN medicine_orders m ON m.order_number=r.order_number AND m.user_id=r.user_id LEFT JOIN clinical_case_state cs ON cs.record_id=r.id LEFT JOIN clinical_prescription_requests rx ON rx.record_id=r.id LEFT JOIN partner_fulfilment f ON f.order_number=r.order_number
  WHERE ${filters} AND (?='' OR r.order_number LIKE ? ESCAPE '\\' OR CAST(r.user_id AS TEXT)=? OR r.id=?) ORDER BY r.updated_at DESC LIMIT 201`).bind(at(),...args,search,'%'+search.replace(/[\\%_]/g,c=>'\\'+c)+'%',search,search));
- const records=await coordinateRecords(env,a,source.slice(0,200).map(r=>({...r,url:(a.staff?.kind==='dispensing'?'/workspace/dispensing#':'/workspace/clinical#')+r.recordId})));
+ const records=await informationExceptions(env,a,await coordinateRecords(env,a,source.slice(0,200).map(r=>({...r,url:(a.staff?.kind==='dispensing'?'/workspace/dispensing#':'/workspace/clinical#')+r.recordId}))));
  const counts={};for(const r of records)counts[r.action.kind]=(counts[r.action.kind]||0)+1;
  const config=a.orgId?await all(env.DB.prepare('SELECT service,config_json,version,updated_at FROM rx_service_config WHERE org_id=?').bind(a.orgId)):[];
- return {apiVersion:API_VERSION,observedAt:at(),source:'existing_clinical_order_and_fulfilment_records',memberExperienceCandidate:env.MY_SHIFT_REDESIGN_ENABLED==='true',role:a.staff?.kind||a.role,records,counts,coordination:{unowned:records.filter(r=>r.action.unowned).length,overdue:records.filter(r=>r.action.overdue).length,deadlineNotConfigured:records.filter(r=>r.action.deadlineState==='not_configured').length,held:records.filter(r=>r.openHolds).length,notificationsSent:false},coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),commercialAvailable:a.commercial};
+ return {apiVersion:API_VERSION,observedAt:at(),sessionExpiresAt:(await env.DB.prepare('SELECT expires_at FROM hq_sessions WHERE hq_user_id=? AND token_hash=? AND revoked_at IS NULL').bind(a.id,a.sessionHash).first())?.expires_at||null,source:'existing_clinical_order_and_fulfilment_records',memberExperienceCandidate:env.MY_SHIFT_REDESIGN_ENABLED==='true',role:a.staff?.kind||a.role,records,counts,coordination:{unowned:records.filter(r=>r.action.unowned).length,overdue:records.filter(r=>r.action.overdue).length,deadlineNotConfigured:records.filter(r=>r.action.deadlineState==='not_configured').length,held:records.filter(r=>r.openHolds).length,notificationsSent:false},coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),commercialAvailable:a.commercial};
 }
 export async function platformRoute(request,env){
  const url=new URL(request.url);if(url.pathname!==BASE&&!url.pathname.startsWith(BASE+'/'))return null;
@@ -59,6 +65,11 @@ export async function platformRoute(request,env){
   if(!['GET','POST'].includes(request.method))fail(405,'method_not_allowed');
   const a=await platformActor(request,env);if(a.response)return a.response;await ensurePlatformSchema(env.DB);
   const p=url.pathname.slice(BASE.length).split('/').filter(Boolean);
+  const functionalCase=await functionalCaseRoute(request,env,a,p);if(functionalCase)return json(functionalCase);
+  const refunds=await refundRoute(request,env,a,p);if(refunds)return json(refunds);
+  const lifecycle=await lifecycleRoute(request,env,a,p);if(lifecycle)return json(lifecycle);
+  const auditExport=await auditExportRoute(request,env,a,p);if(auditExport)return json(auditExport);
+  if(p[0]==='catalogue'&&p.length===2&&/^[1-9]\d*$/.test(p[1]))return json(await catalogueSignoff(request,env,a,Number(p[1])));
   if(p[0]==='identity'&&p.length===1&&request.method==='GET')return json({staff:a.staff||null,organisationId:a.orgId||null,role:a.staff?.kind||a.role});
   if(p[0]==='messages'){
    if(env.SSTRX_SECURE_MESSAGES_ENABLED!=='true')fail(503,'secure_messages_not_open');
@@ -200,7 +211,7 @@ export async function platformRoute(request,env){
     const rs=await env.DB.batch([env.DB.prepare(`INSERT OR IGNORE INTO rx_economics SELECT ?,1,?,? WHERE ${g.sql}`).bind(orderNumber,JSON.stringify(terms),at(),...g.args),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,NULL,'economics',?,'terms_recorded',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),orderNumber,JSON.stringify({approvalReference:terms.approvalReference,costSourceReference:terms.costSourceReference}),at())]);if(rs[0].meta.changes!==1)fail(409,'order_terms_already_recorded_or_access_changed');return json({recorded:true,paymentRouteChanged:false,moneyMoved:false},201);
    }
    if(request.method==='POST'&&p[2]==='entry'){
-    const b=await input(request);if(!['member_payment','refund','partner_settlement','adjustment_credit','clinical_fee','pharmacy_invoice','delivery_invoice','commission_received',...EXPENSE_KINDS].includes(b.kind)||!Number.isSafeInteger(b.amountPence)||b.amountPence<0)fail(422,'valid_finance_entry_required');
+    const b=await input(request);if(env.SSTRX_FUNCTIONAL_V3_ENABLED==='true'&&['refund','refund_reversal'].includes(b.kind))fail(403,'processor_reconciled_refund_required');if(!['member_payment','refund','partner_settlement','adjustment_credit','clinical_fee','pharmacy_invoice','delivery_invoice','commission_received',...EXPENSE_KINDS].includes(b.kind)||!Number.isSafeInteger(b.amountPence)||b.amountPence<0)fail(422,'valid_finance_entry_required');
     text(b.eventReference);text(b.sourceReference);if(!Number.isFinite(Date.parse(b.occurredAt)))fail(422,'entry_time_required');
     const existing=await env.DB.prepare('SELECT * FROM rx_finance_entries WHERE event_reference=?').bind(b.eventReference).first();if(existing){if(existing.order_number!==orderNumber||existing.kind!==b.kind||existing.amount_pence!==b.amountPence||existing.source_reference!==b.sourceReference)fail(409,'finance_reference_conflict');return json({duplicate:true,moneyMoved:false});}
     const g=authCondition(a,at()),rs=await env.DB.batch([env.DB.prepare(`INSERT INTO rx_finance_entries SELECT ?,?,?,?,?,?,?,?,? WHERE ${g.sql}`).bind(crypto.randomUUID(),orderNumber,b.eventReference,b.kind,b.amountPence,'GBP',b.sourceReference,b.occurredAt,at(),...g.args),env.DB.prepare("INSERT INTO rx_platform_audit SELECT ?,?,NULL,'finance_entry',?,'entry_recorded',?,? WHERE changes()=1").bind(crypto.randomUUID(),String(a.id),orderNumber,JSON.stringify({eventReference:b.eventReference,sourceReference:b.sourceReference}),at())]);if(rs[0].meta.changes!==1)fail(409,'access_changed');return json({recorded:true,moneyMoved:false},201);

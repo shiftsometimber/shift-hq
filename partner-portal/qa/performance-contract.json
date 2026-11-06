@@ -1,0 +1,19 @@
+{
+  "contract": "SST-Rx-functional-v3-performance-1",
+  "fixedBeforeAcceptanceRun": "2026-11-05T21:45:00.000Z",
+  "sampleCountPerActionPerBrowserPerCacheState": 20,
+  "statistics": "median and nearest-rank p95; retain all raw samples including failures",
+  "conditions": "Real Rx, My Timber and HQ domains; same release; UK broadband and a recorded mobile connection; cold and warm caches; Chromium and WebKit; physical iPhone/PWA and Android wrapper parity checks separately",
+  "marks": {
+    "coldSignInToUsableQueue": {"medianMs": 1500, "p95Ms": 2500},
+    "warmMemberOrProfessionalNavigation": {"medianMs": 300, "p95Ms": 750},
+    "openCurrentCase": {"medianMs": 500, "p95Ms": 1000},
+    "saveAcknowledgement": {"medianMs": 1000, "p95Ms": 2000},
+    "confirmedSharedUpdateAllOnlineViews": {"maximumMs": 10000},
+    "returnFromOfflineStaleBanner": {"maximumMs": 1000},
+    "restoredOutboxAfterConsumerRecovery": {"maximumMs": 30000, "backlogEvents": 100},
+    "privateContentAfterSessionExpiry": {"maximumMs": 1000}
+  },
+  "exclusions": "Time a person takes to type credentials, complete MFA/passkey or decide a clinical outcome is excluded. Supplier waiting time is reported separately and never counted as a confirmed local success.",
+  "failureRule": "Any missing sample, functional error, duplicate side effect, hidden stale state or failed percentile fails that action. Local synthetic timings do not pass hosted or physical-device acceptance."
+}

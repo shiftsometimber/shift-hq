@@ -58,4 +58,6 @@ window.installManagementHQ=()=>{
  window.installPartnerDeskHQ?.();
  operationsHome=window.HQOperations.install({getPrincipal:()=>S.me,getPermissions:()=>S.permissions||[],read:(path,opts)=>call(path,opts),reportOptions:()=>({...options(),kind:'management'}),navigate});
  if(S.me)refreshHome();
+ const v3=window.HQV3?.install({getPrincipal:()=>S.me,read:(path,opts)=>call(path,opts),navigate});
+ if(v3){loadOutbox=v3.loadOutbox;const sourceView=view;view=function(id){sourceView(id);if(id==='outbox')get('title').textContent='Outbox';if(id==='knowledgehub')get('title').textContent='Knowledge Hub';};const priorLogout=get('logoutBtn').onclick;get('logoutBtn').onclick=async()=>{v3.clear();await priorLogout()};}
 };

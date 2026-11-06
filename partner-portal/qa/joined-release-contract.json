@@ -1,0 +1,22 @@
+{
+  "kind": "Joined v3.1 private TEST stack source qualification; not production acceptance",
+  "rxHqParent": "a599155d3dc5c7be7a2dcf03292ad4db11b97791",
+  "coreCommit": "7f51bd03bd89dcb2b00440f66055b757d40c02ac",
+  "coreTree": "5f185a695c0cbde3b608c63fec1c317e7deddafa",
+  "coreApiSha256": "b833a33b38cc6dbe1aea2322f7eb00811903adfb35e690fa9e86c8f68d4497c5",
+  "checks": {
+    "currentRxHqComponentSuite": 243,
+    "currentCoreRetainedComponentSuite": 68,
+    "nativeAuthWorkflow": "PASS; three synthetic orders and five verified role exports on same records",
+    "privateBundleWorkflow": "PASS; actual built modules, locally signed Access assertion, native member/owner/partner authentication, same DB; no external transport",
+    "fullNamedAcceptance": "132 NOT RUN on exact hosted build"
+  },
+  "processorTesting": "All test and live protocol branches intercept global fetch; zero real Stripe requests or charges",
+  "processorEnabledInProduction": false,
+  "sourceApproval": "Matt authorised building, publishing and switch-on; applicable commissioning and named checks remain required",
+  "productionDeployed": false,
+  "fullNamedAcceptance": "132 NOT RUN on exact hosted release",
+  "corePublicationReconciled": "Concurrent publisher already wrote identical tested legacy merge; no duplicate commit or push was attempted",
+  "hqV31Parent": "ec4f4691d2e5d9fddb04ce3f595b182120497098",
+  "remainingHostedAccess": "Saved Access app and policy verified. Native stack packaging qualified locally; resource provisioning, deployment and actual sign-in still require verification."
+}

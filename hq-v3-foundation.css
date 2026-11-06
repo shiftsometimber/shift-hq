@@ -1,0 +1,12 @@
+/* Extend the established HQ theme. */
+.hq-v3-gates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.hq-v3-gates article{background:#e7e3da;color:#050505;padding:20px;border:1px solid #707762;border-radius:12px;overflow-wrap:anywhere}
+.hq-v3-rx-row{margin-block:16px;overflow-wrap:anywhere}.hq-v3-rx-row a{color:#050505;text-decoration:underline}.hq-v3-rx-row ul{padding-left:22px}
+#outbox-load-status{max-width:80ch;overflow-wrap:anywhere}
+#queueOutboxRows td{overflow-wrap:anywhere}
+body.management-hq aside nav .hq-nav-group>summary{color:#e7e3da}
+button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid #707762;outline-offset:3px}
+@media(max-width:700px){.hq-v3-gates{grid-template-columns:minmax(0,1fr)}#outbox .toolbar{flex-wrap:wrap}#outbox .tablewrap{overflow:auto}}
+@media(prefers-reduced-motion:reduce){.hq-skeleton{animation:none!important}}
+
+.hq-catalogue-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-block:18px}.hq-catalogue-kpis article{display:grid;gap:8px;background:#e7e3da;color:#050505;padding:16px;border:1px solid #707762;border-radius:10px}.hq-catalogue-kpis strong{font-size:1.6rem}.hq-catalogue-tools,.hq-catalogue-filters{display:flex;flex-wrap:wrap;gap:12px;margin-block:16px;align-items:end}.hq-catalogue-tools label{display:grid;gap:6px;flex:1;min-width:180px}.hq-catalogue-filters [aria-pressed=true]{background:#707762;color:#050505;outline:2px solid #e7e3da;outline-offset:2px}.hq-catalogue-cards,.hq-catalogue-suppliers{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:16px}.hq-catalogue-card,.hq-catalogue-suppliers article{border:1px solid #707762;border-radius:12px;padding:18px;overflow-wrap:anywhere}.hq-catalogue-card h3{margin:.4em 0}.hq-catalogue-editor{margin-top:24px;overflow-wrap:anywhere}.hq-catalogue-editor:empty{display:none}.hq-catalogue-editor a{color:inherit;text-decoration:underline}.hq-catalogue-admin button,.hq-catalogue-admin input,.hq-catalogue-admin select{max-width:100%}@media(max-width:700px){.hq-catalogue-tools>*{width:100%}.hq-catalogue-admin{padding:16px}.hq-catalogue-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.hq-catalogue-kpis article{padding:12px}}

@@ -1,10 +1,11 @@
 {
   "private": true,
   "scripts": {
-    "dev": "node partner-portal/qa/sstrx-server.mjs",
+    "dev": "node partner-portal/qa/functional-server.mjs",
     "qa:seeded": "node partner-portal/qa/server.mjs",
     "qa:full-loop": "node partner-portal/qa/run-full-loop.mjs --continue",
-    "test:sstrx": "node partner-portal/service/build-kernel.mjs && node partner-portal/service/build-member-kernel.mjs && node partner-portal/build-sstrx.mjs && node --test partner-portal/test/*.test.mjs"
+    "test:sstrx": "node partner-portal/service/build-kernel.mjs && node partner-portal/service/build-member-kernel.mjs && node partner-portal/build-sstrx.mjs && node --test partner-portal/test/*.test.mjs",
+    "qa:functional-loop": "node partner-portal/qa/run-functional-loop.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.1",
