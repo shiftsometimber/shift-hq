@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import {chromium,webkit} from 'playwright';
 import {wholeAppFixture} from './whole-app-fixture.mjs';
-import {runAppActions} from './whole-app-actions.mjs';
+const {runAppActions}=await import(process.env.WHOLE_APP_ACTION_SET==='journey'?'./whole-app-journey-actions.mjs':'./whole-app-actions.mjs');
 const origin='https://shiftsometimber.co.uk';
 const directory=process.env.WHOLE_APP_EVIDENCE_DIRECTORY||'.partner-qa/whole-app';
 await fs.mkdir(directory,{recursive:true});

@@ -1,0 +1,266 @@
+TAP version 13
+# Subtest: intake rejects missing previous-treatment answer before contacting a pharmacy
+not ok 1 - intake rejects missing previous-treatment answer before contacting a pharmacy
+  ---
+  duration_ms: 39.289125
+  type: 'test'
+  location: '/private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:58:4'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    409 !== 400
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 400
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:60:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: intake rejects invalid previous-treatment answer before contacting a pharmacy
+not ok 2 - intake rejects invalid previous-treatment answer before contacting a pharmacy
+  ---
+  duration_ms: 2.116125
+  type: 'test'
+  location: '/private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:58:4'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    409 !== 400
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 400
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:60:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: intake rejects missing previous medicine before contacting a pharmacy
+not ok 3 - intake rejects missing previous medicine before contacting a pharmacy
+  ---
+  duration_ms: 1.787083
+  type: 'test'
+  location: '/private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:58:4'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    409 !== 400
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 400
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:60:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: intake rejects missing previous dose before contacting a pharmacy
+not ok 4 - intake rejects missing previous dose before contacting a pharmacy
+  ---
+  duration_ms: 1.2235
+  type: 'test'
+  location: '/private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:58:4'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    409 !== 400
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 400
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:60:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: intake rejects missing last-dose date before contacting a pharmacy
+not ok 5 - intake rejects missing last-dose date before contacting a pharmacy
+  ---
+  duration_ms: 1.173875
+  type: 'test'
+  location: '/private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:58:4'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    409 !== 400
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 400
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:60:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: intake rejects impossible last-dose date before contacting a pharmacy
+not ok 6 - intake rejects impossible last-dose date before contacting a pharmacy
+  ---
+  duration_ms: 1.707416
+  type: 'test'
+  location: '/private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:58:4'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    409 !== 400
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 400
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:60:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: intake rejects future last-dose date before contacting a pharmacy
+not ok 7 - intake rejects future last-dose date before contacting a pharmacy
+  ---
+  duration_ms: 1.157833
+  type: 'test'
+  location: '/private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:58:4'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    409 !== 400
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 400
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:60:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: intake rejects an overlong history instead of silently truncating it
+not ok 8 - intake rejects an overlong history instead of silently truncating it
+  ---
+  duration_ms: 1.033917
+  type: 'test'
+  location: '/private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:64:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    409 !== 400
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 400
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:66:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: intake forwards a complete previous-treatment answer unchanged
+not ok 9 - intake forwards a complete previous-treatment answer unchanged
+  ---
+  duration_ms: 1.113417
+  type: 'test'
+  location: '/private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:70:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    409 !== 202
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 202
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:72:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: a no answer does not forward stale hidden previous-treatment details
+not ok 10 - a no answer does not forward stale hidden previous-treatment details
+  ---
+  duration_ms: 1.137417
+  type: 'test'
+  location: '/private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:78:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    409 !== 202
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 202
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/sstrx-functional-v3-20261105/core-current-source/tests/medicine-intake-continuity.test.mjs:80:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: returning to a product restores the exact selected variant
+ok 11 - returning to a product restores the exact selected variant
+  ---
+  duration_ms: 3.629958
+  type: 'test'
+  ...
+# Subtest: verification handover includes the selected variant in its return route
+ok 12 - verification handover includes the selected variant in its return route
+  ---
+  duration_ms: 0.761
+  type: 'test'
+  ...
+# Subtest: verified return retains dose and existing query parameters
+ok 13 - verified return retains dose and existing query parameters
+  ---
+  duration_ms: 1.313958
+  type: 'test'
+  ...
+# Subtest: a backslash return target cannot send a verified member to another origin
+ok 14 - a backslash return target cannot send a verified member to another origin
+  ---
+  duration_ms: 0.6065
+  type: 'test'
+  ...
+# Subtest: hidden previous-treatment inputs do not participate in a no submission
+ok 15 - hidden previous-treatment inputs do not participate in a no submission
+  ---
+  duration_ms: 0.553416
+  type: 'test'
+  ...
+# Subtest: the deployed assessment asset remains identical to its source copy
+ok 16 - the deployed assessment asset remains identical to its source copy
+  ---
+  duration_ms: 0.763125
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 6
+# fail 10
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 128.639542

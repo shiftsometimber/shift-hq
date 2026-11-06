@@ -1,0 +1,611 @@
+{
+  "scope": "Local Chromium/WebKit browser interception at 390x844. Canonical SQLite fixture with two fictional members. Not hosted or installed-device acceptance.",
+  "baseSource": "046fd6c7380e97886a9d1d9e103b31b96595258a",
+  "guardSourceSha256": "93ec88c16b89d7f4c70a76274f2f40ee9d56c78036064edc101ca317d40533ae",
+  "before": {
+    "engines": [
+      {
+        "name": "chromium",
+        "actions": {
+          "engine": "chromium",
+          "checks": [
+            {
+              "name": "Journey: blank measurement is rejected without a write",
+              "outcome": "FAIL_SYNTHETIC",
+              "error": "The expression evaluated to a falsy value:\n\n  assert(!requests.slice(mark).some(r=>r.method==='POST'))\n",
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back",
+                  "method": "POST",
+                  "status": 400,
+                  "syntheticRequestBody": "{\"action\":\"journey-record\",\"record\":{\"kind\":\"measurement\",\"on\":\"2026-11-06\",\"note\":\"\"},\"operationId\":\"57948b0e-60e7-4fe6-b3a7-c5951c382a75\",\"revision\":0,\"expectedAccount\":\"900811108\"}"
+                }
+              ],
+              "unverified": []
+            },
+            {
+              "name": "Journey: negative measurement fails browser validity",
+              "outcome": "PASS_SYNTHETIC",
+              "invalidValueWithheld": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "Journey: structured weight and waist save survives a fresh read",
+              "outcome": "PASS_SYNTHETIC",
+              "freshReadContainsOwnRecord": true,
+              "sharedJourneyResponse": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back",
+                  "method": "POST",
+                  "status": 201,
+                  "syntheticRequestBody": "{\"action\":\"journey-record\",\"record\":{\"kind\":\"measurement\",\"on\":\"2026-11-05\",\"note\":\"FICTIONAL extended measurement chromium\",\"weightKg\":96.16158244212751,\"waistCm\":99},\"operationId\":\"c13e6518-5911-49ef-b818-e5df208af836\",\"revision\":0,\"expectedAccount\":\"900811108\"}"
+                }
+              ]
+            },
+            {
+              "name": "Journey: dated injection-site self-record persists without a prescribing decision",
+              "outcome": "PASS_SYNTHETIC",
+              "selfRecordOnly": true,
+              "prescriptionsCreated": 0,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back",
+                  "method": "POST",
+                  "status": 201,
+                  "syntheticRequestBody": "{\"action\":\"journey-record\",\"record\":{\"kind\":\"injection\",\"on\":\"2026-11-05\",\"note\":\"FICTIONAL self-record chromium\",\"site\":\"Fictional test site\",\"time\":\"09:15\",\"medicine\":\"\",\"dose\":\"\"},\"operationId\":\"0c64a2f8-412e-4e30-91d4-c1075260f66b\",\"revision\":1,\"expectedAccount\":\"900811108\"}"
+                }
+              ]
+            },
+            {
+              "name": "Journey: records view contains both persisted self-records",
+              "outcome": "PASS_SYNTHETIC",
+              "recordsVisible": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            }
+          ],
+          "controls": [
+            [
+              {
+                "text": "Back to Journey",
+                "data": {
+                  "tjBack": ""
+                }
+              },
+              {
+                "text": "Edit or delete",
+                "data": {
+                  "tjEdit": "0c64a2f8-412e-4e30-91d4-c1075260f66b"
+                }
+              },
+              {
+                "text": "Edit or delete",
+                "data": {
+                  "tjEdit": "c13e6518-5911-49ef-b818-e5df208af836"
+                }
+              }
+            ]
+          ],
+          "summary": {
+            "pass": 4,
+            "total": 5
+          }
+        },
+        "errors": [],
+        "remainingUnverifiedRequests": [
+          {
+            "path": "/shift-health/assets/testing-brandless-cutout-vitamin-d.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/shift-health/assets/nutrition-kitchen.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/shift-health/assets/weight-management-plan.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/assets/products/heavyweight-tee/ash-green.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/v1/commerce/active-checkout",
+            "method": "GET",
+            "reason": "External origin blocked in isolated browser audit"
+          }
+        ]
+      },
+      {
+        "name": "webkit",
+        "actions": {
+          "engine": "webkit",
+          "checks": [
+            {
+              "name": "Journey: blank measurement is rejected without a write",
+              "outcome": "FAIL_SYNTHETIC",
+              "error": "The expression evaluated to a falsy value:\n\n  assert(!requests.slice(mark).some(r=>r.method==='POST'))\n",
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back",
+                  "method": "POST",
+                  "status": 400,
+                  "syntheticRequestBody": "{\"action\":\"journey-record\",\"record\":{\"kind\":\"measurement\",\"on\":\"2026-11-06\",\"note\":\"\"},\"operationId\":\"e448ce2e-1240-476d-989c-c8d4d21b4156\",\"revision\":0,\"expectedAccount\":\"900811108\"}"
+                }
+              ],
+              "unverified": []
+            },
+            {
+              "name": "Journey: negative measurement fails browser validity",
+              "outcome": "PASS_SYNTHETIC",
+              "invalidValueWithheld": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "Journey: structured weight and waist save survives a fresh read",
+              "outcome": "PASS_SYNTHETIC",
+              "freshReadContainsOwnRecord": true,
+              "sharedJourneyResponse": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back",
+                  "method": "POST",
+                  "status": 201,
+                  "syntheticRequestBody": "{\"action\":\"journey-record\",\"record\":{\"kind\":\"measurement\",\"on\":\"2026-11-05\",\"note\":\"FICTIONAL extended measurement webkit\",\"weightKg\":96.16158244212751,\"waistCm\":99},\"operationId\":\"3cb885ed-f1e3-465b-b1f7-c7f00a391d66\",\"revision\":0,\"expectedAccount\":\"900811108\"}"
+                },
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "Journey: dated injection-site self-record persists without a prescribing decision",
+              "outcome": "PASS_SYNTHETIC",
+              "selfRecordOnly": true,
+              "prescriptionsCreated": 0,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back",
+                  "method": "POST",
+                  "status": 201,
+                  "syntheticRequestBody": "{\"action\":\"journey-record\",\"record\":{\"kind\":\"injection\",\"on\":\"2026-11-05\",\"note\":\"FICTIONAL self-record webkit\",\"site\":\"Fictional test site\",\"time\":\"09:15\",\"medicine\":\"\",\"dose\":\"\"},\"operationId\":\"6408e8ab-3b78-4454-88c7-a80f5aa54eee\",\"revision\":1,\"expectedAccount\":\"900811108\"}"
+                },
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "Journey: records view contains both persisted self-records",
+              "outcome": "PASS_SYNTHETIC",
+              "recordsVisible": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            }
+          ],
+          "controls": [
+            [
+              {
+                "text": "Back to Journey",
+                "data": {
+                  "tjBack": ""
+                }
+              },
+              {
+                "text": "Edit or delete",
+                "data": {
+                  "tjEdit": "6408e8ab-3b78-4454-88c7-a80f5aa54eee"
+                }
+              },
+              {
+                "text": "Edit or delete",
+                "data": {
+                  "tjEdit": "3cb885ed-f1e3-465b-b1f7-c7f00a391d66"
+                }
+              }
+            ]
+          ],
+          "summary": {
+            "pass": 4,
+            "total": 5
+          }
+        },
+        "errors": [],
+        "remainingUnverifiedRequests": [
+          {
+            "path": "/shift-health/assets/testing-brandless-cutout-vitamin-d.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/shift-health/assets/nutrition-kitchen.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/shift-health/assets/weight-management-plan.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/assets/products/heavyweight-tee/ash-green.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/v1/commerce/active-checkout",
+            "method": "GET",
+            "reason": "External origin blocked in isolated browser audit"
+          }
+        ]
+      }
+    ]
+  },
+  "after": {
+    "engines": [
+      {
+        "name": "chromium",
+        "actions": {
+          "engine": "chromium",
+          "checks": [
+            {
+              "name": "Journey: blank measurement is rejected without a write",
+              "outcome": "PASS_SYNTHETIC",
+              "rejectedEmptyReading": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "Journey: negative measurement fails browser validity",
+              "outcome": "PASS_SYNTHETIC",
+              "invalidValueWithheld": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "Journey: structured weight and waist save survives a fresh read",
+              "outcome": "PASS_SYNTHETIC",
+              "freshReadContainsOwnRecord": true,
+              "sharedJourneyResponse": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back",
+                  "method": "POST",
+                  "status": 201,
+                  "syntheticRequestBody": "{\"action\":\"journey-record\",\"record\":{\"kind\":\"measurement\",\"on\":\"2026-11-05\",\"note\":\"FICTIONAL extended measurement chromium\",\"weightKg\":96.16158244212751,\"waistCm\":99},\"operationId\":\"80979a0e-dbde-4c21-9044-53d128639f55\",\"revision\":0,\"expectedAccount\":\"900811108\"}"
+                }
+              ]
+            },
+            {
+              "name": "Journey: dated injection-site self-record persists without a prescribing decision",
+              "outcome": "PASS_SYNTHETIC",
+              "selfRecordOnly": true,
+              "prescriptionsCreated": 0,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back",
+                  "method": "POST",
+                  "status": 201,
+                  "syntheticRequestBody": "{\"action\":\"journey-record\",\"record\":{\"kind\":\"injection\",\"on\":\"2026-11-05\",\"note\":\"FICTIONAL self-record chromium\",\"site\":\"Fictional test site\",\"time\":\"09:15\",\"medicine\":\"\",\"dose\":\"\"},\"operationId\":\"4f91e056-4931-4a2c-b6db-654be1820e17\",\"revision\":1,\"expectedAccount\":\"900811108\"}"
+                }
+              ]
+            },
+            {
+              "name": "Journey: records view contains both persisted self-records",
+              "outcome": "PASS_SYNTHETIC",
+              "recordsVisible": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            }
+          ],
+          "controls": [
+            [
+              {
+                "text": "Back to Journey",
+                "data": {
+                  "tjBack": ""
+                }
+              },
+              {
+                "text": "Edit or delete",
+                "data": {
+                  "tjEdit": "4f91e056-4931-4a2c-b6db-654be1820e17"
+                }
+              },
+              {
+                "text": "Edit or delete",
+                "data": {
+                  "tjEdit": "80979a0e-dbde-4c21-9044-53d128639f55"
+                }
+              }
+            ]
+          ],
+          "summary": {
+            "pass": 5,
+            "total": 5
+          }
+        },
+        "errors": [],
+        "remainingUnverifiedRequests": [
+          {
+            "path": "/shift-health/assets/testing-brandless-cutout-vitamin-d.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/shift-health/assets/nutrition-kitchen.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/shift-health/assets/weight-management-plan.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/assets/products/heavyweight-tee/ash-green.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/v1/commerce/active-checkout",
+            "method": "GET",
+            "reason": "External origin blocked in isolated browser audit"
+          }
+        ]
+      },
+      {
+        "name": "webkit",
+        "actions": {
+          "engine": "webkit",
+          "checks": [
+            {
+              "name": "Journey: blank measurement is rejected without a write",
+              "outcome": "PASS_SYNTHETIC",
+              "rejectedEmptyReading": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "Journey: negative measurement fails browser validity",
+              "outcome": "PASS_SYNTHETIC",
+              "invalidValueWithheld": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "Journey: structured weight and waist save survives a fresh read",
+              "outcome": "PASS_SYNTHETIC",
+              "freshReadContainsOwnRecord": true,
+              "sharedJourneyResponse": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back",
+                  "method": "POST",
+                  "status": 201,
+                  "syntheticRequestBody": "{\"action\":\"journey-record\",\"record\":{\"kind\":\"measurement\",\"on\":\"2026-11-05\",\"note\":\"FICTIONAL extended measurement webkit\",\"weightKg\":96.16158244212751,\"waistCm\":99},\"operationId\":\"507b466e-faba-43d6-a0e3-acdd24df9d6a\",\"revision\":0,\"expectedAccount\":\"900811108\"}"
+                },
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "Journey: dated injection-site self-record persists without a prescribing decision",
+              "outcome": "PASS_SYNTHETIC",
+              "selfRecordOnly": true,
+              "prescriptionsCreated": 0,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                },
+                {
+                  "path": "/v1/life-back",
+                  "method": "POST",
+                  "status": 201,
+                  "syntheticRequestBody": "{\"action\":\"journey-record\",\"record\":{\"kind\":\"injection\",\"on\":\"2026-11-05\",\"note\":\"FICTIONAL self-record webkit\",\"site\":\"Fictional test site\",\"time\":\"09:15\",\"medicine\":\"\",\"dose\":\"\"},\"operationId\":\"52fe154b-5e8e-43ab-a0a0-b176f5bd9603\",\"revision\":1,\"expectedAccount\":\"900811108\"}"
+                },
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            },
+            {
+              "name": "Journey: records view contains both persisted self-records",
+              "outcome": "PASS_SYNTHETIC",
+              "recordsVisible": true,
+              "requests": [
+                {
+                  "path": "/v1/life-back/journey",
+                  "method": "GET",
+                  "status": 200
+                }
+              ]
+            }
+          ],
+          "controls": [
+            [
+              {
+                "text": "Back to Journey",
+                "data": {
+                  "tjBack": ""
+                }
+              },
+              {
+                "text": "Edit or delete",
+                "data": {
+                  "tjEdit": "52fe154b-5e8e-43ab-a0a0-b176f5bd9603"
+                }
+              },
+              {
+                "text": "Edit or delete",
+                "data": {
+                  "tjEdit": "507b466e-faba-43d6-a0e3-acdd24df9d6a"
+                }
+              }
+            ]
+          ],
+          "summary": {
+            "pass": 5,
+            "total": 5
+          }
+        },
+        "errors": [],
+        "remainingUnverifiedRequests": [
+          {
+            "path": "/shift-health/assets/testing-brandless-cutout-vitamin-d.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/shift-health/assets/nutrition-kitchen.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/shift-health/assets/weight-management-plan.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/assets/products/heavyweight-tee/ash-green.webp",
+            "method": "GET",
+            "reason": "Exact currently serving Core source not yet qualified for isolated run"
+          },
+          {
+            "path": "/v1/commerce/active-checkout",
+            "method": "GET",
+            "reason": "External origin blocked in isolated browser audit"
+          }
+        ]
+      }
+    ]
+  }
+}
