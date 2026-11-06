@@ -7,7 +7,9 @@ import {createHash} from 'node:crypto';
 import {buildKernel} from '../service/build-kernel.mjs';
 import {buildMemberKernel} from '../service/build-member-kernel.mjs';
 if(!process.env.SSTRX_QA_CORE_ROOT||!path.isAbsolute(process.env.SSTRX_QA_CORE_ROOT))throw Error('Use an explicit current Core checkout. No deployed target is accepted.');
-const coreRoot=await fs.realpath(process.env.SSTRX_QA_CORE_ROOT),out=new URL('../../.partner-qa/native-roles/',import.meta.url);
+const fixtureRoot=process.env.SSTRX_QA_NATIVE_FIXTURE_ROOT;
+if(fixtureRoot&&!path.isAbsolute(fixtureRoot))throw Error('Explicit local native fixture output must be absolute');
+const coreRoot=await fs.realpath(process.env.SSTRX_QA_CORE_ROOT),out=fixtureRoot?pathToFileURL(path.resolve(fixtureRoot)+path.sep):new URL('../../.partner-qa/native-roles/',import.meta.url);
 await fs.mkdir(out,{recursive:true,mode:0o700});
 const originalFetch=globalThis.fetch;let blockedNetworkCalls=0;
 globalThis.fetch=async()=>{blockedNetworkCalls++;throw Error('External network is disabled for native role acceptance')};
@@ -66,4 +68,4 @@ try{
  report.workflow=f.report;report.coreSource=s.summary.coreSource;report.transport=f.transport;report.blockedNetworkCalls=blockedNetworkCalls;assert.equal(blockedNetworkCalls,0);report.result='PASS — SYNTHETIC LOCAL API WORKFLOW';
  report.notProven=['Hosted login URLs and isolated deployed persistence','Automated browser/phone-size/physical-device evidence','Real provider/payment/courier transports','External email/push provider and device receipts','Complete 132-scenario v3.1 release acceptance'];
 }catch(e){report.result='FAIL';report.error=e.stack;process.exitCode=1;}
-finally{globalThis.fetch=originalFetch;f?.s.close();report.completedAt=new Date().toISOString();await fs.writeFile(new URL('report.json',out),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({result:report.result,error:report.error||null,joinedOrders:report.joinedOrders?.length||0,exports:report.exports?.length||0,hostedLoginsAvailable:false,report:'.partner-qa/native-roles/report.json'}));}
+finally{globalThis.fetch=originalFetch;f?.s.close();report.completedAt=new Date().toISOString();await fs.writeFile(new URL('report.json',out),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({result:report.result,error:report.error||null,joinedOrders:report.joinedOrders?.length||0,exports:report.exports?.length||0,hostedLoginsAvailable:false,report:new URL('report.json',out).pathname}));}

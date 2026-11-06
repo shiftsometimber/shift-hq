@@ -38,6 +38,8 @@ test('qualified native plain/Brotli clients stay identical and unknown source is
  const client=await fs.readFile(new URL('./fixtures/native-cache-v268.js',import.meta.url),'utf8');
  const built=buildNativeCacheClient(client);new vm.Script(built.source);
  assert.match(built.source,/my-timber-private-cache-recovery-v1/);
+ assert(built.source.includes('my-shift\\/sign-out$'),'Canonical member logout is recognised by the scoped native loader');
+ assert(built.source.includes('Bored? Eight quick games, just for a laugh.'));assert(!built.source.includes('Bored? Seven quick games, just for a laugh.'));
  assert.throws(()=>repairNativeCacheClient(client+' '),/must be reconciled/);
  assert(built.source.includes('/v1/my-timber/boot'),'The canonical fresh account request remains present');
  assert.throws(()=>patchProgrammeCacheRecovery(client),/release references changed/);

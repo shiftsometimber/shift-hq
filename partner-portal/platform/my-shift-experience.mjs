@@ -18,6 +18,7 @@ export function retainedProfileHTML(original){
 export async function routeMyShiftExperience(request,env,ctx,original){
  if(env.MY_SHIFT_REDESIGN_ENABLED!=='true')return null;
  const u=new URL(request.url);if(u.origin!==ORIGIN||request.method!=='GET')return null;
+ if(u.pathname==='/member/settings'&&u.searchParams.get('legacy-settings')==='1')return null;
  const page=['/member/settings','/member/my-shift','/member/my-shift/'].includes(u.pathname),profile=u.pathname==='/member/my-shift/profile',security=u.pathname==='/member/my-shift/security';
  const retained=u.pathname==='/assets/member-experience/v7-retained-script.mjs'&&u.searchParams.get('source')==='/assets/clinical-records/my-shift.mjs';
  if(!page&&!profile&&!retained&&!security)return null;
