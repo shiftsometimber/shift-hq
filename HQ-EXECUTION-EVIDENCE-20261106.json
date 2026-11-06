@@ -1,0 +1,440 @@
+{
+  "receipts": [
+    {
+      "recordedAt": "2026-11-06T19:20:42.428360+00:00",
+      "scope": "Current joined HQ continuation; synthetic local qualification, not complete hosted acceptance",
+      "source": "9929ca4d246309015f454d105a1f549aa3aec645",
+      "coreSource": "7d63a50b7e67955627ad957e1b549d0294bcf123",
+      "componentTests": {
+        "passed": 248,
+        "failed": 0,
+        "skipped": 0
+      },
+      "browserTests": [
+        {
+          "engine": "chromium",
+          "passed": 44,
+          "externalRequests": 0,
+          "checks": [
+            {
+              "name": "MS-H2-empty",
+              "pass": true
+            },
+            {
+              "name": "MS-H2",
+              "pass": true
+            },
+            {
+              "name": "MS-H3",
+              "pass": true
+            },
+            {
+              "name": "MS-H1",
+              "pass": true
+            },
+            {
+              "name": "MS-X4",
+              "pass": true
+            },
+            {
+              "name": "MS-O2-without",
+              "pass": true
+            },
+            {
+              "name": "MS-O2",
+              "pass": true
+            },
+            {
+              "name": "MS-O1",
+              "pass": true
+            },
+            {
+              "name": "MS-O3",
+              "pass": true
+            },
+            {
+              "name": "MS-C1",
+              "pass": true
+            },
+            {
+              "name": "MS-C3",
+              "pass": true
+            },
+            {
+              "name": "MS-C2",
+              "pass": true
+            },
+            {
+              "name": "MS-M-read-ready",
+              "pass": true
+            },
+            {
+              "name": "MS-M1",
+              "pass": true
+            },
+            {
+              "name": "MS-M3",
+              "pass": true
+            },
+            {
+              "name": "MS-M-send-status",
+              "pass": true
+            },
+            {
+              "name": "MS-X1",
+              "pass": true
+            },
+            {
+              "name": "MS-M-replies",
+              "pass": true
+            },
+            {
+              "name": "MS-M2",
+              "pass": true
+            },
+            {
+              "name": "MS-A1",
+              "pass": true
+            },
+            {
+              "name": "MS-A-password",
+              "pass": true
+            },
+            {
+              "name": "MS-A-privacy",
+              "pass": true
+            },
+            {
+              "name": "MS-P1",
+              "pass": true
+            },
+            {
+              "name": "MS-M-native-reply",
+              "pass": true
+            },
+            {
+              "name": "MS-More-entry",
+              "pass": true
+            },
+            {
+              "name": "MS-More-retained-return",
+              "pass": true
+            },
+            {
+              "name": "MS-More-retained-changed",
+              "pass": true
+            },
+            {
+              "name": "MS-More-retained-expired",
+              "pass": true
+            },
+            {
+              "name": "MS-A-legacy-settings-links",
+              "pass": true
+            },
+            {
+              "name": "MS-P-performance",
+              "pass": true
+            },
+            {
+              "name": "MS-P3",
+              "pass": true
+            },
+            {
+              "name": "MS-X4-unavailable",
+              "pass": true
+            },
+            {
+              "name": "MS-X2",
+              "pass": true
+            },
+            {
+              "name": "MS-A2",
+              "pass": true
+            },
+            {
+              "name": "MS-entry-unified-messages",
+              "pass": true
+            },
+            {
+              "name": "MS-entry-account-clear",
+              "pass": true
+            },
+            {
+              "name": "MS-A-native-signout",
+              "pass": true
+            },
+            {
+              "name": "MS-native-notification-options",
+              "pass": true
+            },
+            {
+              "name": "MS-web-notification-options",
+              "pass": true
+            },
+            {
+              "name": "MS-legacy-app-aliases",
+              "pass": true
+            },
+            {
+              "name": "RX-member-entry",
+              "pass": true
+            },
+            {
+              "name": "RX-private-clear-reentrancy",
+              "pass": true
+            },
+            {
+              "name": "MS-X3",
+              "pass": true
+            },
+            {
+              "name": "MS-P2",
+              "pass": true
+            }
+          ]
+        },
+        {
+          "engine": "webkit",
+          "passed": 44,
+          "externalRequests": 0,
+          "checks": [
+            {
+              "name": "MS-H2-empty",
+              "pass": true
+            },
+            {
+              "name": "MS-H2",
+              "pass": true
+            },
+            {
+              "name": "MS-H3",
+              "pass": true
+            },
+            {
+              "name": "MS-H1",
+              "pass": true
+            },
+            {
+              "name": "MS-X4",
+              "pass": true
+            },
+            {
+              "name": "MS-O2-without",
+              "pass": true
+            },
+            {
+              "name": "MS-O2",
+              "pass": true
+            },
+            {
+              "name": "MS-O1",
+              "pass": true
+            },
+            {
+              "name": "MS-O3",
+              "pass": true
+            },
+            {
+              "name": "MS-C1",
+              "pass": true
+            },
+            {
+              "name": "MS-C3",
+              "pass": true
+            },
+            {
+              "name": "MS-C2",
+              "pass": true
+            },
+            {
+              "name": "MS-M-read-ready",
+              "pass": true
+            },
+            {
+              "name": "MS-M1",
+              "pass": true
+            },
+            {
+              "name": "MS-M3",
+              "pass": true
+            },
+            {
+              "name": "MS-M-send-status",
+              "pass": true
+            },
+            {
+              "name": "MS-X1",
+              "pass": true
+            },
+            {
+              "name": "MS-M-replies",
+              "pass": true
+            },
+            {
+              "name": "MS-M2",
+              "pass": true
+            },
+            {
+              "name": "MS-A1",
+              "pass": true
+            },
+            {
+              "name": "MS-A-password",
+              "pass": true
+            },
+            {
+              "name": "MS-A-privacy",
+              "pass": true
+            },
+            {
+              "name": "MS-P1",
+              "pass": true
+            },
+            {
+              "name": "MS-M-native-reply",
+              "pass": true
+            },
+            {
+              "name": "MS-More-entry",
+              "pass": true
+            },
+            {
+              "name": "MS-More-retained-return",
+              "pass": true
+            },
+            {
+              "name": "MS-More-retained-changed",
+              "pass": true
+            },
+            {
+              "name": "MS-More-retained-expired",
+              "pass": true
+            },
+            {
+              "name": "MS-A-legacy-settings-links",
+              "pass": true
+            },
+            {
+              "name": "MS-P-performance",
+              "pass": true
+            },
+            {
+              "name": "MS-P3",
+              "pass": true
+            },
+            {
+              "name": "MS-X4-unavailable",
+              "pass": true
+            },
+            {
+              "name": "MS-X2",
+              "pass": true
+            },
+            {
+              "name": "MS-A2",
+              "pass": true
+            },
+            {
+              "name": "MS-entry-unified-messages",
+              "pass": true
+            },
+            {
+              "name": "MS-entry-account-clear",
+              "pass": true
+            },
+            {
+              "name": "MS-A-native-signout",
+              "pass": true
+            },
+            {
+              "name": "MS-native-notification-options",
+              "pass": true
+            },
+            {
+              "name": "MS-web-notification-options",
+              "pass": true
+            },
+            {
+              "name": "MS-legacy-app-aliases",
+              "pass": true
+            },
+            {
+              "name": "RX-member-entry",
+              "pass": true
+            },
+            {
+              "name": "RX-private-clear-reentrancy",
+              "pass": true
+            },
+            {
+              "name": "MS-X3",
+              "pass": true
+            },
+            {
+              "name": "MS-P2",
+              "pass": true
+            }
+          ]
+        }
+      ],
+      "rawEvidenceHashes": {
+        "components": "cc8a69f263d5b8382d6991dc70c16173e564962febb494f0aef2054271c9a275",
+        "browsers": "6a935fedf6b132bd2690aa1be8aed57d3e801f5a46d48023f23279c0bf466159"
+      },
+      "privateControlPlane": {
+        "core": {
+          "id": "d4255089-a53a-4f6c-891c-1ee77b97289d",
+          "source": "wrangler",
+          "strategy": "percentage",
+          "author_email": "matobrien@hotmail.co.uk",
+          "annotations": {
+            "workers/triggered_by": "deployment"
+          },
+          "versions": [
+            {
+              "version_id": "0c4c9693-9b07-4020-8e50-cd5fafb24327",
+              "percentage": 100
+            }
+          ],
+          "created_on": "2026-11-06T16:13:23.083672Z"
+        },
+        "clinical": {
+          "id": "fa69f917-d227-4f0b-8003-5c18b650aadd",
+          "source": "wrangler",
+          "strategy": "percentage",
+          "author_email": "matobrien@hotmail.co.uk",
+          "annotations": {
+            "workers/triggered_by": "deployment"
+          },
+          "versions": [
+            {
+              "version_id": "3fa3c955-612e-4975-a140-46ffd216af74",
+              "percentage": 100
+            }
+          ],
+          "created_on": "2026-11-06T17:45:18.56755Z"
+        },
+        "edge": {
+          "id": "c8e8086f-3b5e-4f30-99ca-3ec7cd0d2bac",
+          "source": "wrangler",
+          "strategy": "percentage",
+          "author_email": "matobrien@hotmail.co.uk",
+          "annotations": {
+            "workers/triggered_by": "deployment"
+          },
+          "versions": [
+            {
+              "version_id": "e9e5345c-a5ea-4917-a1e3-5f23e7d8932d",
+              "percentage": 100
+            }
+          ],
+          "created_on": "2026-11-06T16:13:39.189209Z"
+        }
+      },
+      "productionDeployed": false,
+      "hosted132Status": "NOT QUALIFIED",
+      "externalCommunicationsSent": 0
+    }
+  ]
+}
