@@ -18,7 +18,11 @@ export function retainedProfileHTML(original){
 export async function routeMyShiftExperience(request,env,ctx,original){
  if(env.MY_SHIFT_REDESIGN_ENABLED!=='true')return null;
  const u=new URL(request.url);if(u.origin!==ORIGIN||request.method!=='GET')return null;
- const page=['/member/settings','/member/my-shift','/member/my-shift/'].includes(u.pathname),profile=u.pathname==='/member/my-shift/profile',security=u.pathname==='/member/my-shift/security';
+ // More opens the same member view inside the retained app shell. Keep the
+ // existing tools menu reachable explicitly; full document requests still use
+ // the original shell and its navigation/session authority.
+ const more=u.pathname==='/member/dashboard'&&u.searchParams.get('timber')==='stuff'&&u.searchParams.get('tools')!=='1'&&(u.searchParams.get('view-data')==='1'||request.headers.get('X-My-Timber-Content')==='1');
+ const page=more||['/member/settings','/member/my-shift','/member/my-shift/'].includes(u.pathname),profile=u.pathname==='/member/my-shift/profile',security=u.pathname==='/member/my-shift/security';
  const retained=u.pathname==='/assets/member-experience/v7-retained-script.mjs'&&u.searchParams.get('source')==='/assets/clinical-records/my-shift.mjs';
  if(!page&&!profile&&!retained&&!security)return null;
  if(!env.MY_SHIFT_MEMBER?.fetch)return new Response('Your account view is temporarily unavailable.',{status:503,headers:privateHeaders});
@@ -27,7 +31,7 @@ export async function routeMyShiftExperience(request,env,ctx,original){
   const r=await original.fetch(new Request(ORIGIN+'/member/my-shift',request),env,ctx);if(!r.ok)return r;
   try{return new Response(retainedProfileHTML(await r.text()),{headers:{...privateHeaders,'Content-Type':'text/html; charset=utf-8'}});}catch{return new Response('Your existing profile could not be opened. Please try again.',{status:503,headers:privateHeaders});}
  }
- const target=retained?'/assets/clinical-records/my-shift.mjs':'/member/my-shift'+u.search;
+ const target=retained?'/assets/clinical-records/my-shift.mjs':'/member/my-shift'+(more?'':u.search);
  const r=await env.MY_SHIFT_MEMBER.fetch(new Request(ORIGIN+target,request));
  if(!retained||!r.ok)return r;
  const context=u.searchParams.get('context');if(!/^[A-Za-z0-9_-]{1,100}$/.test(context||''))return new Response('Invalid retained context',{status:400,headers:privateHeaders});
