@@ -11,6 +11,12 @@ const origin='https://shiftsometimber.co.uk';
 const directory=process.env.WHOLE_APP_EVIDENCE_DIRECTORY||'.partner-qa/whole-app';
 await fs.mkdir(directory,{recursive:true});
 const report={sourceCommit:process.env.WHOLE_APP_SOURCE||'working-tree',scope:'Synthetic browser interception of exact compiled app. No hosted, supplier or physical-device acceptance.',engines:[]};
+let basket;
+if(process.env.WHOLE_APP_CORE_ROOT){
+ const {currentBasketRead}=await import('./whole-app-commerce.mjs');
+ basket=await currentBasketRead(process.env.WHOLE_APP_CORE_ROOT);
+ report.retainedCommerce=basket.source;
+}
 let portability;
 if(process.env.WHOLE_APP_CORE_ROOT){
  const root=process.env.WHOLE_APP_CORE_ROOT;if(!path.isAbsolute(root))throw Error('Absolute retained Core checkout required');
@@ -36,14 +42,14 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
  const errors=[],requests=[],rows=[];let browser,ctx;
  try{
   browser=await type.launch();ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'});
-  await ctx.addCookies([{name:'sst_session',value:f.tokens[0],url:origin+'/',httpOnly:true,secure:true,sameSite:'Lax'}]);
+  await ctx.addCookies([{name:'sst_session',value:f.tokens[0],domain:'.shiftsometimber.co.uk',path:'/',httpOnly:true,secure:true,sameSite:'Lax'}]);
   await ctx.route('**/*',async route=>{
    const q=route.request(),headers=await q.allHeaders();const localUrl=new URL(q.url());if(localUrl.protocol==='blob:'||localUrl.protocol==='data:'){if(localUrl.protocol==='blob:'&&localUrl.origin!==origin)throw Error('Foreign local blob');await route.continue();return;}
    if(name==='webkit'&&!headers.cookie){const c=await ctx.cookies(q.url());if(c.length)headers.cookie=c.map(x=>x.name+'='+x.value).join('; ');}
    try{
-    const u=new URL(q.url());if(u.origin!==origin){f.unverified.push({path:u.pathname,method:q.method(),reason:'External origin blocked in isolated browser audit'});await route.fulfill({status:503,body:'Isolated audit: external service unverified'});return;}
+    const u=new URL(q.url()),nativeBasket=!!basket&&basket.accepts(q.url(),q.method());if(u.origin!==origin&&!nativeBasket){f.unverified.push({path:u.pathname,method:q.method(),reason:'External origin blocked in isolated browser audit'});await route.fulfill({status:503,body:'Isolated audit: external service unverified'});return;}
     const request=new Request(q.url(),{method:q.method(),headers,body:['GET','HEAD'].includes(q.method())?undefined:q.postDataBuffer()});
-    const r=await f.app.fetch(request,f.env,{waitUntil:p=>p.catch(e=>errors.push(e.message))});
+    const r=nativeBasket?await basket.fetch(request,f.env):await f.app.fetch(request,f.env,{waitUntil:p=>p.catch(e=>errors.push(e.message))});
     requests.push({path:u.pathname+u.search,method:q.method(),status:r.status,...q.postData()?{syntheticRequestBody:q.postData()}: {}});
     await route.fulfill({status:r.status,headers:Object.fromEntries(r.headers),body:Buffer.from(await r.arrayBuffer())});
    }catch(e){errors.push(e.message);await route.fulfill({status:500,body:'Isolated audit error'}).catch(()=>{});}
