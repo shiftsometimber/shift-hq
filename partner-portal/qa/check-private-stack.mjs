@@ -70,6 +70,14 @@ try{
  const againApproval=await json(await call('rx-qa.sstrx.co.uk','/api/clinical/platform/catalogue/9911',{cookies:clinicianJar,body:acknowledgement}));assert.equal(againApproval.replayed,true);
  const catalogueAfter=await json(await call('hq-qa.sstrx.co.uk',cataloguePath,{cookies:ownerJar}));assert.equal(catalogueAfter.authority.canBuy,true);assert.equal(catalogueAfter.clinical_body_in_hq,false);
  report.catalogueRenewal={ownerCannotSign:true,assignedMfaClinicianSigned:true,version:acknowledgement.variantVersion,duplicateHarmless:true,patientPrescriptionCreated:false};report.checks.push('Actual generated TEST catalogue flag and exact grant support owner stock renewal, owner-signoff denial and native MFA prescriber approval once');
+ const lifecycleContract=await json(await call('hq-qa.sstrx.co.uk','/v1/hq/clinical/platform/integrations/stub-contract',{cookies:ownerJar,body:{contractReference:'TEST-EMITTED-LIFECYCLE-FIXTURE',clinicalOrgId:'test-clinical-org',pharmacyOrgId:'test-pharmacy-b',variantId:9911,approvalReference:'TEST-OWNER-SYNTHETIC-SETUP'}}));
+ const lifecycleInputs=await json(await call('hq-qa.sstrx.co.uk','/v1/hq/clinical/platform/integrations',{cookies:ownerJar})),lifecycleContractInput=lifecycleInputs.contracts.find(c=>c.id===lifecycleContract.contractId);assert.ok(lifecycleInputs.testLifecycleSetupAvailable&&lifecycleContractInput);
+ const fixtureRules={contractId:lifecycleContract.contractId,clinicalVersion:lifecycleContractInput.clinical_config_version,pharmacyVersion:lifecycleContractInput.pharmacy_config_version,approvalReference:'TEST-OWNER-FICTIONAL-WITHDRAWAL',clientReference:crypto.randomUUID()};
+ const preparedRules=await json(await call('hq-qa.sstrx.co.uk','/v1/hq/clinical/platform/integrations/stub-lifecycle',{cookies:ownerJar,body:fixtureRules}));assert.equal(preparedRules.simulation,true);assert.equal(preparedRules.clinicalProtocolApproved,false);assert.equal(preparedRules.pharmacyProtocolApproved,false);assert.equal(preparedRules.realSupplierCommissioned,false);
+ const duplicateRules=await json(await call('hq-qa.sstrx.co.uk','/v1/hq/clinical/platform/integrations/stub-lifecycle',{cookies:ownerJar,body:fixtureRules}));assert.equal(duplicateRules.duplicate,true);
+ const retainedVerification=JSON.parse(sql.prepare("SELECT config_json FROM rx_service_config WHERE org_id='test-clinical-org' AND service='weight_management'").get().config_json);assert.ok(retainedVerification.verificationProtocol&&retainedVerification.lifecycleProtocol.simulation);
+ report.lifecycleFixtureSetup={nativeOwnerAction:true,duplicateHarmless:true,verificationRulesPreserved:true,professionalApprovalGranted:false};report.checks.push('Actual emitted QA setup stores explicitly fictional withdrawal rules once, preserves verification rules and grants no real professional approval');
+
 
 
  const freshOrdersBefore=sql.prepare('SELECT COUNT(*) n FROM medicine_orders').get().n;

@@ -5,7 +5,7 @@ export function allowedPath(path, method, kind) {
   if(kind==='oversight'&&((method==='GET'&&/^\/api\/clinical\/platform\/finance-exceptions(?:\/[A-Za-z0-9_.:%-]{1,600})?$/.test(path))||(method==='POST'&&/^\/api\/clinical\/platform\/finance-exceptions\/[A-Za-z0-9_.:%-]{1,600}\/(?:assign|cover|resolve)$/.test(path))))return true;
   if(kind==='oversight'&&method==='POST'&&new RegExp('^/api/clinical/platform/lifecycle/'+uuid+'/'+uuid+'/(?:price-plan|price-refund|financial-resolution)$').test(path))return true;
   if(kind==='oversight'&&method==='POST'&&new RegExp('^/api/clinical/platform/refunds/'+uuid+'/reconcile$').test(path))return true;
-  if(kind==='oversight'&&(method==='GET'&&path==='/api/clinical/platform/integrations'||method==='POST'&&/^\/api\/clinical\/platform\/integrations\/(?:stub-contract|stub-handover|reconcile)$/.test(path)))return true;
+  if(kind==='oversight'&&(method==='GET'&&path==='/api/clinical/platform/integrations'||method==='POST'&&/^\/api\/clinical\/platform\/integrations\/(?:stub-contract|stub-handover|stub-lifecycle|reconcile)$/.test(path)))return true;
   if(kind==='dispensing'&&method==='GET'&&path==='/api/clinical/platform/integrations/status')return true;
   if(kind==='dispensing'&&method==='POST'&&/^\/api\/clinical\/platform\/integrations\/(?:simulate|receipts|project)$/.test(path))return true;
   if(['clinician','dispensing','oversight'].includes(kind)&&method==='POST'&&/^\/api\/clinical\/platform\/(?:exports|audit-proof)\/[a-f0-9-]{36}$/.test(path))return true;
