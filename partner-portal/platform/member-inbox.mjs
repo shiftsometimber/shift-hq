@@ -1,5 +1,5 @@
 import {memberCareCard,MEMBER_CARE_CARD_CLIENT} from './care-card.mjs';
-import {MEMBER_ENTRY_CLIENT} from './member-entry.mjs';
+import {MEMBER_ENTRY_CLIENT,LEGACY_MEMBER_ENTRY_CLIENT} from './member-entry.mjs';
 import {authenticate,sessionHash} from '../service/member-kernel.mjs';
 import {ensurePlatformSchema} from './schema.mjs';
 import {readObject,fail} from './domain.mjs';
@@ -20,7 +20,7 @@ export const MEMBER_INBOX_HTML=`<!doctype html><html lang="en-GB"><head><meta ch
 
 export async function memberInbox(request,env){
  const url=new URL(request.url),path=url.pathname;
- if(path==='/assets/clinical-records/member-entry.mjs')return new Response(MEMBER_ENTRY_CLIENT,{headers:{...headers,'Content-Type':'text/javascript; charset=utf-8'}});
+ if(path==='/assets/clinical-records/member-entry.mjs')return new Response(env.MY_SHIFT_REDESIGN_ENABLED==='true'?MEMBER_ENTRY_CLIENT:LEGACY_MEMBER_ENTRY_CLIENT,{headers:{...headers,'Content-Type':'text/javascript; charset=utf-8'}});
  if(path==='/assets/clinical-records/member-inbox.mjs')return env.SSTRX_SECURE_MESSAGES_ENABLED==='true'?new Response(MEMBER_INBOX_CLIENT,{headers:{...headers,'Content-Type':'text/javascript; charset=utf-8'}}):new Response('Not found',{status:404,headers});
  const page=['/member/messages','/member/messages/','/member/care','/member/care/'].includes(path),card=path==='/v1/member/care-card';
  if(!page&&!card&&path!==base&&!path.startsWith(base+'/'))return null;

@@ -1,6 +1,6 @@
 import {routeMyShiftExperience} from './my-shift-experience.mjs';
 // One shared member shortcut: both native wrappers load this live web surface.
-export function installMemberMessages(){
+export function installMemberMessages({myShift=true}={}){
  if(document.getElementById('mt-secure-messages-script'))return;
  const marker=document.createElement('span');marker.id='mt-secure-messages-script';marker.hidden=true;document.body.append(marker);
  let alive=true,ready=true,unread=null,pending=false,generation=0;
@@ -10,8 +10,8 @@ export function installMemberMessages(){
   const aliases={'#shop':'/member/life-back/shop','#grub':'/member/grub','#fit':'/member/fit','#support':'/member/dashboard?timber=support#today','#more':'/member/settings'};
   const legacyTarget=value=>{
    const u=new URL(value,location.origin);if(u.origin!==location.origin||u.searchParams.has('tools')||u.searchParams.has('timber'))return null;
-   let path=u.pathname==='/member/dashboard'?aliases[u.hash]:({'/member/support':'/member/life-back/support','/member/more':'/member/settings','/member/messages':'/member/my-shift?view=messages'})[u.pathname];
-   if(u.pathname==='/member/settings'&&u.searchParams.get('legacy-settings')!=='1'){
+   let path=u.pathname==='/member/dashboard'?aliases[u.hash]:({'/member/support':'/member/life-back/support','/member/more':'/member/settings','/member/messages':myShift?'/member/my-shift?view=messages':null})[u.pathname];
+   if(myShift&&u.pathname==='/member/settings'&&u.searchParams.get('legacy-settings')!=='1'){
     if(u.hash==='#privacy')path='/member/settings?legacy-settings=1#healthConsentManager';
     if(u.hash==='#memberDetailsPanel'||u.hash==='#memberDeliveryPanel')path='/member/my-shift/profile'+u.hash;
    }
@@ -60,7 +60,7 @@ export function installMemberMessages(){
   if(!ready)return clear();
   const header=document.querySelector('.mt-shop-brand');if(!header)return;
   let link=document.getElementById('mt-secure-messages-link');
-  if(!link){link=document.createElement('a');link.id='mt-secure-messages-link';link.href='/member/my-shift?view=messages';link.style.cssText='color:#E7E3DA;background:#050505;border:1px solid #707762;border-radius:8px;padding:10px 12px;min-height:44px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap';header.append(link);}
+  if(!link){link=document.createElement('a');link.id='mt-secure-messages-link';link.href=myShift?'/member/my-shift?view=messages':'/member/messages';link.style.cssText='color:#E7E3DA;background:#050505;border:1px solid #707762;border-radius:8px;padding:10px 12px;min-height:44px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap';header.append(link);}
   const label=unread?'Messages · '+unread+' unread':'Messages';
   if(link.textContent!==label)link.textContent=label;
   link.setAttribute('aria-label',unread===null?'Messages — unread status unavailable':label);
@@ -68,17 +68,17 @@ export function installMemberMessages(){
  async function refresh(){
   if(!alive||pending||document.hidden)return;pending=true;const version=generation;
   try{
-   const r=await fetch('/v1/member/my-shift?projection=message-count',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)});
+   const r=await fetch(myShift?'/v1/member/my-shift?projection=message-count':'/v1/member/secure-messages',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)});
    if(!alive||version!==generation)return;
    if(r.status===401||r.status===403){ready=false;clear();return;}
-   if(!r.ok)throw Error('unavailable');const d=await r.json();if(!alive||version!==generation)return;if(!Number.isInteger(d.unread)||d.unread<0)throw Error('unread status unavailable');
-   ready=true;unread=d.unread;mount();
+   if(!r.ok)throw Error('unavailable');const d=await r.json();if(!alive||version!==generation)return;const count=myShift?d.unread:Array.isArray(d.threads)?d.threads.filter(t=>t.unread).length:null;if(!Number.isInteger(count)||count<0)throw Error('unread status unavailable');
+   ready=true;unread=count;mount();
   }catch{if(!alive||version!==generation)return;unread=null;const link=document.getElementById('mt-secure-messages-link');if(link){link.textContent='Messages';link.setAttribute('aria-label','Messages — unread status unavailable');}}
   finally{pending=false;}
  }
  const accountChanged=()=>{generation++;ready=false;unread=null;clear();};document.addEventListener('sst:account-changed',accountChanged);
  const observer=new MutationObserver(mount);observer.observe(document.body,{childList:true,subtree:true});
- const resume=e=>{if(e.persisted){window.removeEventListener('pageshow',resume);marker.remove();installMemberMessages();}};
+ const resume=e=>{if(e.persisted){window.removeEventListener('pageshow',resume);marker.remove();installMemberMessages({myShift});}};
  window.addEventListener('pageshow',resume);
  const timer=setInterval(refresh,60000);
  window.addEventListener('focus',refresh);window.addEventListener('hashchange',mount);window.addEventListener('popstate',mount);document.addEventListener('sstrx-message-change',refresh);
@@ -86,6 +86,7 @@ export function installMemberMessages(){
  mount();refresh();
 }
 export const MEMBER_ENTRY_CLIENT='('+installMemberMessages.toString()+')();';
+export const LEGACY_MEMBER_ENTRY_CLIENT='('+installMemberMessages.toString()+')({myShift:false});';
 export function wrapMemberInboxNavigation(original){
  return {...original,async fetch(request,env,ctx){
   const candidate=await routeMyShiftExperience(request,env,ctx,original);if(candidate)return candidate;
