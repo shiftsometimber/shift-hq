@@ -6,7 +6,14 @@ import {REVIEWER_EXPIRY_CLIENT} from './reviewer-expiry.mjs';
 const note='<div data-sst-test-notice role="note" style="padding:12px;background:#242c1b;color:#E7E3DA;font:600 14px/1.5 system-ui">FICTIONAL TEST SYSTEM · Simulated prescribing, dispensing and delivery · No real members, payments or shipments · Reviewer sign-in lasts 30 minutes</div>';
 const privateHeaders={'Cache-Control':'no-store, private','X-Robots-Tag':'noindex, nofollow','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'};
 const requestFor=(request,hostname,origin)=>{const u=new URL(request.url);u.hostname=hostname;const h=new Headers(request.headers);h.delete('Host');if(h.has('Origin'))h.set('Origin',origin);return new Request(u,new Request(request,{headers:h}));};
-const native={fetch(request,env,ctx){const p=new URL(request.url).pathname;return (p.startsWith('/v1/hq/clinical/')||p.startsWith('/v1/member/my-shift')||p.startsWith('/v1/member/clinical-records')||p.startsWith('/v1/member/secure-messages')||p==='/v1/member/care-card'?env.CLINICAL:env.CORE).fetch(request);}};
+const native={async fetch(request,env,ctx){const p=new URL(request.url).pathname;const response=await (p.startsWith('/v1/hq/clinical/')||p.startsWith('/v1/member/my-shift')||p.startsWith('/v1/member/clinical-records')||p.startsWith('/v1/member/secure-messages')||p==='/v1/member/care-card'?env.CLINICAL:env.CORE).fetch(request);
+ if(p==='/v1/commerce/qa-confirm-checkout'&&request.method==='POST'&&response.ok){
+  // Use the retained owned-record reconciliation, never a second record writer.
+  // A paid result with a failed handover stays explicit and safely retryable.
+  const linked=await env.CLINICAL.fetch(new Request('https://api.shiftsometimber.co.uk/v1/member/clinical-records',{headers:request.headers}));
+  if(!linked.ok)return Response.json({error:'test_payment_recorded_record_handover_pending',message:'Fictional payment is recorded. Retry this same confirmation to reconcile the clinical record; do not create another order.',simulated:true},{status:503});
+ }
+ return response;}};
 const api=Object.fromEntries(['hq-qa.sstrx.co.uk','my-qa.sstrx.co.uk','api-qa.sstrx.co.uk'].map(host=>[host,createQaNativeOrigin(native,{host})]));
 const rx=createQaAccessBoundary(createSstrxPortal(QA_RX_ORIGIN));
 const reviewerRuntime=createQaAccessBoundary({fetch(){return new Response(REVIEWER_EXPIRY_CLIENT,{headers:{...privateHeaders,'Content-Type':'text/javascript; charset=utf-8'}})}});
@@ -20,6 +27,7 @@ const pages=createQaAccessBoundary({async fetch(request,env){
   const prefix=u.hostname==='hq-qa.sstrx.co.uk'?'/hq':'/member';
   if(u.hostname==='my-qa.sstrx.co.uk'&&['/','/member/dashboard'].includes(u.pathname))return Response.redirect(u.origin+'/member/my-shift',303);
   if(u.hostname==='my-qa.sstrx.co.uk'&&['/member-login','/member-login.html','/member/login','/member/login.html'].includes(u.pathname))u.pathname='/login.html';
+  if(u.hostname==='my-qa.sstrx.co.uk'&&['/test-purchase','/test-checkout'].includes(u.pathname))u.pathname+='.html';
   if(u.hostname==='hq-qa.sstrx.co.uk'&&u.pathname==='/')u.pathname='/index.html';
   if(u.hostname==='api-qa.sstrx.co.uk')return Response.json({scope:'FICTIONAL TEST API',status:'Native authentication required',productionReady:false},{headers:privateHeaders});
   u.pathname=prefix+u.pathname;response=await env.ASSETS.fetch(new Request(u,{method:request.method}));
