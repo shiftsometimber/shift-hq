@@ -11,3 +11,10 @@ test('A bounded supplier save retains its method/body and timeout signal rather 
  let seen;await boundedRead((path,options)=>{seen={path,options};return Promise.resolve({ok:true})},'/test/suppliers',{method:'POST',body:'{"version":4}',headers:{'Content-Type':'application/json'}});
  assert.equal(seen.options.method,'POST');assert.equal(seen.options.body,'{"version":4}');assert.ok(seen.options.signal instanceof AbortSignal);
 });
+
+test('Unknown catalogue authority never becomes an awaiting count or a zero sellable total',()=>{
+ const {authorityCounts}=require('./hq-catalogue-v31.js');
+ assert.deepEqual(authorityCounts([{kind:'medicine',sellable:null}],true),{sellable:null,medicineBlocked:null});
+ assert.deepEqual(authorityCounts([{kind:'medicine',sellable:true},{kind:'medicine',sellable:false}],true),{sellable:1,medicineBlocked:1});
+ assert.deepEqual(authorityCounts([{kind:'medicine',sellable:true}],false),{sellable:null,medicineBlocked:null});
+});

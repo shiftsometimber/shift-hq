@@ -29,7 +29,7 @@ export function createQaNativeOrigin(handler,{host}={},accessOptions){
  const origin='https://'+host;
  const native={async fetch(request,env,ctx){
   const url=new URL(request.url),supplied=request.headers.get('Origin');
-  const cataloguePage=host==='hq-qa.sstrx.co.uk'&&url.pathname==='/hq/catalogue-controls'&&['GET','HEAD'].includes(request.method);
+  const cataloguePage=host==='hq-qa.sstrx.co.uk'&&['/hq/catalogue-controls','/hq/radar-controls','/hq/radar-social'].includes(url.pathname)&&['GET','HEAD'].includes(request.method);
   const legacyCrm=host==='hq-qa.sstrx.co.uk'&&url.pathname.startsWith('/v1/crm/');
   const authConfig=host==='hq-qa.sstrx.co.uk'&&url.pathname==='/v1/auth/turnstile-config'&&request.method==='GET';
   if(url.origin!==origin||!url.pathname.startsWith('/v1/')&&!cataloguePage||request.headers.get('Sec-Fetch-Site')==='cross-site'||supplied&&supplied!==origin||!['GET','HEAD'].includes(request.method)&&supplied!==origin)return denied();

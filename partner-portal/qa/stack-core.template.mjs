@@ -2,6 +2,7 @@
 import core from '__CORE_ROOT__/worker.js';
 import hq from '__CORE_ROOT__/hq-ai-v2.js';
 import {hqCatalogueRoutes} from '__CORE_ROOT__/hq-catalogue-v1.js';
+import {radarRoutes} from '__CORE_ROOT__/radar-integration-v1.js';
 import {medicineCommerceRoutes} from '__CORE_ROOT__/medicine-commerce-v1.js';
 import {handleEmailVerification} from '__CORE_ROOT__/auth-email-verification-v1.js';
 import {publicTurnstileConfig} from '__CORE_ROOT__/turnstile-auth-v1.js';
@@ -33,6 +34,7 @@ export default {async fetch(request,env,ctx){
  if(request.method==='POST'&&['/v1/auth/register','/v1/auth/request-password-reset','/v1/auth/resend-verification','/v1/hq/auth/bootstrap'].includes(path))return Response.json({error:'provided_test_accounts_required',message:'Use the prepared fictional TEST accounts. No real account or outgoing email can be created here.'},{status:403});
  if(request.method==='POST'&&path==='/v1/hq/users'){let b;try{b=await request.clone().json()}catch{return Response.json({error:'invalid_json'},{status:400})}if(!/@example\.(?:test|invalid)$/i.test(b.email||''))return Response.json({error:'fictional_staff_email_required'},{status:403});}
  if(request.method==='GET'&&path==='/v1/auth/turnstile-config')return Response.json(publicTurnstileConfig(env,request));
+ if(request.method==='GET'&&(path==='/hq/radar-controls'||path==='/hq/radar-social'||path.startsWith('/v1/hq/radar'))){const radar=await radarRoutes(request,env,ctx);if(radar)return radar;}
  const catalogue=await hqCatalogueRoutes(request,env,ctx);if(catalogue)return catalogue;
  const medicine=await medicineCommerceRoutes(request,env,ctx);if(medicine)return medicine;
  if(path.startsWith('/v1/hq/'))return hq.fetch(request,env,ctx);

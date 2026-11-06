@@ -41,3 +41,15 @@ test('QA adapter retains actual current Core native member/owner/MFA sessions an
   r=await app.fetch(req('/v1/auth/logout',{},memberCookie),env,{});assert.equal(r.status,200);assert.ok(r.headers.getSetCookie().every(c=>!c.includes('Domain=')&&c.includes('Max-Age=0')));r=await app.fetch(req('/v1/me',null,memberCookie),env,{});assert.equal(r.status,401);
  }finally{s?.close();globalThis.fetch=old;}
 });
+
+test('Existing catalogue and Social admin pages remain read-only and confined to the protected HQ host',async()=>{
+ const a=await access(),seen=[],app=createQaNativeOrigin({fetch:async request=>{seen.push({url:request.url,origin:request.headers.get('Origin')});return new Response('<!doctype html><html><body>TEST native admin page</body></html>',{headers:{'Content-Type':'text/html'}})}},{host:'hq-qa.sstrx.co.uk'},a.options);
+ for(const path of ['/hq/catalogue-controls','/hq/radar-controls','/hq/radar-social']){
+  const req=method=>new Request('https://hq-qa.sstrx.co.uk'+path,{method,headers:{Origin:'https://hq-qa.sstrx.co.uk','Cf-Access-Jwt-Assertion':a.token}});
+  assert.equal((await app.fetch(req('GET'),{SSTRX_ENVIRONMENT:'synthetic'})).status,200);assert.equal((await app.fetch(req('POST'),{SSTRX_ENVIRONMENT:'synthetic'})).status,403);
+  const foreign=createQaNativeOrigin({fetch:async()=>{throw Error('Wrong host reached native handler')}},{host:'my-qa.sstrx.co.uk'},a.options);
+  assert.equal((await foreign.fetch(new Request('https://my-qa.sstrx.co.uk'+path,{headers:{'Cf-Access-Jwt-Assertion':a.token}}),{SSTRX_ENVIRONMENT:'synthetic'})).status,403);
+ }
+ assert.equal(seen.length,3);assert.ok(seen.every(x=>new URL(x.url).hostname==='api.shiftsometimber.co.uk'&&x.origin==='https://hq.shiftsometimber.co.uk'));
+ assert.equal((await app.fetch(new Request('https://hq-qa.sstrx.co.uk/hq/admin-email-test',{headers:{'Cf-Access-Jwt-Assertion':a.token}}),{SSTRX_ENVIRONMENT:'synthetic'})).status,403);
+});
