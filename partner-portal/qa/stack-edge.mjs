@@ -13,6 +13,8 @@ const reviewerRuntime=createQaAccessBoundary({fetch(){return new Response(REVIEW
 const pages=createQaAccessBoundary({async fetch(request,env){
  const u=new URL(request.url),origin=request.headers.get('Origin');
  if(!['GET','HEAD'].includes(request.method)||origin&&origin!==u.origin||request.headers.get('Sec-Fetch-Site')==='cross-site')return new Response('TEST origin required',{status:403,headers:privateHeaders});
+ if(u.hostname==='my-qa.sstrx.co.uk'&&u.pathname==='/test-purchase')return new Response(null,{status:303,headers:{...privateHeaders,Location:u.origin+'/qa/start'}});
+ if(u.hostname==='my-qa.sstrx.co.uk'&&u.pathname==='/test-checkout')return new Response('This old fictional checkout format has been retired. Check the existing order in My Shift before starting any new attempt.',{status:410,headers:{...privateHeaders,'Content-Type':'text/plain; charset=utf-8'}});
  let response;
  if(u.hostname==='my-qa.sstrx.co.uk'&&(u.pathname.startsWith('/qa/')||u.pathname==='/assets/qa-commerce.js')){response=await env.CORE.fetch(requestFor(request,'api.shiftsometimber.co.uk','https://shiftsometimber.co.uk'));
  }else if(u.hostname==='my-qa.sstrx.co.uk'&&(u.pathname.startsWith('/member/')&&!/^\/member\/(?:dashboard|login)(?:\.html)?\/?$/.test(u.pathname)||u.pathname.startsWith('/assets/clinical-records/'))){
