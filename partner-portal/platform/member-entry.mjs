@@ -7,6 +7,13 @@ export function installMemberMessages(){
  const clear=()=>document.getElementById('mt-secure-messages-link')?.remove();
  function mount(){
   if(!alive||!ready)return clear();
+  const aliases={'#shop':'/member/life-back/shop','#grub':'/member/grub','#fit':'/member/fit','#support':'/member/dashboard?timber=support#today','#more':'/member/settings'};
+  const legacyTarget=value=>{const u=new URL(value,location.origin);if(u.origin!==location.origin||u.pathname!=='/member/dashboard'||u.searchParams.has('tools')||u.searchParams.has('timber')||!aliases[u.hash])return null;const v=new URL(aliases[u.hash],location.origin);for(const [k,x]of u.searchParams)if(!v.searchParams.has(k))v.searchParams.set(k,x);return v.pathname+v.search+v.hash;};
+  for(const a of document.querySelectorAll('a[href]')){const target=legacyTarget(a.getAttribute('href'));if(target)a.setAttribute('href',target);}
+  const target=legacyTarget(location.href);
+  if(target&&document.body.hasAttribute('data-mt-native-shell')&&document.body.dataset.memberSession==='ready'){
+   history.replaceState(history.state,'',target);window.dispatchEvent(new PopStateEvent('popstate',{state:history.state}));return;
+  }
   // The retained app renders More locally. Its visible tab must use the
   // canonical account entry rather than the old built-in tools panel.
   for(const a of document.querySelectorAll('a[data-mt-shop-tab="more"]')){
@@ -61,8 +68,8 @@ export function installMemberMessages(){
  const resume=e=>{if(e.persisted){window.removeEventListener('pageshow',resume);marker.remove();installMemberMessages();}};
  window.addEventListener('pageshow',resume);
  const timer=setInterval(refresh,60000);
- window.addEventListener('focus',refresh);document.addEventListener('sstrx-message-change',refresh);
- window.addEventListener('pagehide',()=>{alive=false;ready=false;clear();observer.disconnect();clearInterval(timer);window.removeEventListener('focus',refresh);document.removeEventListener('sstrx-message-change',refresh);},{once:true});
+ window.addEventListener('focus',refresh);window.addEventListener('hashchange',mount);window.addEventListener('popstate',mount);document.addEventListener('sstrx-message-change',refresh);
+ window.addEventListener('pagehide',()=>{alive=false;ready=false;clear();observer.disconnect();clearInterval(timer);window.removeEventListener('focus',refresh);window.removeEventListener('hashchange',mount);window.removeEventListener('popstate',mount);document.removeEventListener('sstrx-message-change',refresh);},{once:true});
  mount();refresh();
 }
 export const MEMBER_ENTRY_CLIENT='('+installMemberMessages.toString()+')();';
@@ -71,8 +78,9 @@ export function wrapMemberInboxNavigation(original){
   const candidate=await routeMyShiftExperience(request,env,ctx,original);if(candidate)return candidate;
   const response=await original.fetch(request,env,ctx),url=new URL(request.url);
   if(url.origin!=='https://shiftsometimber.co.uk'||!url.pathname.startsWith('/member/')||request.method!=='GET'||response.status!==200||!(response.headers.get('Content-Type')||'').includes('text/html'))return response;
-  const before=await response.text();
-  if(!before.includes('data-mt-native-shell')||before.includes('/assets/clinical-records/member-entry.mjs')||!before.includes('</head>'))return new Response(before,response);
+  if(url.pathname==='/member/settings'&&url.searchParams.get('legacy-settings')==='1'&&url.searchParams.has('view-data'))return response;
+  const before=await response.text(),directSettings=url.pathname==='/member/settings'&&url.searchParams.get('legacy-settings')==='1';
+  if((!before.includes('data-mt-native-shell')&&!directSettings)||before.includes('/assets/clinical-records/member-entry.mjs')||!before.includes('</head>'))return new Response(before,response);
   const after=before.replace('</head>','<script type="module" src="/assets/clinical-records/member-entry.mjs"></script></head>');
   const headers=new Headers(response.headers);for(const key of ['Content-Length','Content-Encoding','ETag','Last-Modified'])headers.delete(key);
   headers.set('X-Shift-Member-Messages','20261105');

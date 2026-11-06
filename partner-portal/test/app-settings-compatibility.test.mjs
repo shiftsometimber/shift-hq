@@ -17,3 +17,14 @@ test('existing settings authentication failures pass through without becoming su
  const w=wrapMemberInboxNavigation({async fetch(){return Response.json({error:'sign_in_required'},{status:401,headers:{'Cache-Control':'no-store, private'}});}}),r=await w.fetch(new Request(origin+'/member/settings?legacy-settings=1'),env,{});
  assert.equal(r.status,401);assert.deepEqual(await r.json(),{error:'sign_in_required'});assert.equal(r.headers.get('Cache-Control'),'no-store, private');
 });
+
+// The direct native settings document also needs the shared entry client, while
+// retained-fragment responses already have their parent client.
+test('direct original settings gets one shared client without changing controls',async()=>{
+ const html='<!doctype html><html><head></head><body><input id="prefWeight"><div id="pwaReminderSettings"></div></body></html>';
+ const original={fetch:async()=>new Response(html,{headers:{'Content-Type':'text/html','ETag':'old'}})};
+ const wrapped=wrapMemberInboxNavigation(original);const r=await wrapped.fetch(new Request('https://shiftsometimber.co.uk/member/settings?legacy-settings=1'),{MY_SHIFT_REDESIGN_ENABLED:'true'},{});const body=await r.text();assert.equal(body.replace('<script type="module" src="/assets/clinical-records/member-entry.mjs"></script>',''),html);assert.equal(r.headers.get('ETag'),null);
+});
+test('original retained settings keeps the exact existing response',async()=>{
+ const response=new Response('<html><head></head><body data-mt-native-shell>Original controls</body></html>',{headers:{'Content-Type':'text/html'}});const wrapped=wrapMemberInboxNavigation({fetch:async()=>response});assert.equal(await wrapped.fetch(new Request('https://shiftsometimber.co.uk/member/settings?legacy-settings=1&view-data=1'),{MY_SHIFT_REDESIGN_ENABLED:'true'},{}),response);
+});
