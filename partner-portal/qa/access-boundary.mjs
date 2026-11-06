@@ -93,12 +93,14 @@ export function createQaAccessBoundary(handler, {fetchKeys = (...args) => fetch(
     try { signatureValid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, decode(parts[2]), encoder.encode(parts[0] + '.' + parts[1])); }
     catch { return reject('assertion_signature'); }
     if (!signatureValid) return reject('assertion_signature');
+    return claims.exp;
   }
   return {async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.protocol !== 'https:' || !QA_ACCESS.hosts.includes(url.hostname) || url.port) return denied(403, 'qa_host');
     if (env.SSTRX_ENVIRONMENT !== 'synthetic') return denied(503, 'qa_environment');
-    try { await verify(request); }
+    let expires;
+    try { expires = await verify(request); }
     catch (error) {
       const safeKeyCode=/^(?:keys_(?:http_[1-5][0-9]{2}|redirected|feed_size|fetch_failed|import_failed|unavailable|temporarily_unavailable)|duplicate_key_id|weak_access_key)$/.test(error.message||'')?error.message:'assertion_keys_unavailable';
       return denied(error.status === 403 ? 403 : 503, error.status === 403 ? error.check : safeKeyCode);
@@ -108,6 +110,8 @@ export function createQaAccessBoundary(handler, {fetchKeys = (...args) => fetch(
     for (const name of ['Cf-Access-Jwt-Assertion', 'Cf-Access-Authenticated-User-Email', 'X-QA-Access-Email']) headers.delete(name);
     const cookies = (headers.get('Cookie') || '').split(';').map(x => x.trim()).filter(x => x && !/^CF_Authorization=/i.test(x));
     if (cookies.length) headers.set('Cookie', cookies.join('; ')); else headers.delete('Cookie');
-    return handler.fetch(new Request(request, {headers}), env, ctx);
+    const response=await handler.fetch(new Request(request, {headers}), env, ctx);
+    const output=new Headers(response.headers);output.set('X-SST-QA-Review-Expires',String(expires));
+    return new Response(response.body,{status:response.status,statusText:response.statusText,headers:output});
   }};
 }

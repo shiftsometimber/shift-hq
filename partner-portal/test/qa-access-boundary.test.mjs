@@ -76,6 +76,11 @@ test('QA: the three signed reviewer identities preserve native cookies and POST 
  for(const v of seen){assert.equal(v.headers.get('Cookie'),'__Host-shift_partner=inner');for(const h of ['Cf-Access-Jwt-Assertion','Cf-Access-Authenticated-User-Email','X-QA-Access-Email'])assert.equal(v.headers.get(h),null);assert.equal(v.body,'{"username":"fictional"}');}
  assert.equal(b.calls(),1);
 });
+test('QA: only a fully verified assertion supplies the non-secret reviewer expiry, never a client header',async()=>{
+ const b=boundary(),r=await b.app.fetch(request(await token(),undefined,{headers:{'X-SST-QA-Review-Expires':'9999999999'}}),env);
+ assert.equal(r.status,200);assert.equal(r.headers.get('X-SST-QA-Review-Expires'),String(seconds+1800));
+ assert.equal((await b.app.fetch(request(null),env)).headers.has('X-SST-QA-Review-Expires'),false);
+});
 test('QA: concurrent valid requests share one bounded public-key retrieval',async()=>{
  const b=boundary(),t=await token();const results=await Promise.all(Array.from({length:10},()=>b.app.fetch(request(t),env)));assert(results.every(r=>r.status===200));assert.equal(b.calls(),1);
 });
