@@ -1,3 +1,4 @@
+import {qaStockStatus,recordQaStockObservation} from '../qa/stock-observation.mjs';
 import {fail,readObject} from './domain.mjs';
 import {receiveVerifiedEvent,projectVerifiedEvents} from './integrations.mjs';
 import {partnerRoute,existingHqIdentity,internalDispensingAdapters,permission} from '../service/clinical-kernel.mjs';
@@ -5,7 +6,7 @@ import {withSharedOutbox,completeSharedResponse} from '../service/shared-workflo
 // Receipt ingestion and native projection retain the pharmacy professional's
 // current session. An owner role cannot stand in for dispensing authority.
 export async function providerReceiptRoute(request,env,a,p){
- if(p[0]!=='integrations'||!['simulate','receipts','project','status'].includes(p[1]))return null;
+ if(p[0]!=='integrations'||!['simulate','receipts','project','status','stock'].includes(p[1]))return null;
  if(p.length!==2)fail(404,'not_found');
  if(request.method!==(p[1]==='status'?'GET':'POST'))fail(405,'method_not_allowed');
  if(a.internal||a.orgAdmin||a.staff?.kind!=='dispensing'||!a.mfa)fail(403,'pharmacy_receipt_access_required');
@@ -16,10 +17,12 @@ export async function providerReceiptRoute(request,env,a,p){
   const current=await env.DB.prepare("SELECT MAX(CAST(json_extract(event_json,'$.sourceRecordVersion') AS INTEGER)) version FROM rx_integration_events WHERE order_number=? AND contract_id=? AND state='projected' AND json_extract(event_json,'$.prescriptionReference')=?").bind(r.order_number,r.contract_id,r.prescription_id).first();
   const pending=await env.DB.prepare("SELECT COUNT(*) count FROM rx_integration_events WHERE order_number=? AND contract_id=? AND state='awaiting_projection' AND json_extract(event_json,'$.prescriptionReference')=?").bind(r.order_number,r.contract_id,r.prescription_id).first();
   const job=await env.DB.prepare('SELECT state,remote_reference FROM rx_integration_jobs WHERE order_number=? AND contract_id=? ORDER BY created_at DESC LIMIT 1').bind(r.order_number,r.contract_id).first();
-  return {simulation:true,orderReference:r.order_number,prescriptionReference:r.prescription_id,nextSourceVersion:Number(current?.version||0)+1,pending:pending?.count||0,transportState:job?.state||'not_submitted',transportReference:job?.remote_reference||null};
+  const qaStock=await qaStockStatus(env,r);
+  return {simulation:true,orderReference:r.order_number,prescriptionReference:r.prescription_id,nextSourceVersion:Number(current?.version||0)+1,pending:pending?.count||0,transportState:job?.state||'not_submitted',transportReference:job?.remote_reference||null,...qaStock?{qaStock}:{}};
  }
- let received=null;
- if(p[1]!=='project'){
+ let received=null,stockObservation=null;
+ if(p[1]==='stock')stockObservation=await recordQaStockObservation(env,a,r,b);
+ if(!['project','stock'].includes(p[1])){
   let raw=b.raw,proof=b.proof;
   if(p[1]==='simulate'){
    if(env.SSTRX_QA_FULFILMENT_ENABLED!=='true'||typeof env.SSTRX_SYNTHETIC_ADAPTER?.createEvent!=='function')fail(503,'isolated_stub_provider_required');
@@ -34,5 +37,5 @@ export async function providerReceiptRoute(request,env,a,p){
   const response=await partnerRoute(req,run,existingHqIdentity,internalDispensingAdapters(run));if(!response)return {ok:false};
   return {ok:(await completeSharedResponse(response,req,env)).ok};
  }});
- return {simulation:true,received,projection,orderReference:r.order_number,prescriptionReference:r.prescription_id};
+ return {simulation:true,received,...stockObservation?{stockObservation}:{},projection,orderReference:r.order_number,prescriptionReference:r.prescription_id};
 }

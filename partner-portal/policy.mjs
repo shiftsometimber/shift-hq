@@ -8,7 +8,7 @@ export function allowedPath(path, method, kind) {
   if(kind==='oversight'&&method==='POST'&&new RegExp('^/api/clinical/platform/refunds/'+uuid+'/reconcile$').test(path))return true;
   if(kind==='oversight'&&(method==='GET'&&path==='/api/clinical/platform/integrations'||method==='POST'&&/^\/api\/clinical\/platform\/integrations\/(?:stub-contract|stub-handover|stub-lifecycle|reconcile)$/.test(path)))return true;
   if(kind==='dispensing'&&method==='GET'&&path==='/api/clinical/platform/integrations/status')return true;
-  if(kind==='dispensing'&&method==='POST'&&/^\/api\/clinical\/platform\/integrations\/(?:simulate|receipts|project)$/.test(path))return true;
+  if(kind==='dispensing'&&method==='POST'&&/^\/api\/clinical\/platform\/integrations\/(?:simulate|receipts|project|stock)$/.test(path))return true;
   if(['clinician','dispensing','oversight'].includes(kind)&&method==='POST'&&/^\/api\/clinical\/platform\/(?:exports|audit-proof)\/[a-f0-9-]{36}$/.test(path))return true;
   if(['clinician','dispensing'].includes(kind)&&['GET','POST'].includes(method)&&/^\/api\/clinical\/platform\/lifecycle\/[a-f0-9-]{36}(?:\/[a-f0-9-]{36}\/acknowledge)?$/.test(path))return true;
   if(kind==='oversight'&&method==='GET'&&/^\/api\/clinical\/platform\/lifecycle\/[a-f0-9-]{36}$/.test(path))return true;
