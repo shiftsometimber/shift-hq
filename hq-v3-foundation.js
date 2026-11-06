@@ -53,7 +53,7 @@
     const selected = nav.querySelector('button.active'); if (selected?.parentElement.tagName === 'DETAILS') selected.parentElement.open = true;
     return { before: buttons.length, after: nav.querySelectorAll('button[data-view]').length, preserved: buttons.every(button => nav.contains(button)) };
   }
-  function install({ getPrincipal, read, navigate }) {
+  function install({ getPrincipal, read, navigate, setCommunications = () => {} }) {
     const get = id => document.getElementById(id), nav = document.querySelector('aside nav');
     let revision = 0, activeController, clearRx = () => {},catalogue,business;
     const target = get('queueOutboxRows');
@@ -65,7 +65,44 @@
     const sentCard = get('outSent').closest('article');
     sentCard.querySelector('span').textContent = 'Transport accepted';
     sentCard.querySelector('em').textContent = 'Device delivery unverified';
+    let commRevision = 0, commController;
+    const commRows = get('outboxRows'), commRetry = get('refreshOutbox');
+    const commStatus = document.createElement('p'); commStatus.id = 'communications-load-status'; commStatus.setAttribute('role', 'status'); commStatus.setAttribute('aria-live', 'polite');
+    commRows.closest('article').querySelector('.panelhead').after(commStatus);
+    function clearCommunications(message = 'Sign in to load Communications.') {
+      commRevision++; commController?.abort(); commRows.removeAttribute('aria-busy'); commRetry.disabled = false;
+      setCommunications({ messages: [], templates: [] });
+      commRows.innerHTML = '<tr><td colspan="6">' + esc(message) + '</td></tr>'; commStatus.textContent = message;
+      get('adapterList').textContent = message;
+      for (const id of ['commQueued', 'commSent', 'commFailed', 'templateCount']) get(id).textContent = 'Unavailable';
+    }
+    async function loadCommunications() {
+      const principal = getPrincipal(); if (!principal) { clearCommunications(); return; }
+      commController?.abort(); commController = new AbortController(); const ticket = ++commRevision;
+      commRows.setAttribute('aria-busy', 'true'); commRetry.disabled = true; setCommunications({ messages: [], templates: [] });
+      commRows.innerHTML = '<tr><td colspan="6">Loading Communications…</td></tr>'; commStatus.textContent = 'Checking the existing queue and template sources.'; get('adapterList').textContent = 'Checking channel configuration…';
+      for (const id of ['commQueued', 'commSent', 'commFailed', 'templateCount']) get(id).textContent = 'Unavailable';
+      try {
+        const [queue, templates] = await Promise.all(['/v1/hq/outbox', '/v1/hq/templates'].map(path => boundedRead(read, path, { signal: commController.signal })));
+        if (ticket !== commRevision || principal !== getPrincipal()) return;
+        const messages = validateMessages(queue);
+        if (templates?.ok === false || !Array.isArray(templates?.templates)) throw Error('The template source did not return a valid list.');
+        setCommunications({ messages, templates: templates.templates });
+        const stamp = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('en-GB', { timeZone: 'Europe/London' }) : 'Unavailable';
+        commRows.innerHTML = messages.length ? messages.map(x => '<tr><td>' + esc(x.channel) + '</td><td>' + esc(x.user_email || x.recipient || x.destination || 'Unavailable') + '</td><td>' + esc(x.template_name || '—') + '</td><td>' + esc(x.status.replaceAll('_', ' ')) + '</td><td>' + esc(x.provider || 'Unavailable') + '</td><td>' + esc(stamp(x.created_at)) + '</td></tr>').join('') : '<tr><td colspan="6">No messages returned. Queue source confirmed.</td></tr>';
+        for (const [id, key] of [['commQueued', 'pending'], ['commSent', 'sent'], ['commFailed', 'failed']]) get(id).textContent = counter(queue.stats, key);
+        get('templateCount').textContent = String(templates.templates.length);
+        get('adapterList').innerHTML = Array.isArray(queue.adapters) ? queue.adapters.map(a => '<div class="cms-item"><b>' + esc(a.channel) + ' · ' + esc(a.provider || 'Unavailable') + '</b><span>' + esc(a.configured === true ? 'Configuration present · delivery unverified' : 'Configuration unavailable') + '</span></div>').join('') || '<p>No channel configuration returned by this source.</p>' : '<p>Channel configuration unavailable.</p>';
+        commStatus.textContent = 'Sources refreshed · Europe/London ' + new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' }) + '. Template count covers the returned list. Provider acceptance is not device delivery.';
+      } catch (error) {
+        if (ticket !== commRevision || principal !== getPrincipal()) return;
+        const state = host.HQOperations.errorState(error); commRows.innerHTML = '<tr><td colspan="6">' + esc(state.label) + ' — ' + esc(state.detail) + '</td></tr>'; commStatus.textContent = state.detail; get('adapterList').textContent = 'Channel configuration unavailable.';
+      } finally { if (ticket === commRevision && principal === getPrincipal()) { commRows.removeAttribute('aria-busy'); commRetry.disabled = false; } }
+    }
+    commRetry.onclick = loadCommunications;
+    const commSentCard = get('commSent').closest('article'); commSentCard.querySelector('span').textContent = 'Transport accepted'; commSentCard.querySelector('em').textContent = 'Device delivery unverified';
     function clear(message = 'Sign in to load the Outbox.') {
+      clearCommunications();
       revision++; activeController?.abort(); target.removeAttribute('aria-busy');
       retry.disabled = false;
       clearRx();
@@ -133,7 +170,7 @@
       const title=get('title');title.tabIndex=-1;title.focus({preventScroll:true});title.scrollIntoView({block:'start'});
     });
     window.addEventListener('pagehide', () => clear());
-    return { loadOutbox, clear, navigation };
+    return { loadOutbox, loadCommunications, clear, navigation };
   }
   const api = { JOBS, boundedRead, validateMessages, counter, organiseNavigation, install };
   host.HQV3 = api;

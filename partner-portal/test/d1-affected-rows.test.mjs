@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {wrapDatabase} from './database.mjs';
+import {exactAffectedRows} from '../service/d1-affected-rows.mjs';
+function fixture(){const sql=new DatabaseSync(':memory:'),base=wrapDatabase(sql).DB;
+ sql.exec("CREATE TABLE work(id INTEGER PRIMARY KEY,version INTEGER);CREATE TABLE audit(id INTEGER PRIMARY KEY,work_id INTEGER);CREATE TRIGGER side_effect AFTER INSERT ON work BEGIN INSERT INTO audit(work_id)VALUES(NEW.id);INSERT INTO audit(work_id)VALUES(NEW.id);END;");
+ const rawBatch=base.batch.bind(base);base.batch=async statements=>rawBatch(statements.map(s=>({runSync(){const before=sql.prepare('SELECT total_changes() n').get().n,r=s.runSync();return {...r,meta:{...r.meta,changes:sql.prepare('SELECT total_changes() n').get().n-before}};}})));
+ return {sql,DB:exactAffectedRows(base),close:()=>sql.close()};}
+test('Trigger-backed writes report exact guarded rows and preserve chained changes() predicates',async()=>{const f=fixture();try{const rs=await f.DB.batch([f.DB.prepare('INSERT INTO work VALUES(1,1)'),f.DB.prepare('INSERT INTO work SELECT 2,1 WHERE changes()=1'),f.DB.prepare('UPDATE work SET version=2 WHERE id=1 AND version=1')]);assert.deepEqual(rs.map(r=>r.meta.changes),[1,1,1]);assert.equal(rs[0].meta.reported_changes,3);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM audit').get().n,4);}finally{f.close();}});
+test('Stale versions and ignored duplicates remain zero; a single run uses the same atomic proof',async()=>{const f=fixture();try{assert.equal((await f.DB.prepare('INSERT INTO work VALUES(1,1)').run()).meta.changes,1);assert.equal((await f.DB.prepare('INSERT OR IGNORE INTO work VALUES(1,1)').run()).meta.changes,0);assert.equal((await f.DB.prepare('UPDATE work SET version=99 WHERE id=1 AND version=0').run()).meta.changes,0);assert.equal((await f.DB.prepare('SELECT version FROM work WHERE id=?').bind(1).first()).version,1);assert.equal(exactAffectedRows(f.DB),f.DB);}finally{f.close();}});
+test('Failed transactions retain neither a native write nor trigger history',async()=>{const f=fixture();try{await assert.rejects(f.DB.batch([f.DB.prepare('INSERT INTO work VALUES(1,1)'),f.DB.prepare('INSERT INTO missing_table VALUES(1)')]));assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM work').get().n,0);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM audit').get().n,0);}finally{f.close();}});

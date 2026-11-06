@@ -1,3 +1,4 @@
+import {exactAffectedRows} from './d1-affected-rows.mjs';
 import {memberInbox} from '../platform/member-inbox.mjs';
 import {myShiftRoutes} from '../platform/my-shift-routes.mjs';
 import {listConversations,readConversation,sendSecureMessage,markConversationRead} from '../platform/messages.mjs';
@@ -15,6 +16,7 @@ import {ensureLifecycleSchema} from '../platform/prescription-lifecycle.mjs';
 import {exportRecord} from '../platform/audit-export.mjs';
 import {memberAdjustment} from '../platform/price-adjustments.mjs';
 export default {async fetch(request,env,ctx){
+ env={...env,DB:exactAffectedRows(env.DB)};
  if(env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return original.fetch(request,env,ctx);
  if(env.SSTRX_FUNCTIONAL_V3_ENABLED==='true')await ensureFunctionalSchema(env.DB);
  const myShift=await myShiftRoutes(request,env);if(myShift)return myShift;

@@ -1,3 +1,4 @@
+import {exactAffectedRows} from './d1-affected-rows.mjs';
 import original,{existingHqIdentity,partnerRoute,prescriptionHqRoute,hqClinicalRoute,commissioningRoute,notificationManagementRoute,internalDispensingAdapters,credentialsCurrent,currentPartner} from './clinical-kernel.mjs';
 import {ensureSharedSchema} from './schema.mjs';
 import {withSharedOutbox,drainSharedWorkflow,completeSharedResponse} from './shared-workflow.mjs';
@@ -17,6 +18,7 @@ const API='/v1/hq/clinical';
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private','Access-Control-Allow-Origin':'https://hq.shiftsometimber.co.uk','Access-Control-Allow-Credentials':'true','Vary':'Origin'}});
 export default {
  async fetch(request,env,ctx){
+ env={...env,DB:exactAffectedRows(env.DB)};
   const url=new URL(request.url);
   if(url.hostname!=='api.shiftsometimber.co.uk'||!url.pathname.startsWith(API))return original.fetch(request,env,ctx);
   try{

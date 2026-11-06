@@ -1,3 +1,5 @@
+import {setupStubProvider} from '../qa/stub-provider-setup.mjs';
+import {providerReceiptRoute} from './provider-receipts.mjs';
 import {passwordSignInAllowed} from '../password-signin.mjs';
 import {functionalCaseRoute} from './functional-case-routes.mjs';
 import {refundRoute} from './refunds.mjs';
@@ -56,7 +58,7 @@ export async function overview(env,a,search=""){
  const records=await informationExceptions(env,a,await coordinateRecords(env,a,source.slice(0,200).map(r=>({...r,url:(a.staff?.kind==='dispensing'?'/workspace/dispensing#':'/workspace/clinical#')+r.recordId}))));
  const counts={};for(const r of records)counts[r.action.kind]=(counts[r.action.kind]||0)+1;
  const config=a.orgId?await all(env.DB.prepare('SELECT service,config_json,version,updated_at FROM rx_service_config WHERE org_id=?').bind(a.orgId)):[];
- return {apiVersion:API_VERSION,observedAt:at(),sessionExpiresAt:(await env.DB.prepare('SELECT expires_at FROM hq_sessions WHERE hq_user_id=? AND token_hash=? AND revoked_at IS NULL').bind(a.id,a.sessionHash).first())?.expires_at||null,source:'existing_clinical_order_and_fulfilment_records',memberExperienceCandidate:env.MY_SHIFT_REDESIGN_ENABLED==='true',role:a.staff?.kind||a.role,records,counts,coordination:{unowned:records.filter(r=>r.action.unowned).length,overdue:records.filter(r=>r.action.overdue).length,deadlineNotConfigured:records.filter(r=>r.action.deadlineState==='not_configured').length,held:records.filter(r=>r.openHolds).length,notificationsSent:false},coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),commercialAvailable:a.commercial};
+ return {apiVersion:API_VERSION,observedAt:at(),sessionExpiresAt:(await env.DB.prepare('SELECT expires_at FROM hq_sessions WHERE hq_user_id=? AND token_hash=? AND revoked_at IS NULL').bind(a.id,a.sessionHash).first())?.expires_at||null,source:'existing_clinical_order_and_fulfilment_records',memberExperienceCandidate:env.MY_SHIFT_REDESIGN_ENABLED==='true',role:a.staff?.kind||a.role,records,counts,coordination:{unowned:records.filter(r=>r.action.unowned).length,overdue:records.filter(r=>r.action.overdue).length,deadlineNotConfigured:records.filter(r=>r.action.deadlineState==='not_configured').length,held:records.filter(r=>r.openHolds).length,notificationsSent:false},coverage:{limit:200,hasMore:source.length>200,countsScope:'returned_authorised_records'},services:Object.entries(SERVICES).map(([id,s])=>{const c=config.find(c=>c.service===id);return {id,...s,...commissioning(c?JSON.parse(c.config_json):null)}}),integrations:Object.entries(ADAPTERS).map(([id,x])=>({id,label:x.label,state:x.state,live:false})),qaProviderManagementAvailable:env.SSTRX_QA_FULFILMENT_ENABLED==='true'&&env.SSTRX_ENVIRONMENT==='synthetic'&&a.commercial,qaProviderAvailable:env.SSTRX_QA_FULFILMENT_ENABLED==='true'&&env.SSTRX_ENVIRONMENT==='synthetic'&&a.staff?.kind==='dispensing'&&typeof env.SSTRX_SYNTHETIC_ADAPTER?.createEvent==='function',commercialAvailable:a.commercial};
 }
 export async function platformRoute(request,env){
  const url=new URL(request.url);if(url.pathname!==BASE&&!url.pathname.startsWith(BASE+'/'))return null;
@@ -66,6 +68,7 @@ export async function platformRoute(request,env){
   if(!['GET','POST'].includes(request.method))fail(405,'method_not_allowed');
   const a=await platformActor(request,env);if(a.response)return a.response;await ensurePlatformSchema(env.DB);
   const p=url.pathname.slice(BASE.length).split('/').filter(Boolean);
+  const providerReceipt=await providerReceiptRoute(request,env,a,p);if(providerReceipt)return json(providerReceipt);
   const functionalCase=await functionalCaseRoute(request,env,a,p);if(functionalCase)return json(functionalCase);
   const refunds=await refundRoute(request,env,a,p);if(refunds)return json(refunds);
   const financeOperations=await financeOperationsRoute(request,env,a,p);if(financeOperations)return json(financeOperations);
@@ -227,8 +230,8 @@ export async function platformRoute(request,env){
   }
   if(p[0]==='integrations'){
    if(!a.commercial)fail(403,'owner_integration_access_required');
-   if(request.method==='GET')return json({adapters:Object.entries(ADAPTERS).map(([id,v])=>({id,...v,live:false})),jobs:await all(env.DB.prepare('SELECT id,contract_id,order_number,operation,state,attempts,last_code,updated_at FROM rx_integration_jobs ORDER BY updated_at DESC LIMIT 200'))});
-   const b=await input(request);if(p[1]==='capture')return json(await captureOrderRoute(env.DB,b));
+   if(request.method==='GET')return json({adapters:Object.entries(ADAPTERS).map(([id,v])=>({id,...v,live:false})),jobs:await all(env.DB.prepare('SELECT id,contract_id,order_number,operation,state,attempts,last_code,updated_at FROM rx_integration_jobs ORDER BY updated_at DESC LIMIT 200')),contracts:await all(env.DB.prepare("SELECT id,org_id,config_json FROM rx_supplier_contracts WHERE adapter_id='synthetic' AND state='approved' ORDER BY id")),testOrganisations:env.SSTRX_QA_FULFILMENT_ENABLED==='true'?await all(env.DB.prepare("SELECT id,json_extract(state_json,'$.name') name,json_extract(state_json,'$.kind') kind FROM partner_organisations WHERE json_extract(state_json,'$.status')='approved'")):[],testVariants:env.SSTRX_QA_FULFILMENT_ENABLED==='true'?await all(env.DB.prepare("SELECT v.id,m.name,v.strength_label FROM medicine_variants v JOIN medicine_products m ON m.id=v.medicine_id WHERE m.name GLOB 'TEST*' OR m.name GLOB 'Synthetic *'")):[]});
+   const b=await input(request);if(p.length===2&&['stub-contract','stub-handover'].includes(p[1]))return json(await setupStubProvider(env,a,p[1],b));if(p[1]==='capture')return json(await captureOrderRoute(env.DB,b));
    if(p[1]==='queue'){const route=await env.DB.prepare('SELECT * FROM rx_order_routes WHERE order_number=?').bind(b.orderNumber).first();if(!route)fail(404,'route_not_found');return json(await queueSubmission(env.DB,route));}
    if(p[1]==='reconcile')return json(await reconcileJob(env,b.id));
    if(p[1]==='submit'){
