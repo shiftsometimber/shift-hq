@@ -77,3 +77,11 @@ test('Rx member entrance reuses canonical member identity; professional origin/s
  const env={...f.portalEnv,MY_SHIFT_REDESIGN_ENABLED:'true',SSTRX_PORTAL_ENABLED:'true'};const home=await sstrx.fetch(new Request('https://sstrx.shiftsometimber.co.uk/'),env);assert((await home.text()).includes('Member sign-in'));
  const handoff=await sstrx.fetch(new Request('https://sstrx.shiftsometimber.co.uk/member-sign-in?returnTo=https://evil.example'),env);assert.equal(handoff.status,303);assert.equal(handoff.headers.get('Location'),'https://shiftsometimber.co.uk/member-login?returnTo=%2Fmember%2Fmy-shift');assert.equal(handoff.headers.get('Set-Cookie'),null);
 }finally{f.close();}});
+
+test('MS-header-count: unified unread projection withholds clinical records and preserves authentication',async()=>{const f=await myShiftFixture();try{
+ const full=await json(await f.call());const count=await json(await f.call('/v1/member/my-shift?projection=message-count'));
+ assert.deepEqual(Object.keys(count).sort(),['memberId','observedAt','unread']);assert.equal(count.memberId,full.memberId);assert.equal(count.unread,full.unread);assert(count.observedAt);
+ await json(await f.call('/v1/member/my-shift?projection=message-count',undefined,'invalid'),401);
+ await json(await f.call('/v1/member/my-shift?projection=full-record'),422);
+ await json(await f.call('/v1/member/my-shift?projection=message-count',undefined,f.memberToken,{'X-My-Timber-Expected-Account':'other-member'}),409);
+}finally{f.close();}});
