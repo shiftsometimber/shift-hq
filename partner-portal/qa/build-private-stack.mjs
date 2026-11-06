@@ -5,7 +5,8 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {build} from 'esbuild';
 import {QA_ACCESS} from './access-config.mjs';
-const core=process.env.SSTRX_QA_CORE_ROOT;if(!core||!path.isAbsolute(core))throw Error('Explicit current Core source required');
+import {commerceBuildAdapter} from './commerce-build-adapter.mjs';
+const configuredCore=process.env.SSTRX_QA_CORE_ROOT;if(!configuredCore||!path.isAbsolute(configuredCore))throw Error('Explicit current Core source required');const core=await fs.realpath(configuredCore);
 const root=fileURLToPath(new URL('../../',import.meta.url)),output=path.join(root,'.partner-qa/hosted');await fs.mkdir(output,{recursive:true});
 const assets=path.join(output,'assets');await fs.mkdir(path.join(assets,'hq'),{recursive:true});await fs.mkdir(path.join(assets,'member'),{recursive:true});
 const hash=b=>createHash('sha256').update(b).digest('hex'),manifest={scope:'Private fictional TEST build; not deployment',builtAt:new Date().toISOString(),hosts:QA_ACCESS.hosts,files:{},bundles:{}};
@@ -20,7 +21,7 @@ await fs.writeFile(path.join(assets,'member/login.html'),login);manifest.files['
 for(const file of ['api-adapter-v33d.js','turnstile-auth-v1.js'])await copy(path.join(core,'frontend/member',file),path.join(assets,'member',file));
 const generated=(await fs.readFile(new URL('./stack-core.template.mjs',import.meta.url),'utf8')).replaceAll('__CORE_ROOT__',core).replaceAll('__QA_ROOT__',fileURLToPath(new URL('./',import.meta.url)).replace(/\/$/,''));await fs.writeFile(path.join(output,'core-entry.mjs'),generated);
 for(const [name,entry]of [['core',path.join(output,'core-entry.mjs')],['clinical',new URL('./stack-clinical-entry.mjs',import.meta.url).pathname],['edge',new URL('./stack-edge.mjs',import.meta.url).pathname]]){
- const bundle=path.join(output,name+'.bundle.mjs');const result=await build({entryPoints:[entry],bundle:true,format:'esm',platform:'browser',target:'es2022',outfile:bundle,metafile:true});const bytes=await fs.readFile(bundle);manifest.bundles[name]={sha256:hash(bytes),bytes:bytes.length,inputs:{}};
+ const bundle=path.join(output,name+'.bundle.mjs'),transports=[],qa=fileURLToPath(new URL('./',import.meta.url));const result=await build({entryPoints:[entry],bundle:true,format:'esm',platform:'browser',target:'es2022',outfile:bundle,metafile:true,...name==='core'?{plugins:[commerceBuildAdapter(core,qa,transports)],inject:[path.join(qa,'commerce-network-deny.mjs')],define:{'globalThis.fetch':'fetch'}}:{}});if(name==='core'&&transports.length!==3)throw Error('All three native transport modules must be isolated');const bytes=await fs.readFile(bundle);manifest.bundles[name]={sha256:hash(bytes),bytes:bytes.length,inputs:{},syntheticTransportOverrides:transports};
  for(const input of Object.keys(result.metafile.inputs)){const absolute=path.resolve(input);manifest.bundles[name].inputs[input]=hash(await fs.readFile(absolute));}
 }
 await fs.writeFile(path.join(output,'build-manifest.json'),JSON.stringify(manifest,null,2));console.log(JSON.stringify({built:output,bundles:Object.fromEntries(Object.entries(manifest.bundles).map(([n,v])=>[n,{sha256:v.sha256,bytes:v.bytes}])),staticFiles:Object.keys(manifest.files).length,deployExecuted:false}));

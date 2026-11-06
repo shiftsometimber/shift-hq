@@ -3,7 +3,7 @@ import {createQaAccessBoundary} from './access-boundary.mjs';
 import {createQaNativeOrigin} from './native-origin.mjs';
 import {QA_RX_ORIGIN} from './access-config.mjs';
 import {REVIEWER_EXPIRY_CLIENT} from './reviewer-expiry.mjs';
-const note='<div data-sst-test-notice role="note" style="padding:12px;background:#242c1b;color:#E7E3DA;font:600 14px/1.5 system-ui">FICTIONAL TEST SYSTEM · Simulated prescribing, dispensing and delivery · No real members, payments or shipments · Reviewer sign-in lasts 30 minutes</div>';
+const note='<div data-sst-test-notice role="note" style="padding:12px;background:#242c1b;color:#E7E3DA;font:600 14px/1.5 system-ui">FICTIONAL TEST SYSTEM · Simulated prescribing, dispensing and delivery · No real members, payments or shipments · Reviewer sign-in lasts 30 minutes · <a style="color:inherit" href="https://my-qa.sstrx.co.uk/qa/start">Start a fresh fictional order</a></div>';
 const privateHeaders={'Cache-Control':'no-store, private','X-Robots-Tag':'noindex, nofollow','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'};
 const requestFor=(request,hostname,origin)=>{const u=new URL(request.url);u.hostname=hostname;const h=new Headers(request.headers);h.delete('Host');if(h.has('Origin'))h.set('Origin',origin);return new Request(u,new Request(request,{headers:h}));};
 const native={fetch(request,env,ctx){const p=new URL(request.url).pathname;return (p.startsWith('/v1/hq/clinical/')||p.startsWith('/v1/member/my-shift')||p.startsWith('/v1/member/clinical-records')||p.startsWith('/v1/member/secure-messages')||p==='/v1/member/care-card'?env.CLINICAL:env.CORE).fetch(request);}};
@@ -14,7 +14,8 @@ const pages=createQaAccessBoundary({async fetch(request,env){
  const u=new URL(request.url),origin=request.headers.get('Origin');
  if(!['GET','HEAD'].includes(request.method)||origin&&origin!==u.origin||request.headers.get('Sec-Fetch-Site')==='cross-site')return new Response('TEST origin required',{status:403,headers:privateHeaders});
  let response;
- if(u.hostname==='my-qa.sstrx.co.uk'&&(u.pathname.startsWith('/member/')&&!/^\/member\/(?:dashboard|login)(?:\.html)?\/?$/.test(u.pathname)||u.pathname.startsWith('/assets/clinical-records/'))){
+ if(u.hostname==='my-qa.sstrx.co.uk'&&(u.pathname.startsWith('/qa/')||u.pathname==='/assets/qa-commerce.js')){response=await env.CORE.fetch(requestFor(request,'api.shiftsometimber.co.uk','https://shiftsometimber.co.uk'));
+ }else if(u.hostname==='my-qa.sstrx.co.uk'&&(u.pathname.startsWith('/member/')&&!/^\/member\/(?:dashboard|login)(?:\.html)?\/?$/.test(u.pathname)||u.pathname.startsWith('/assets/clinical-records/'))){
   response=await env.CLINICAL.fetch(requestFor(request,'api.shiftsometimber.co.uk','https://my-timber.app'));
  }else{
   const prefix=u.hostname==='hq-qa.sstrx.co.uk'?'/hq':'/member';
