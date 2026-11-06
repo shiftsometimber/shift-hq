@@ -1,6 +1,9 @@
 // Audit driver: real compiled app, isolated exact-schema SQLite, no external network.
 import fs from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {chromium,webkit} from 'playwright';
 import {wholeAppFixture} from './whole-app-fixture.mjs';
 const {runAppActions}=await import(process.env.WHOLE_APP_ACTION_SET==='journey'?'./whole-app-journey-actions.mjs':'./whole-app-actions.mjs');
@@ -8,12 +11,25 @@ const origin='https://shiftsometimber.co.uk';
 const directory=process.env.WHOLE_APP_EVIDENCE_DIRECTORY||'.partner-qa/whole-app';
 await fs.mkdir(directory,{recursive:true});
 const report={sourceCommit:process.env.WHOLE_APP_SOURCE||'working-tree',scope:'Synthetic browser interception of exact compiled app. No hosted, supplier or physical-device acceptance.',engines:[]};
+let portability;
+if(process.env.WHOLE_APP_CORE_ROOT){
+ const root=process.env.WHOLE_APP_CORE_ROOT;if(!path.isAbsolute(root))throw Error('Absolute retained Core checkout required');
+ const dirty=execFileSync('git',['diff','--name-only'],{cwd:root,encoding:'utf8'}).trim();if(dirty)throw Error('Retained Core source must be clean');
+ const routeFile=path.join(root,'member-experience/journey-portability.mjs');
+ portability=(await import(pathToFileURL(routeFile))).journeyPortabilityRoutes;
+ report.retainedCore={commit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),route:'member-experience/journey-portability.mjs',routeSha256:createHash('sha256').update(await fs.readFile(routeFile)).digest('hex')};
+}
+if(process.env.WHOLE_APP_LEGACY_MODULE){
+ const filename=process.env.WHOLE_APP_LEGACY_MODULE;
+ const manifest=JSON.parse(await fs.readFile(new URL('./manifest.json',pathToFileURL(filename)),'utf8'));
+ report.retainedProgramme={version:manifest.version,deployment:manifest.deployment,recordedAt:manifest.recordedAt,bundleSha256:createHash('sha256').update(await fs.readFile(filename)).digest('hex')};
+}
 for(const [name,type] of [['chromium',chromium],['webkit',webkit]]){
  const f=await wholeAppFixture();f.tracking();f.setup();let apiAdapter;
  if(process.env.WHOLE_APP_LEGACY_MODULE)apiAdapter=await fs.readFile(new URL('./public-assets/api-adapter-v33d.js',pathToFileURL(process.env.WHOLE_APP_LEGACY_MODULE)),'utf8');
  if(process.env.WHOLE_APP_LEGACY_MODULE){
   const legacy=await import(process.env.WHOLE_APP_LEGACY_MODULE),prior=f.env.MEMBER_LEGACY;
-  Object.assign(f.env,{MEMBER_EXPERIENCE_V1_ENABLED:'true',CORE:{async fetch(r){if(new URL(r.url).pathname==='/api-adapter-v33d.js'&&apiAdapter)return new Response(apiAdapter,{headers:{'Content-Type':'text/javascript'}});f.unverified.push({path:new URL(r.url).pathname,method:r.method,reason:'Exact currently serving Core source not yet qualified for isolated run'});return Response.json({error:'unverified_core_transport_in_isolated_fixture'},{status:503});}}});
+  Object.assign(f.env,{MEMBER_EXPERIENCE_V1_ENABLED:'true',CORE:{async fetch(r){if(new URL(r.url).pathname==='/api-adapter-v33d.js'&&apiAdapter)return new Response(apiAdapter,{headers:{'Content-Type':'text/javascript'}});if(portability){const response=await portability(r,f.env);if(response)return response;}f.unverified.push({path:new URL(r.url).pathname,method:r.method,reason:'Exact currently serving Core source not yet qualified for isolated run'});return Response.json({error:'unverified_core_transport_in_isolated_fixture'},{status:503});}}});
   f.env.MEMBER_LEGACY={fetch(r){const p=new URL(r.url).pathname;return p.startsWith('/assets/clinical-records/')||p.startsWith('/v1/member/my-shift')||p.startsWith('/v1/member/secure-messages')||['/member/messages','/member/care','/v1/member/care-card'].includes(p)?prior.fetch(r):legacy.default.fetch(r,f.env,{waitUntil:p=>p.catch(()=>{})});}};
  }
  const originalFetch=globalThis.fetch;globalThis.fetch=async(input,options)=>{const u=new URL(input instanceof Request?input.url:input);f.unverified.push({path:u.pathname,method:options?.method||'GET',reason:'Network disabled in isolated audit'});return Response.json({error:'unverified_external_transport_in_isolated_fixture'},{status:503});};

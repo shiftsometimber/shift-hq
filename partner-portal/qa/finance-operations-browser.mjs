@@ -28,7 +28,7 @@ for(const [engine,type] of [['chromium',chromium],['webkit',webkit]]){
    if(url.pathname==='/finance'){
     await route.fulfill({status:200,contentType:'text/html; charset=utf-8',body:'<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>*{box-sizing:border-box}body{margin:0;background:#050505;color:#E7E3DA;font:16px Arial}main{max-width:100%;padding:12px}'+FUNCTIONAL_CSS+'</style><body class="rx-app" data-functional="true"><button data-rx-view="finance">Refresh Finance</button><p id="rx-notice" role="status"></p><main><section id="rx-finance"><div id="rx-finance-content"></div></section></main><script>'+FUNCTIONAL_CLIENT+'</script></body></html>'});return;
    }
-   if(!url.pathname.startsWith('/api/clinical/platform/'))throw Error('Unexpected internal finance request');
+   if(url.pathname!=='/api/clinical/platform'&&!url.pathname.startsWith('/api/clinical/platform/'))throw Error('Unexpected internal finance request');
    const suffix=url.pathname.slice('/api/clinical'.length),body=request.method()==='POST'?request.postDataJSON():undefined;
    const response=await f.hq(suffix,1,body);requests.push({path:url.pathname,method:request.method(),status:response.status,...body?{body}: {}});
    await route.fulfill({status:response.status,headers:Object.fromEntries(response.headers),body:Buffer.from(await response.arrayBuffer())});
@@ -65,6 +65,8 @@ for(const [engine,type] of [['chromium',chromium],['webkit',webkit]]){
   checks.push({name:'Resolution UI closes only the owned variance with a retained matching-period receipt; no money entry',pass:true});
   for(const width of [390,1366]){await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
   checks.push({name:'Finance controls remain within mobile and desktop viewports',pass:true});
+  assert.equal(requests.some(r=>r.path==='/api/clinical/platform/integrations'),false);
+  checks.push({name:'Provider setup is not requested without its current server-side QA privilege',pass:true});
   f.sql.prepare('UPDATE hq_sessions SET revoked_at=? WHERE hq_user_id=1').run(new Date().toISOString());
   await page.getByRole('button',{name:'Refresh Finance'}).click();await page.waitForFunction(()=>!document.querySelector('#rx-finance-content')?.innerText.includes('Request a refund'));
   assert.equal(await page.locator('[data-finance-exception]').count(),0);
