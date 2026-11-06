@@ -2,7 +2,8 @@
 import fs from 'node:fs/promises';
 import {createHmac,randomBytes} from 'node:crypto';
 import {nativeAccounts,totp} from './native-accounts.mjs';
-import {medicineCommerceRoutes} from './native-core/medicine-commerce-v1.js';
+import {medicineCommerceRoutes,currentCoreRoot} from './core-runtime.mjs';
+import {prepareTestProfessionals,authoriseCurrentTestCatalogue} from './current-catalogue.mjs';
 import {ensureSharedSchema} from '../service/schema.mjs';
 import clinical from '../service/clinical-service.mjs';
 import memberService from '../service/member-service.mjs';
@@ -21,7 +22,7 @@ export async function fullLoop({continueAfterPaymentBlock=false,sstrxCandidate=f
  async function result(stage,response,expected=200){const start=performance.now(),r=await response,body=await r.json();timings.push({stage,ms:Math.round(performance.now()-start),http:r.status});if(r.status!==expected)throw Object.assign(Error(stage+' HTTP '+r.status+' '+JSON.stringify(body)),{stage,body});return body;}
  const files=new Map(),bucket={async put(k,b,o){files.set(k,{body:new Uint8Array(b),httpMetadata:o?.httpMetadata});},async get(k){return files.get(k)||null},async delete(k){files.delete(k)}};
  const env={...s.env,HQ_AUTH:{fetch:s.nativeFetch},CLINICAL_PRIVATE_FILES:bucket,PARTNER_PRIVATE_FILES:bucket,PARTNER_OPERATIONS_ENABLED:'true',PARTNER_INTERNAL_SETUP_ONLY:'false',PARTNER_LOGIN_ENABLED:'true',PARTNER_FULFILMENT_ENABLED:'true',CLINICAL_CASEWORK_ENABLED:'true',CLINICAL_REVIEW_READY:'true',CLINICAL_CONTEXT_ENABLED:'false',PRESCRIPTION_WORKFLOW_ENABLED:'true',PRESCRIPTION_SIGNING_ENABLED:'true',PRESCRIPTION_SIGNATURE_POLICY_REFERENCE:'FICTIONAL-ACCEPTANCE-ONLY',PARTNER_CLINICAL_APPROVER_IDS:String(s.actors.governor.user.id),SHARED_ORDER_WORKFLOW_ENABLED:'true',CLINICAL_MEMBER_RECORDS_ENABLED:'true',NOTIFICATION_EVENTS_ENABLED:'true',PARTNER_NOTIFICATION_REVIEW_ENABLED:'true',PARTNER_TRACKING_READ_ENABLED:'true',PARTNER_MEMBER_REPLIES_ENABLED:'true',STRIPE_MODE:'test',STRIPE_SECRET_KEY:'sk_test_ISOLATED_NO_PROVIDER_ACCOUNT',STRIPE_WEBHOOK_SECRET:randomBytes(32).toString('hex'),PHARMACY_CLINICAL_INTAKE_URL:'https://pharmacy.example.test/intake',PHARMACY_INTEGRATION_SECRET:randomBytes(32).toString('hex')};
- if(sstrxCandidate)Object.assign(env,{SSTRX_PLATFORM_ENABLED:'true',SSTRX_PAID_RECORD_LINK_ENABLED:'true',SSTRX_ENVIRONMENT:'synthetic',SSTRX_TEST_SIGNING:'true'});
+ if(sstrxCandidate)Object.assign(env,{SSTRX_PLATFORM_ENABLED:'true',SSTRX_PAID_RECORD_LINK_ENABLED:'true',SSTRX_ENVIRONMENT:'synthetic',SSTRX_TEST_SIGNING:'true',MY_SHIFT_REDESIGN_ENABLED:'true'});
  if(functionalV3)env.SSTRX_FUNCTIONAL_V3_ENABLED='true';
  const portalEnv={PARTNER_ACCESS_ENABLED:'true',PORTAL_SESSION_KEY:randomBytes(32).toString('hex'),HQ_AUTH:env.HQ_AUTH,CLINICAL:{fetch:r=>clinical.fetch(r,env,ctx)}};
  const req=(origin,path,body,cookie='',extra={})=>new Request(origin+path,{method:body===undefined?'GET':'POST',headers:{Origin:origin,Cookie:cookie,...(!(body instanceof FormData)?{'Content-Type':'application/json'}:{}),...extra},body:body===undefined?undefined:body instanceof FormData||body instanceof Uint8Array?body:JSON.stringify(body)});
@@ -42,9 +43,10 @@ export async function fullLoop({continueAfterPaymentBlock=false,sstrxCandidate=f
   // Catalogue and governance prerequisites are explicitly synthetic fixtures.
   await commerce('catalogue/medicines');
   const stamp=new Date().toISOString(),future=new Date(Date.now()+86400000).toISOString(),past=new Date(Date.now()-86400000).toISOString();
-  sql.prepare("INSERT OR REPLACE INTO medicine_products(id,name,active_ingredient,form,status,description,sellable,availability_state,partner) VALUES(991,'TEST Mounjaro — NOT FOR SUPPLY','TEST ONLY','injection','available','ISOLATED TEST ONLY',1,'available','test-pharmacy')").run();
+  sql.prepare("INSERT OR REPLACE INTO medicine_products(id,name,active_ingredient,form,status,description,sellable,availability_state,partner) VALUES(991,'TEST-Mounjaro-NOT-FOR-SUPPLY','TEST ONLY','injection','available','ISOLATED TEST ONLY',1,'available','test-pharmacy')").run();
   sql.prepare("INSERT OR REPLACE INTO medicine_variants(id,medicine_id,strength_label,selling_price_pence,status,updated_at,sellable,availability_state,partner) VALUES(9911,991,'TEST 2.5 mg',16900,'available',?,1,'available','test-pharmacy')").run(stamp);
   sql.prepare('INSERT OR REPLACE INTO medicine_inventory VALUES(9911,20,0,?)').run(stamp);
+  if(currentCoreRoot)await authoriseCurrentTestCatalogue({s,env,result,record,ctx,report});
   record('Fresh accounts','PASS','Native member registration, captured email verification, password login; native staff password login and real TOTP MFA for synthetic HQ/partner identities.');
   const form=new FormData();
   const answers={variantId:'9911',insulinUse:'no',dateOfBirth:'1980-01-01',heightCm:'175',weightKg:'110',weightRelatedCondition:'no',conditions:'None — fictional test declaration',medicines:'None — fictional test declaration',previousTreatment:'no',gpName:'TEST GP — NOT A REAL PRACTICE',gpPractice:'TEST ONLY',gpAddress:'TEST ONLY',gpPostcode:'AA1 1AA',gpContactConsent:'on',answersConfirmed:'on',imageConsent:'on',submissionId:crypto.randomUUID(),patientFirstName:'TEST Full Loop',patientLastName:'Member',patientPhone:'07700900000',patientAddress1:'TEST ADDRESS — NOT FOR DELIVERY',patientTown:'TEST TOWN',patientPostcode:'AA1 1AA'};
@@ -88,12 +90,7 @@ export async function fullLoop({continueAfterPaymentBlock=false,sstrxCandidate=f
 async function downstream(f,{continueAfterPaymentBlock}){
  const {s,env,portalEnv,report,created,evidence,submitted,record,result,ctx,portal}=f,{sql}=s;const PORTAL_ORIGIN=f.sstrxCandidate?'https://sstrx.shiftsometimber.co.uk':'https://partner.shiftsometimber.co.uk';if(f.sstrxCandidate)portalEnv.SSTRX_PORTAL_ENABLED='true';
  const stamp=new Date().toISOString(),future=new Date(Date.now()+86400000).toISOString(),past=new Date(Date.now()-86400000).toISOString();
- for(const [id,kind]of [['test-clinical-org','clinical'],['test-pharmacy','pharmacy']]){const org={id,kind,name:'TEST '+id,status:'approved',version:1,expiresAt:future,premises:'FICTIONAL ADDRESS — NO REAL PRACTICE',registration:'SYNTHETIC-NOT-A-REAL-REGISTRATION'};sql.prepare('INSERT OR IGNORE INTO partner_organisations VALUES(?,1,?,?)').run(id,JSON.stringify(org),stamp);}
- for(const [actor,kind,org]of [['clinician','clinician','test-clinical-org'],[f.dispenserActor||'dispenser','dispensing',f.pharmacyOrgId||'test-pharmacy']]){
-  const id=s.actors[actor].user.id,profile={id:'test-professional-'+id,hqUserId:id,username:actor==='clinician'?'CLNTEST':actor==='dispenser'?'DSPTEST':'DSPSWITCH',kind,orgId:org,status:'active',version:1,credentialVersion:1,details:{name:'TEST '+actor,email:s.secrets.get(actor).email,profession:kind==='clinician'?'GP':'Pharmacist',regulator:kind==='clinician'?'GMC':'GPhC',registrationNumber:'SYNTHETIC-'+id,prescribingEntitlement:'Fictional acceptance only'},evidence:[],checks:['identity','registration','indemnity','agreements','competence'].map(kind=>({kind,credentialVersion:1,outcome:'verified',expiresAt:future})),grants:[{credentialVersion:1,area:'weight_management',startsAt:past,expiresAt:future,medicines:[],actions:kind==='clinician'?['review','query','clinical_decision','issue_prescription']:['view_fulfilment','query','supply_decision','prepare','dispatch','record_delivery','record_exception','cancel_supply']}],passwordSetAt:stamp};
-  sql.prepare('INSERT OR IGNORE INTO partner_staff VALUES(?,?,?,?,?,1,?,?)').run(profile.id,id,profile.username,kind,org,JSON.stringify(profile),stamp);
- }
- for(const actor of ['governor','clinician'])sql.prepare("INSERT OR IGNORE INTO clinical_hq_staff VALUES(?,'clinician',1,'TEST-ONLY','GMC',?,?)").run(s.actors[actor].user.id,'SYNTHETIC-'+s.actors[actor].user.id,future);
+ prepareTestProfessionals(f);
  if(f.functionalV3){
   const {ensurePlatformSchema}=await import('../platform/schema.mjs');await ensurePlatformSchema(env.DB);
   sql.prepare("INSERT OR IGNORE INTO rx_service_config VALUES('test-clinical-org','weight_management',1,?,?)").run(JSON.stringify({verificationProtocol:{version:1,approvalReference:'FICTIONAL-PROVIDER-PROTOCOL',requirements:[{id:'identity',methods:['independent_document'],allowException:false},{id:'measurements',methods:['video'],allowException:false}]}}),stamp);
@@ -122,7 +119,7 @@ async function downstream(f,{continueAfterPaymentBlock}){
   await action({action:'start_review'});record('C: Additional information','PASS (SYNTHETIC)','Clinician request → explicit member resubmission/reply → return to assigned review; no clinical answer inferred.');
  }
  for(const item of evidence.filter(e=>e.kind!=='photo_id'))await action({action:'review_evidence',evidenceId:item.id,outcome:'approve'});
- const handover={version:CARE_HANDOVER_VERSION};for(const [id,,type]of careFields)handover[id]=Array.isArray(type)?type[0]:type==='date'?new Date(Date.now()+(id==='followUpDate'?7:0)*86400000).toISOString().slice(0,10):'Fictional acceptance handover only';for(const [id]of careChecks)handover[id]=true;handover.medicine='TEST Mounjaro — NOT FOR SUPPLY';
+ const handover={version:CARE_HANDOVER_VERSION};for(const [id,,type]of careFields)handover[id]=Array.isArray(type)?type[0]:type==='date'?new Date(Date.now()+(id==='followUpDate'?7:0)*86400000).toISOString().slice(0,10):'Fictional acceptance handover only';for(const [id]of careChecks)handover[id]=true;handover.medicine='TEST-Mounjaro-NOT-FOR-SUPPLY';
  if(f.functionalV3)for(const [requirement,method]of [['identity','independent_document'],['measurements','video']])await result('Independent '+requirement+' verification',partner('/platform/cases/'+created.id+'/verification',clinicianCookie,{assessmentVersion:submitted.revision,requirement,state:'verified',method,sourceReference:'FICTIONAL-INDEPENDENT-'+requirement,expiresAt:future,version:0}));
  await action({action:'decision',outcome:'proceed',identityVerified:true,independentMeasurementsVerified:true,verification:'Fictional checks only — not a clinical decision',handover,rationale:'Fictional acceptance only',message:'TEST review complete'});
  report.assessmentVersion=submitted.revision;
@@ -153,7 +150,7 @@ async function downstream(f,{continueAfterPaymentBlock}){
  const conversation=await result('Partner receives HQ reply',partner('/partner-desk/threads/'+ask.id,dispenserCookie));if(!conversation.messages.some(m=>m.actor_kind==='hq'))throw Error('HQ response missing from partner view');
  record('Partner ↔ HQ communication','PASS','Question and reply persisted and visible on both private workspaces for this order; no email or external message sent.');
  const transitions=[];
- for(const [operation,expected]of [['accept','pharmacy_received'],['prepare','dispensing'],['dispatch','dispatched'],['delivered','fulfilled']]){
+ for(const [operation,expected]of [['accept','pharmacy_received'],['prepare','dispensing'],...f.sstrxCandidate?[['dispensed','dispensing']]:[],['dispatch','dispatched'],['delivered','fulfilled']]){
   const current=await result('Pharmacy order '+operation,partner('/partners/fulfilment/'+report.orderNumber,dispenserCookie));
   await result('Pharmacy '+operation,partner('/partners/fulfilment/'+report.orderNumber+'/action',dispenserCookie,{version:current.order.version,action:operation,carrier:'dpd',trackingNumber:'12345678901234',message:'FICTIONAL TEST ONLY — NO SHIPMENT'}));
   const memberOrders=await result('Member order after '+operation,medicineCommerceRoutes(new Request('https://api.shiftsometimber.co.uk/v1/treatment/orders',{headers:{Cookie:s.memberSession}}),env,ctx));
@@ -164,7 +161,7 @@ async function downstream(f,{continueAfterPaymentBlock}){
  }
  report.statusTransitions=transitions;
  const tracking=await result('Member fulfilment tracking',s.callMember(recordPath+'/fulfilment'));report.memberTracking=tracking.fulfilment;
- record('Dispensing → delivery → member/HQ',f.sstrxCandidate?'PASS (SYNTHETIC)':'PASS WITH WORKAROUNDS','All four native pharmacy transitions synchronised to Core, member orders and HQ; test tracking visible in member record. No actual shipment.');
+ record('Dispensing → delivery → member/HQ',f.sstrxCandidate?'PASS (SYNTHETIC)':'PASS WITH WORKAROUNDS','All five native pharmacy transitions, including the explicit dispensing receipt, synchronised to Core, member orders and HQ; test tracking visible in member record. No actual shipment.');
  report.pendingSharedSync=sql.prepare("SELECT count(*) n FROM partner_workflow_sync WHERE status='pending'").get().n;
  report.notificationChannels=sql.prepare('SELECT channel,status,count(*) count FROM clinical_notification_channels GROUP BY channel,status').all();
  report.sentNotificationChannels=sql.prepare('SELECT count(*) n FROM clinical_notification_channels WHERE provider_reference IS NOT NULL').get().n;
@@ -215,6 +212,7 @@ async function supplierSwitchJourney(f){
  const before=JSON.parse(s.sql.prepare('SELECT state_json FROM partner_fulfilment WHERE order_number=?').get(oldOrder).state_json);
  const original=await captureOrderRoute(s.DB,{orderNumber:oldOrder,memberId:s.member.id,clinicalOrgId:'test-clinical-org',pharmacyOrgId:'test-pharmacy',contractId:'fixture-a',prescriptionId:before.prescriptionId,variantId:9911,service:'weight_management',authorisationReference:'FICTIONAL INITIAL ROUTE'});
  await selectFutureSupplier(s.DB,{orgId:'test-clinical-org',service:'weight_management',contractId:'fixture-a',version:0,authorisationReference:'FICTIONAL A'});await selectFutureSupplier(s.DB,{orgId:'test-clinical-org',service:'weight_management',contractId:'fixture-b',version:1,authorisationReference:'FICTIONAL B'});
+ if(currentCoreRoot)await authoriseCurrentTestCatalogue(f,'test-pharmacy-b');
  await repeatJourney(f,{pharmacyOrgId:'test-pharmacy-b',dispenserActor:'otherDispenser'});
  const after=JSON.parse(s.sql.prepare('SELECT state_json FROM partner_fulfilment WHERE order_number=?').get(report.orderNumber).state_json);
  const current=await captureOrderRoute(s.DB,{orderNumber:report.orderNumber,memberId:s.member.id,clinicalOrgId:'test-clinical-org',pharmacyOrgId:'test-pharmacy-b',contractId:'fixture-b',prescriptionId:after.prescriptionId,variantId:9911,service:'weight_management',authorisationReference:'FICTIONAL NEW PRESCRIBER DESTINATION'});
