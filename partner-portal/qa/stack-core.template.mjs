@@ -2,6 +2,7 @@
 import core from '__CORE_ROOT__/worker.js';
 import hq from '__CORE_ROOT__/hq-ai-v2.js';
 import {hqCatalogueRoutes} from '__CORE_ROOT__/hq-catalogue-v1.js';
+import {hqCommerceContentRoutes} from '__CORE_ROOT__/hq-commerce-content-v1.js';
 import {radarRoutes} from '__CORE_ROOT__/radar-integration-v1.js';
 import {medicineCommerceRoutes} from '__CORE_ROOT__/medicine-commerce-v1.js';
 import {handleEmailVerification} from '__CORE_ROOT__/auth-email-verification-v1.js';
@@ -36,6 +37,7 @@ export default {async fetch(request,env,ctx){
  if(request.method==='GET'&&path==='/v1/auth/turnstile-config')return Response.json(publicTurnstileConfig(env,request));
  if((request.method==='GET'||request.method==='PATCH'&&/^\/v1\/hq\/radar\/ticker-controls\/[1-9]\d*$/.test(path))&&(path==='/hq/radar-controls'||path==='/hq/radar-social'||path.startsWith('/v1/hq/radar'))){const radar=await radarRoutes(request,env,ctx);if(radar)return radar;}
  const catalogue=await hqCatalogueRoutes(request,env,ctx);if(catalogue)return catalogue;
+ const commerceContent=await hqCommerceContentRoutes(request,env,ctx);if(commerceContent)return commerceContent;
  const medicine=await medicineCommerceRoutes(request,env,ctx);if(medicine)return medicine;
  if(path.startsWith('/v1/hq/'))return hq.fetch(request,env,ctx);
  return await handleEmailVerification(request,env,ctx,(r,e,c)=>core.fetch(r,e,c))||core.fetch(request,env,ctx);
