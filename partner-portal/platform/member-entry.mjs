@@ -18,6 +18,26 @@ export function installMemberMessages(){
    const u=new URL(a.getAttribute('href')||'',location.origin);
    if(u.origin===location.origin&&u.pathname==='/member/settings'&&['#notifications','#prefWeight','#healthConsentManager','#deviceHealth','#food'].includes(u.hash)){u.searchParams.set('legacy-settings','1');a.setAttribute('href',u.pathname+u.search+u.hash);}
   }
+  const native=!!(window.__SST_NATIVE_PRESENTATION__||window.webkit?.messageHandlers?.sstHealth||window.sstHealth);
+  if(native){
+   // The existing PWA script intentionally hides its web-push controls in a
+   // native wrapper. Keep the app's shortcut useful without implying support.
+   for(const a of document.querySelectorAll('a[href*="#notifications"]')){
+    const walker=document.createTreeWalker(a,NodeFilter.SHOW_TEXT);let node;
+    while((node=walker.nextNode())){
+     if(node.data==='Daily check-in reminder')node.data='Notifications and reminders';
+     if(node.data==='Optional. No health details in the notification')node.data='See the options available in this app';
+    }
+   }
+   const pwa=document.getElementById('pwaReminderSettings');
+   if(pwa&&location.pathname==='/member/settings'&&!document.getElementById('notifications')){
+    const section=document.createElement('section');section.id='notifications';section.className='mt-v7-card';section.dataset.nativeNotificationOptions='';
+    const heading=document.createElement('h2');heading.textContent='Notifications and reminders';
+    const copy=document.createElement('p');copy.textContent='Treatment reminders are managed in My treatment. Daily check-in notifications are not currently available inside this app.';
+    const link=document.createElement('a');link.href='/member/treatment';link.textContent='Open My treatment';
+    section.append(heading,copy,link);pwa.before(section);
+   }
+  }
   const header=document.querySelector('.mt-shop-brand');if(!header)return;
   let link=document.getElementById('mt-secure-messages-link');
   if(!link){link=document.createElement('a');link.id='mt-secure-messages-link';link.href='/member/messages';link.style.cssText='color:#E7E3DA;background:#050505;border:1px solid #707762;border-radius:8px;padding:10px 12px;min-height:44px;display:inline-flex;align-items:center;font-size:14px;white-space:nowrap';header.append(link);}
