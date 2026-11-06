@@ -4,7 +4,7 @@
 <script src="hq-partner-workflows.js"></script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#253128"><meta name="shift-hq-build" content="1.11.3-commerce"><title>Shift HQ</title><link rel="stylesheet" href="hq.css?v=11.14-source-review-20260916"><link rel="stylesheet" href="hq-knowledge-editorial.css?v=2" data-g3-006="true">
-<link rel="stylesheet" href="hq-management.css?v=20261104-owner-2"><link rel="stylesheet" href="hq-operations.css?v=20261104-1"><link rel="stylesheet" href="hq-partners.css?v=1"><script src="hq-partners.js?v=1"></script>
+<link rel="stylesheet" href="hq-v3-foundation.css?v=20261105-1"><link rel="stylesheet" href="hq-management.css?v=20261104-owner-2"><link rel="stylesheet" href="hq-operations.css?v=20261104-1"><link rel="stylesheet" href="hq-partners.css?v=1"><script src="hq-partners.js?v=1"></script>
 </head><body>
 <div class="shell">
 <aside><div class="brand"><b>SHIFT</b><span>HQ</span><small>V1.11.3</small></div><nav>
@@ -278,7 +278,7 @@
 <section id="outbox" class="view">
 <div class="toolbar"><div><p class="eyebrow">COMMUNICATIONS</p><h2>Shift outbox</h2><p class="sub">Messages are queued, auditable and retryable before they leave Shift HQ.</p></div><button id="processOutbox">Process pending</button></div>
 <div class="cards compact-cards"><article><span>Pending</span><strong id="outPending">—</strong><em>ready to send</em></article><article><span>Sent</span><strong id="outSent">—</strong><em>completed</em></article><article><span>Failed</span><strong id="outFailed">—</strong><em>retry/review</em></article><article><span>Suppressed</span><strong id="outSuppressed">—</strong><em>consent/safety</em></article></div>
-<div class="panel tablewrap"><table><thead><tr><th>To</th><th>Channel</th><th>Subject</th><th>Status</th><th>Created</th></tr></thead><tbody id="outboxRows"><tr><td colspan="5">Loading…</td></tr></tbody></table></div>
+<div class="panel tablewrap"><table><thead><tr><th>To</th><th>Channel</th><th>Subject</th><th>Status</th><th>Created</th></tr></thead><tbody id="queueOutboxRows"><tr><td colspan="5">Loading…</td></tr></tbody></table></div>
 </section>
 
 <section id="aiactions" class="view">
@@ -512,5 +512,5 @@
 <div class="form-grid"><label>Source / URL<input id="knowledgeSource" placeholder="internal://shift or source URL"></label><label>Trust tier<select id="knowledgeTrust"><option value="1">1 — authoritative</option><option value="2">2 — approved professional</option><option value="3">3 — Shift/community context</option><option value="4">4 — general reference</option><option value="5">5 — untrusted/review</option></select></label></div>
 <label>Knowledge text<textarea id="knowledgeText" rows="14" required></textarea></label><div class="actions"><button type="button" data-close="knowledgeDocModal">Cancel</button><button class="primary" type="submit">Ingest & index</button></div></form></dialog>
 
-<script src="turnstile-auth-v1.js?v=2"></script><script src="gp-directory.js?v=20261012"></script><script src="hq-operations.js?v=20261104-owner-5"></script><link rel="stylesheet" href="hq-partner-desk.css?v=20261104-1"><script src="hq-partner-desk.js?v=20261104-3"></script><script src="hq-management.js?v=20261104-connected-2"></script><script src="hq.js?v=11.15-bounded-reconciliation-20261014"></script></body></html>
+<script src="turnstile-auth-v1.js?v=2"></script><script src="gp-directory.js?v=20261012"></script><script src="hq-operations.js?v=20261105-v3-joined-1"></script><link rel="stylesheet" href="hq-partner-desk.css?v=20261104-1"><script src="hq-partner-desk.js?v=20261104-3"></script><script src="hq-v3-foundation.js?v=20261105-1"></script><script src="hq-management.js?v=20261105-v3-foundation-1"></script><script src="hq.js?v=20261105-v3-loaders-1"></script></body></html>
 

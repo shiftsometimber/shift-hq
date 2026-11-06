@@ -13,6 +13,7 @@
     const requestedView = deepLink.get('view');
     let requestedEvent = /^\d+$/.test(deepLink.get('event') || '') ? deepLink.get('event') : null;
     let radarEvents=[];
+    let knowledgeRevision=0,knowledgeController;
     let openedDeepLink=false;
     const radarDestinations=['medicine_news','dossier','ticker_knowledge','ticker_treatments','knowledge_links','member_watch','member_email','member_push','search','sitemap','social_instagram','social_facebook','social_linkedin','social_x'];
 
@@ -85,12 +86,30 @@
     async function loadHubArticles(){
       installKnowledgeEditorialPresentation();
       const rows=$('#articleRows'); if(!rows) return;
+      knowledgeController?.abort();knowledgeController=new AbortController();
+      const revision=++knowledgeRevision,principal=S.me;
+      if(!principal){rows.innerHTML='<tr><td colspan="7">Sign in to load Knowledge Hub articles.</td></tr>';rows.removeAttribute('aria-busy');return;}
+      rows.setAttribute('aria-busy','true');rows.innerHTML='<tr><td colspan="7">Loading Knowledge Hub articles…</td></tr>';
       try {
-        const j=await radarCall('/v1/hq/articles'), articles=j.articles||[];
+        const j=await window.HQV3.boundedRead(radarCall,'/v1/hq/articles',{signal:knowledgeController.signal});
+        if(revision!==knowledgeRevision||principal!==S.me)return;
+        if(j?.ok===false||!Array.isArray(j?.articles))throw Error('The article source did not return a valid list.');
+        const articles=j.articles;
         rows.innerHTML=articles.length?articles.map(a=>`<tr data-editorial-state="${esc(a.review?.decision||'unreviewed')}"><td><b>${esc(a.title)}</b><br><small>/${esc(a.slug)}</small></td><td>${badge(a.status)}</td><td>${esc(a.category||'—')}</td><td>${esc(a.author||'—')}</td><td>${reviewCell(a)}</td><td>${knowledgeActions(a)}</td><td>${esc(fmt(a.updated_at))}</td></tr>`).join(''):'<tr><td colspan="7">No Knowledge Hub articles yet.</td></tr>';
         $$('[data-knowledge-review]').forEach(b=>b.onclick=()=>reviewHubArticle(b.dataset.knowledgeReview,b.dataset.decision));
         $$('[data-knowledge-publish]').forEach(b=>b.onclick=()=>publishHubArticle(b.dataset.knowledgePublish));
-      } catch(e) { rows.innerHTML=`<tr><td colspan="7">${esc(e.message)}</td></tr>`; }
+      } catch(e) {if(revision===knowledgeRevision&&principal===S.me)rows.innerHTML=`<tr><td colspan="7">Unavailable — ${esc(e.message)}. Use Refresh articles to retry.</td></tr>`;}
+      finally{if(revision===knowledgeRevision&&principal===S.me)rows.removeAttribute('aria-busy');}
+    }
+
+    function installKnowledgeLoadState(){
+      loadArticles=loadHubArticles;
+      const section=$('#knowledgehub'),toolbar=section?.querySelector('.toolbar');if(!toolbar)return;
+      const refresh=document.createElement('button');refresh.type='button';refresh.id='knowledge-refresh';refresh.textContent='Refresh articles';refresh.onclick=loadHubArticles;toolbar.append(refresh);
+      const priorLoad=load;load=async function(){await priorLoad();if(section.classList.contains('active')||!S.me)await loadHubArticles();};
+      const clear=()=>{knowledgeRevision++;knowledgeController?.abort();const rows=$('#articleRows');rows?.removeAttribute('aria-busy');if(rows)rows.innerHTML='<tr><td colspan="7">Sign in to load Knowledge Hub articles.</td></tr>';};
+      const logout=$('#logoutBtn').onclick;$('#logoutBtn').onclick=async()=>{clear();await logout();};
+      window.addEventListener('pagehide',clear);
     }
 
     function installRadarView() {
@@ -401,6 +420,7 @@
     installWebsiteUpdater();
     installRadarView();
     installEvidenceDeskView();
+    installKnowledgeLoadState();
     window.installManagementHQ?.();
     window.installGpDirectoryHQ?.();
     window.installGpMemberEditorHQ?.();

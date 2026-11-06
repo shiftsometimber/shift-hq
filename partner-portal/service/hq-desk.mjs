@@ -1,4 +1,5 @@
 import {hqConversationAlerts} from '../platform/messages.mjs';
+import {hqOperatingPicture} from './hq-operating-picture.mjs';
 import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition} from './clinical-kernel.mjs';
 import {ensureSharedSchema} from './schema.mjs';
 import {overview} from '../platform/service.mjs';
@@ -35,6 +36,12 @@ export async function hqDeskRoute(request,env){
   if(request.method==='POST'&&origin!=='https://hq.shiftsometimber.co.uk')fail(403,'origin_required');
   const a=await actor(request,env);if(a.response)return a.response;await ensureSharedSchema(env.DB);
   const parts=url.pathname.slice(BASE.length).split('/').filter(Boolean);
+  if(parts[0]==='operations'&&parts.length===1&&request.method==='GET'){
+   if(!a.internal)fail(403,'hq_access_required');
+   if(env.HQ_V3_TEST_MODE!=='true'||env.SSTRX_ENVIRONMENT!=='synthetic'||env.SSTRX_PLATFORM_ENABLED!=='true')fail(503,'isolated_test_environment_required');
+   if((url.searchParams.get('partition')||'TEST')!=='TEST')fail(403,'test_partition_required');
+   return json(await hqOperatingPicture(env,a));
+  }
   if(parts[0]==='questions'&&parts.length===1&&request.method==='GET'){
    if(!a.internal)fail(403,'hq_access_required');
    const questions=await rows(env.DB.prepare("SELECT id,order_number,status,priority,'SHIFT HQ' owner_name,created_at,updated_at FROM partner_hq_threads WHERE status='awaiting_hq' ORDER BY CASE priority WHEN 'urgent' THEN 0 ELSE 1 END,created_at LIMIT 101"));
