@@ -400,18 +400,29 @@
         host.innerHTML='<div class="empty">Loading controlled public fields…</div>';
         try{
           const data=await radarCall('/v1/hq/site-content');
-          const rows=data.content||[],delivery=data.deliveryState,deliveryReady=delivery?.status==='ready',deliveryNotice=deliveryReady?'':`<div class="empty" role="status">Website delivery unavailable — ${esc(delivery?.reason||'The public delivery source has not been verified.')}${delivery?.owner?` · Owner: ${esc(delivery.owner)}`:''}. Draft records can still be reviewed; publishing and rollback are unavailable.</div>`;
-          host.innerHTML=deliveryNotice+(rows.length?rows.map(x=>`<article class="cms-item" data-site-content="${Number(x.id)}"><b>${esc(x.label)}</b><span>${esc(x.page_path)} · ${badge(x.status)} · version ${Number(x.version||1)}</span><textarea aria-label="${esc(x.label)} text">${esc(x.draft_text||'')}</textarea><div class="actions"><button data-site-preview="${Number(x.id)}">Preview</button><button data-site-publish="${Number(x.id)}"${deliveryReady?'':' disabled'}>Publish</button><button data-site-rollback="${Number(x.id)}"${deliveryReady?'':' disabled'}>Rollback</button></div><p role="status"></p></article>`).join(''):'<div class="empty">No controlled public fields yet.</div>');
-          $$('[data-site-preview],[data-site-publish],[data-site-rollback]').forEach(button=>button.onclick=async()=>{
-            const id=button.dataset.sitePreview||button.dataset.sitePublish||button.dataset.siteRollback,card=button.closest('[data-site-content]'),text=card.querySelector('textarea').value,status=card.querySelector('[role=status]'),action=button.dataset.sitePreview?'preview':button.dataset.sitePublish?'publish':'rollback';
-            if(action!=='preview'&&!deliveryReady){status.textContent='Website delivery is unavailable. Refresh the source before publishing or rollback.';return;}
-            button.disabled=true;status.textContent=action==='preview'?'Preparing preview…':action==='publish'?'Publishing…':'Rolling back…';
-            try{const result=await radarCall(`/v1/hq/site-content/${id}`,{method:'PATCH',body:JSON.stringify({action,text})});if(action==='preview'){const p=result.preview||{};status.textContent=`Preview only · ${p.pagePath||''} · current: ${p.currentText||'underlying page wording'} · proposed: ${p.draftText||text}`;}else{status.textContent=`Committed · ${result.status} · version ${Number(result.version||0)}`;await render();}}catch(e){status.textContent=`FAILED · ${e.message}`;}finally{button.disabled=false;}
+          const rows=data.content||[],delivery=data.deliveryState,deliveryReady=delivery?.status==='ready';
+          const deliveryNotice=deliveryReady?'':'<div class="empty" role="status">Website delivery unavailable — '+esc(delivery?.reason||'The public delivery source has not been verified.')+(delivery?.owner?' · Owner: '+esc(delivery.owner):'')+'. Drafts can still be saved and reviewed; publishing and rollback are unavailable.</div>';
+          host.innerHTML=deliveryNotice+(rows.length?rows.map(x=>'<article class="cms-item" data-site-content="'+Number(x.id)+'" data-site-version="'+Number(x.version)+'"><b>'+esc(x.label)+'</b><span>'+esc(x.page_path)+' · '+badge(x.status)+' · version '+Number(x.version)+(x.published_version!=null?' · published version '+Number(x.published_version):'')+'</span><textarea aria-label="'+esc(x.label)+' text">'+esc(x.draft_text??'')+'</textarea>'+(x.published_text!=null&&x.draft_text!==x.published_text?'<p class="muted">Saved draft differs from the published text. Choose Publish to apply this draft.</p>':'')+'<div class="actions"><button data-site-save="'+Number(x.id)+'">Save draft</button><button data-site-preview="'+Number(x.id)+'">Preview</button><button data-site-publish="'+Number(x.id)+'"'+(deliveryReady?'':' disabled')+'>Publish</button><button data-site-rollback="'+Number(x.id)+'"'+(deliveryReady?'':' disabled')+'>Rollback</button></div><p role="status"></p></article>').join(''):'<div class="empty">No controlled public fields yet.</div>');
+          $$('[data-site-content] textarea').forEach(textarea=>textarea.addEventListener('input',()=>{textarea.closest('[data-site-content]').querySelector('[role=status]').textContent='Unsaved changes. Choose Save draft to keep them without publishing.';}));
+          $$('[data-site-save],[data-site-preview],[data-site-publish],[data-site-rollback]').forEach(button=>button.onclick=async()=>{
+            const id=button.dataset.siteSave||button.dataset.sitePreview||button.dataset.sitePublish||button.dataset.siteRollback,card=button.closest('[data-site-content]'),text=card.querySelector('textarea').value,status=card.querySelector('[role=status]'),action=button.dataset.siteSave?'save':button.dataset.sitePreview?'preview':button.dataset.sitePublish?'publish':'rollback',expectedVersion=Number(card.dataset.siteVersion);
+            if((action==='publish'||action==='rollback')&&!deliveryReady){status.textContent='Website delivery is unavailable. Refresh the source before publishing or rollback.';return;}
+            const buttons=[...card.querySelectorAll('button')],disabled=buttons.map(x=>x.disabled);buttons.forEach(x=>x.disabled=true);
+            status.textContent=action==='save'?'Saving draft…':action==='preview'?'Preparing preview…':action==='publish'?'Publishing…':'Rolling back…';
+            try{
+              const result=await radarCall('/v1/hq/site-content/'+id,{method:'PATCH',body:JSON.stringify({action,text,expectedVersion})});
+              if(action==='preview'){const p=result.preview||{};status.textContent='Preview only · '+(p.pagePath||'')+' · current: '+(p.currentText||'underlying page wording')+' · proposed: '+(p.draftText||text);}
+              else{
+                await render();const current=host.querySelector('[data-site-content="'+id+'"] [role=status]');
+                if(current)current.textContent=action==='save'?'Draft saved · version '+Number(result.version)+'. Published text is unchanged.':'Committed · '+result.status+' · version '+Number(result.version);
+              }
+            }catch(e){status.textContent='FAILED · '+e.message;}
+            finally{buttons.forEach((x,i)=>x.disabled=disabled[i]);}
           });
-        }catch(e){host.innerHTML=`<div class="empty">Website updater failed: ${esc(e.message)}</div>`;}
+        }catch(e){host.innerHTML='<div class="empty">Website updater failed: '+esc(e.message)+'</div>';}
       };
       create.hidden=true;
-      const heading=$('#website .toolbar .sub');if(heading)heading.textContent='Preview, publish and roll back controlled public fields against the live delivery state.';
+      const heading=$('#website .toolbar .sub');if(heading)heading.textContent='Save drafts, preview changes, then publish or roll back controlled website text.';
       const button=$('#website .toolbar button');if(button){button.hidden=false;button.textContent='Refresh live state';button.onclick=render;}
       document.querySelector('nav button[data-view="website"]')?.addEventListener('click',()=>setTimeout(render,0));
     }

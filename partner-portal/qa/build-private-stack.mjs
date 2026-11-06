@@ -10,9 +10,15 @@ const configuredCore=process.env.SSTRX_QA_CORE_ROOT;if(!configuredCore||!path.is
 const root=fileURLToPath(new URL('../../',import.meta.url)),output=path.join(root,'.partner-qa/hosted');await fs.mkdir(output,{recursive:true});
 const assets=path.join(output,'assets');await fs.mkdir(path.join(assets,'hq'),{recursive:true});await fs.mkdir(path.join(assets,'member'),{recursive:true});
 const hash=b=>createHash('sha256').update(b).digest('hex'),manifest={scope:'Private fictional TEST build; not deployment',builtAt:new Date().toISOString(),hosts:QA_ACCESS.hosts,files:{},bundles:{}};
-const copy=async(source,destination,transform=x=>x)=>{const raw=await fs.readFile(source),bytes=Buffer.from(transform(raw.toString()));await fs.mkdir(path.dirname(destination),{recursive:true});await fs.writeFile(destination,bytes);manifest.files[path.relative(output,destination)]={sourceSha256:hash(raw),outputSha256:hash(bytes)};};
+const copy=async(source,destination,transform=x=>x)=>{const raw=await fs.readFile(source),bytes=transform===null?raw:Buffer.from(transform(raw.toString()));await fs.mkdir(path.dirname(destination),{recursive:true});await fs.writeFile(destination,bytes);manifest.files[path.relative(output,destination)]={sourceSha256:hash(raw),outputSha256:hash(bytes)};};
 const allow=(await fs.readFile(path.join(root,'.assetsignore'),'utf8')).split('\n').filter(x=>x.startsWith('!')).map(x=>x.slice(1).trim());
-for(const name of allow)await copy(path.join(root,name),path.join(assets,'hq',name),s=>s.replaceAll('https://api.shiftsometimber.co.uk','https://hq-qa.sstrx.co.uk').replaceAll('https://sstrx.shiftsometimber.co.uk','https://rx-qa.sstrx.co.uk').replaceAll('Shift HQ is securely signed in to live Shift Core.','Shift HQ is signed in to the isolated fictional TEST system.').replaceAll('Live HQ records','Fictional TEST HQ records'));
+for(const name of allow){
+ if(name.startsWith('professional-fonts/')){
+  // Preserve font bytes and licences. Both professional hosts use the same root URL.
+  await copy(path.join(root,name),path.join(assets,'hq',name),null);
+  await copy(path.join(root,name),path.join(assets,name),null);
+ }else await copy(path.join(root,name),path.join(assets,'hq',name),s=>s.replaceAll('https://api.shiftsometimber.co.uk','https://hq-qa.sstrx.co.uk').replaceAll('https://sstrx.shiftsometimber.co.uk','https://rx-qa.sstrx.co.uk').replaceAll('Shift HQ is securely signed in to live Shift Core.','Shift HQ is signed in to the isolated fictional TEST system.').replaceAll('Live HQ records','Fictional TEST HQ records'));
+}
 const loginSource=await fs.readFile(path.join(core,'frontend/member/my-timber-preview.html'),'utf8'),auth=loginSource.match(/<section class="preview-auth" id="previewAuth">[\s\S]*?<\/section>/)?.[0],scripts=[...loginSource.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]),authScript=scripts.find(x=>x.includes("const auth=document.getElementById('previewAuth')"));
 if(!auth||!authScript||authScript.split("params.get('next')||''").length!==2)throw Error('Retained login template changed');
 const styles=[...loginSource.matchAll(/<style\b[^>]*>[\s\S]*?<\/style>/g)].map(m=>m[0]).join('\n');

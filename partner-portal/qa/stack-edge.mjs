@@ -11,6 +11,17 @@ const native={fetch(request,env,ctx){const p=new URL(request.url).pathname;retur
 const api=Object.fromEntries(['hq-qa.sstrx.co.uk','my-qa.sstrx.co.uk','api-qa.sstrx.co.uk'].map(host=>[host,createQaNativeOrigin(native,{host})]));
 const rx=createQaAccessBoundary(createSstrxPortal(QA_RX_ORIGIN));
 const reviewerRuntime=createQaAccessBoundary({fetch(){return new Response(REVIEWER_EXPIRY_CLIENT,{headers:{...privateHeaders,'Content-Type':'text/javascript; charset=utf-8'}})}});
+// Static professional fonts still require the existing QA host, environment and
+// signed reviewer assertion. This route contains no member or clinical record.
+const professionalFonts=new Set(['SourceSansPro-Regular.woff','SourceSansPro-Semibold.woff','SourceSansPro-Bold.woff','IBMPlexMono-Regular.woff']);
+const professionalStatic=createQaAccessBoundary({async fetch(request,env){
+ const u=new URL(request.url),name=u.pathname.slice('/professional-fonts/'.length);
+ if(!['hq-qa.sstrx.co.uk','rx-qa.sstrx.co.uk'].includes(u.hostname)||!['GET','HEAD'].includes(request.method)||!professionalFonts.has(name))return new Response('Not found',{status:404,headers:privateHeaders});
+ const response=await env.ASSETS.fetch(new Request(u,{method:request.method}));
+ const headers=new Headers(response.headers);for(const [key,value]of Object.entries(privateHeaders))headers.set(key,value);headers.set('Content-Type','font/woff');
+ return new Response(request.method==='HEAD'?null:response.body,{status:response.status,headers});
+}});
+
 const pages=createQaAccessBoundary({async fetch(request,env){
  const u=new URL(request.url),origin=request.headers.get('Origin');
  if(!qaPageRequestAllowed(request))return new Response('TEST origin required',{status:403,headers:privateHeaders});
@@ -34,4 +45,4 @@ const pages=createQaAccessBoundary({async fetch(request,env){
  }
  return new Response(response.body,{status:response.status,headers});
 }});
-export default {async fetch(request,env,ctx){const u=new URL(request.url);if(env.SSTRX_QA_STACK!=='joined-v31')return new Response('TEST stack unavailable',{status:503,headers:privateHeaders});const response=u.pathname==='/assets/qa-reviewer-expiry.js'?await reviewerRuntime.fetch(request,env,ctx):u.hostname==='rx-qa.sstrx.co.uk'?await rx.fetch(request,env,ctx):u.pathname.startsWith('/v1/')||['/hq/catalogue-controls','/hq/radar-controls','/hq/radar-social'].includes(u.pathname)?await api[u.hostname]?.fetch(request,env,ctx)||new Response('Not found',{status:404}):await pages.fetch(request,env,ctx);if(request.method==='HEAD'||!(response.headers.get('Content-Type')||'').includes('text/html'))return response;let html=(await response.text()).replaceAll('href="https://hq.shiftsometimber.co.uk/','href="https://hq-qa.sstrx.co.uk/');if(!html.includes('data-sst-test-notice'))html=html.replace(/(<body[^>]*>)/,'$1'+note);const expires=response.headers.get('X-SST-QA-Review-Expires');if(/^[0-9]+$/.test(expires||''))html=html.replace('</body>','<script defer src="/assets/qa-reviewer-expiry.js" data-review-expires="'+expires+'"></script></body>');const h=new Headers(response.headers);h.delete('Content-Length');h.delete('ETag');for(const [k,v]of Object.entries(privateHeaders))h.set(k,v);return new Response(html,{status:response.status,headers:h});}};
+export default {async fetch(request,env,ctx){const u=new URL(request.url);if(env.SSTRX_QA_STACK!=='joined-v31')return new Response('TEST stack unavailable',{status:503,headers:privateHeaders});const response=u.pathname==='/assets/qa-reviewer-expiry.js'?await reviewerRuntime.fetch(request,env,ctx):u.pathname.startsWith('/professional-fonts/')?await professionalStatic.fetch(request,env,ctx):u.hostname==='rx-qa.sstrx.co.uk'?await rx.fetch(request,env,ctx):u.pathname.startsWith('/v1/')||['/hq/catalogue-controls','/hq/radar-controls','/hq/radar-social'].includes(u.pathname)?await api[u.hostname]?.fetch(request,env,ctx)||new Response('Not found',{status:404}):await pages.fetch(request,env,ctx);if(request.method==='HEAD'||!(response.headers.get('Content-Type')||'').includes('text/html'))return response;let html=(await response.text()).replaceAll('href="https://hq.shiftsometimber.co.uk/','href="https://hq-qa.sstrx.co.uk/');if(!html.includes('data-sst-test-notice'))html=html.replace(/(<body[^>]*>)/,'$1'+note);const expires=response.headers.get('X-SST-QA-Review-Expires');if(/^[0-9]+$/.test(expires||''))html=html.replace('</body>','<script defer src="/assets/qa-reviewer-expiry.js" data-review-expires="'+expires+'"></script></body>');const h=new Headers(response.headers);h.delete('Content-Length');h.delete('ETag');for(const [k,v]of Object.entries(privateHeaders))h.set(k,v);return new Response(html,{status:response.status,headers:h});}};
