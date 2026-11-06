@@ -59,5 +59,5 @@ window.installManagementHQ=()=>{
  operationsHome=window.HQOperations.install({getPrincipal:()=>S.me,getPermissions:()=>S.permissions||[],read:(path,opts)=>call(path,opts),reportOptions:()=>({...options(),kind:'management'}),navigate});
  if(S.me)refreshHome();
  const v3=window.HQV3?.install({getPrincipal:()=>S.me,read:(path,opts)=>call(path,opts),navigate,setCommunications:data=>{S.outbox=data.messages;S.templates=data.templates;}});
- if(v3){loadOutbox=v3.loadOutbox;loadCommunications=v3.loadCommunications;const sourceView=view;view=function(id){sourceView(id);if(id==='outbox')get('title').textContent='Outbox';if(id==='knowledgehub')get('title').textContent='Knowledge Hub';};const priorLogout=get('logoutBtn').onclick;get('logoutBtn').onclick=async()=>{v3.clear();await priorLogout()};}
+ if(v3){loadOutbox=v3.loadOutbox;loadCommunications=v3.loadCommunications;loadIntelligence=v3.loadIntelligence;get('refreshIntelligence').onclick=loadIntelligence;const sourceView=view;view=function(id){sourceView(id);if(id==='outbox')get('title').textContent='Outbox';if(id==='knowledgehub')get('title').textContent='Knowledge Hub';};const priorLogout=get('logoutBtn').onclick;get('logoutBtn').onclick=async()=>{v3.clear();await priorLogout()};}
 };

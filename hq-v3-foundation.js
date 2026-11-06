@@ -101,8 +101,30 @@
     }
     commRetry.onclick = loadCommunications;
     const commSentCard = get('commSent').closest('article'); commSentCard.querySelector('span').textContent = 'Transport accepted'; commSentCard.querySelector('em').textContent = 'Device delivery unverified';
+    let intelligenceRevision=0,intelligenceController;
+    const intelligenceHero=get('intelligenceHero'),intelligenceGrid=get('intelligenceGrid'),intelligenceRetry=get('refreshIntelligence');
+    function clearIntelligence(message='Sign in to load Shift Intelligence.'){
+      intelligenceRevision++;intelligenceController?.abort();intelligenceHero.removeAttribute('aria-busy');intelligenceRetry.disabled=false;intelligenceHero.textContent=message;intelligenceGrid.replaceChildren();
+    }
+    async function loadIntelligence(){
+      const principal=getPrincipal();if(!principal){clearIntelligence();return;}
+      intelligenceController?.abort();intelligenceController=new AbortController();const ticket=++intelligenceRevision;
+      intelligenceRetry.disabled=true;intelligenceHero.setAttribute('aria-busy','true');intelligenceHero.textContent='Checking operational sources…';intelligenceGrid.replaceChildren();
+      try{
+        const data=await boundedRead(read,'/v1/hq/intelligence',{signal:intelligenceController.signal});
+        if(ticket!==intelligenceRevision||principal!==getPrincipal())return;
+        if(data?.ok===false||typeof data?.brief!=='string'||!Number.isFinite(Date.parse(data.generatedAt))||!Array.isArray(data.signals)||data.signals.length===0||data.signals.some(s=>!s||typeof s.key!=='string'||typeof s.title!=='string'||typeof s.message!=='string'||!['high','medium','good','unavailable'].includes(s.severity)||(s.count!==null&&(!Number.isSafeInteger(s.count)||s.count<0))||(s.status==='unavailable'&&s.count!==null)))throw Error('The intelligence source returned incomplete signals.');
+        intelligenceHero.innerHTML='<div><p class="eyebrow">DAILY BRIEF · '+esc(new Date(data.generatedAt).toLocaleString('en-GB',{timeZone:'Europe/London'}))+'</p><h2>'+esc(data.brief)+'</h2></div>';
+        intelligenceGrid.innerHTML=data.signals.map(s=>'<article class="intel-card '+esc(s.severity)+'"><b>'+esc(s.title)+'</b><strong>'+(s.count===null?'Unavailable':String(s.count))+'</strong><span>'+esc(s.message)+'</span></article>').join('');
+      }catch(error){
+        if(ticket!==intelligenceRevision||principal!==getPrincipal())return;
+        const state=host.HQOperations.errorState(error);intelligenceHero.textContent=state.label+' — '+state.detail;intelligenceGrid.textContent='Operational signals are unavailable. Use Refresh intelligence to try again.';
+      }finally{if(ticket===intelligenceRevision&&principal===getPrincipal()){intelligenceHero.removeAttribute('aria-busy');intelligenceRetry.disabled=false;}}
+    }
+    intelligenceRetry.onclick=loadIntelligence;
     function clear(message = 'Sign in to load the Outbox.') {
       clearCommunications();
+      clearIntelligence();
       revision++; activeController?.abort(); target.removeAttribute('aria-busy');
       retry.disabled = false;
       clearRx();
@@ -170,7 +192,7 @@
       const title=get('title');title.tabIndex=-1;title.focus({preventScroll:true});title.scrollIntoView({block:'start'});
     });
     window.addEventListener('pagehide', () => clear());
-    return { loadOutbox, loadCommunications, clear, navigation };
+    return { loadOutbox, loadCommunications, loadIntelligence, clear, navigation };
   }
   const api = { JOBS, boundedRead, validateMessages, counter, organiseNavigation, install };
   host.HQV3 = api;

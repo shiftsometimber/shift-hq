@@ -1,7 +1,7 @@
 /* Shift HQ 1.11.3 commerce */
 (() => {
   const legacy = document.createElement('script');
-  legacy.src = 'hq-v111.js?v=11.2';
+  legacy.src = 'hq-v111.js?v=20261106-intelligence-1';
   legacy.onload = () => {
     const $ = s => document.querySelector(s);
     const $$ = s => [...document.querySelectorAll(s)];
