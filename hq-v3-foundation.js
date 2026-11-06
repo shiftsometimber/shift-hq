@@ -113,7 +113,7 @@
       try{
         const data=await boundedRead(read,'/v1/hq/intelligence',{signal:intelligenceController.signal});
         if(ticket!==intelligenceRevision||principal!==getPrincipal())return;
-        if(data?.ok===false||typeof data?.brief!=='string'||!Number.isFinite(Date.parse(data.generatedAt))||!Array.isArray(data.signals)||data.signals.length===0||data.signals.some(s=>!s||typeof s.key!=='string'||typeof s.title!=='string'||typeof s.message!=='string'||!['high','medium','good','unavailable'].includes(s.severity)||(s.count!==null&&(!Number.isSafeInteger(s.count)||s.count<0))||(s.status==='unavailable'&&s.count!==null)))throw Error('The intelligence source returned incomplete signals.');
+        if(data?.ok===false||typeof data?.brief!=='string'||!Number.isFinite(Date.parse(data.generatedAt))||!Array.isArray(data.signals)||data.signals.length===0||data.signals.some(s=>!s||typeof s.key!=='string'||typeof s.title!=='string'||typeof s.message!=='string'||!['high','medium','good','unavailable','unknown'].includes(s.severity)||(s.count!==null&&(!Number.isSafeInteger(s.count)||s.count<0))||(s.status==='unavailable'&&s.count!==null)))throw Error('The intelligence source returned incomplete signals.');
         intelligenceHero.innerHTML='<div><p class="eyebrow">DAILY BRIEF · '+esc(new Date(data.generatedAt).toLocaleString('en-GB',{timeZone:'Europe/London'}))+'</p><h2>'+esc(data.brief)+'</h2></div>';
         intelligenceGrid.innerHTML=data.signals.map(s=>'<article class="intel-card '+esc(s.severity)+'"><b>'+esc(s.title)+'</b><strong>'+(s.count===null?'Unavailable':String(s.count))+'</strong><span>'+esc(s.message)+'</span></article>').join('');
       }catch(error){
