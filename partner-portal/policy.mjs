@@ -2,6 +2,7 @@
 // for professional checks, organisation approval, assignments, consent and grants.
 const uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
 export function allowedPath(path, method, kind) {
+  if(kind==='oversight'&&method==='POST'&&new RegExp('^/api/clinical/platform/refunds/'+uuid+'/reconcile$').test(path))return true;
   if(kind==='oversight'&&(method==='GET'&&path==='/api/clinical/platform/integrations'||method==='POST'&&/^\/api\/clinical\/platform\/integrations\/(?:stub-contract|stub-handover|reconcile)$/.test(path)))return true;
   if(kind==='dispensing'&&method==='GET'&&path==='/api/clinical/platform/integrations/status')return true;
   if(kind==='dispensing'&&method==='POST'&&/^\/api\/clinical\/platform\/integrations\/(?:simulate|receipts|project)$/.test(path))return true;

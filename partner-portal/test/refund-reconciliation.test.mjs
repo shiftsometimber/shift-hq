@@ -131,3 +131,26 @@ test('A reconcile command cannot apply a processor receipt belonging to a differ
   assert.equal(f.sql.prepare('SELECT version FROM rx_refunds WHERE id=?').get(other.id).version,other.version);
  }finally{f.close()}
 });
+
+test('Delegated finance authority must retain its current grant, expiry and amount limit after provider lookup',async()=>{
+ for(const change of ['revoked','downgraded','expired','unchanged']){
+  const f=await setup();try{
+   const r=await f.historicalSubmitted();f.recordTerms();
+   f.sql.prepare("UPDATE hq_users SET role='operations' WHERE id=2").run();
+   f.sql.prepare("INSERT INTO rx_finance_authorities VALUES(2,1000,?,'TEST-DELEGATED-REFUND',1)").run(new Date(Date.now()+3600000).toISOString());
+   f.setTransform(async(req,res)=>{
+    if(req.method==='GET'){
+     if(change==='revoked')f.sql.prepare('DELETE FROM rx_finance_authorities WHERE hq_user_id=2').run();
+     if(change==='downgraded')f.sql.prepare('UPDATE rx_finance_authorities SET limit_pence=999 WHERE hq_user_id=2').run();
+     if(change==='expired')f.sql.prepare('UPDATE rx_finance_authorities SET expires_at=? WHERE hq_user_id=2').run(new Date(Date.now()-1000).toISOString());
+    }
+    return res;
+   });
+   const result=await f.call('/'+r.id+'/reconcile',{version:r.version},change==='unchanged'?200:409,2);
+   assert.equal(f.calls.post,1);
+   assert.deepEqual(counts(f),change==='unchanged'?{provider:1,native:1,ledger:1}:{provider:1,native:0,ledger:0});
+   if(change==='unchanged')assert.equal(result.state,'completed');
+   else assert.equal(f.sql.prepare('SELECT version FROM rx_refunds WHERE id=?').get(r.id).version,4);
+  }finally{f.close()}
+ }
+});
