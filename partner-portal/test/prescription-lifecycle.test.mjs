@@ -8,6 +8,8 @@ import {RECORD} from './fixture.mjs';
 import {authenticator} from './authenticator.mjs';
 import portal from '../sstrx-worker.mjs';
 import {captureOrderRoute,queueSubmission,submitJob,receiveVerifiedEvent,isolatedSyntheticAdapter} from '../platform/integrations.mjs';
+import {applyPricePaymentEvent,priceSettlement,stripePriceWebhook} from '../platform/price-adjustments.mjs';
+import {economicsTerms,reconcileEconomics} from '../platform/domain.mjs';
 const ORIGIN='https://sstrx.shiftsometimber.co.uk';
 const j=async(r,status=200)=>{const b=await r.json();assert.equal(r.status,status,JSON.stringify(b));return b;};
 async function retainEvidence(f,name){
@@ -30,13 +32,14 @@ async function freshReview(f){
  const cookie=await f.login('CLNTEST'),version=()=>f.sql.prepare('SELECT version FROM clinical_case_state WHERE record_id=?').get(RECORD).version;
  for(const b of [{action:'start_review'},{action:'review_evidence',evidenceId:'front-photo-fixture',outcome:'approve'},{action:'decision',outcome:'proceed',identityVerified:true,independentMeasurementsVerified:true,verification:'FICTIONAL current independent checks',handover:f.handover,rationale:'FICTIONAL new review for replacement',message:'Fictional replacement review recorded'}])await j(await f.partner('/'+RECORD+'/action',cookie,{version:version(),assessmentVersion:1,...b}));
 }
-async function replacementSignature(f,directions='FICTIONAL AMENDED DIRECTIONS',expectedStatus=200){
- const cookie=await f.login('CLNTEST'),current=f.state();let p=(await j(await f.partner('/prescriptions/'+RECORD+'/proposal',cookie,{version:current.version,partnerId:'pharmacy-org',expiresAt:new Date(Date.now()+3600000).toISOString(),reason:'FICTIONAL reviewed amendment',clinicalRationale:'Fictional acceptance only',treatment:{variantId:11,packs:1,quantity:'One fictional pack',dose:'Fictional dose',route:'Oral test formulation',directions}}))).prescription;
+async function replacementSignature(f,directions='FICTIONAL AMENDED DIRECTIONS',expectedStatus=200,variantId=11){
+ const cookie=await f.login('CLNTEST'),current=f.state();let p=(await j(await f.partner('/prescriptions/'+RECORD+'/proposal',cookie,{version:current.version,partnerId:'pharmacy-org',expiresAt:new Date(Date.now()+3600000).toISOString(),reason:'FICTIONAL reviewed amendment',clinicalRationale:'Fictional acceptance only',treatment:{variantId,packs:1,quantity:'One fictional pack',dose:'Fictional dose',route:'Oral test formulation',directions}}))).prescription;
  await j(await f.member('/prescription/decision',{version:p.version,action:'accept',agreed:true}));
+ if(f.afterAgreement)await f.afterAgreement(f,p,cookie);const agreedVersion=f.state().version;
  const key=await authenticator(),c=await j(await f.partner('/prescriptions/'+RECORD+'/keys/challenge',cookie,{})),registered=await j(await f.partner('/prescriptions/'+RECORD+'/keys/register',cookie,{challengeId:c.id,proof:await key.register(c.challenge)}));
  await j(await f.hq('/prescriptions/keys/'+registered.keyId+'/approve',2,{version:0,expiresAt:new Date(Date.now()+3600000).toISOString(),verificationReference:'FICTIONAL independent replacement signing key review'}));
- const challenge=await j(await f.partner('/prescriptions/'+RECORD+'/signing-challenge',cookie,{version:p.version+1,keyId:registered.keyId}));
- const body={version:p.version+1,challengeId:challenge.id,document:challenge.document,proof:await key.sign(challenge.challenge)};if(f.beforeSign)await f.beforeSign();const signed=await j(await f.partner('/prescriptions/'+RECORD+'/sign',cookie,body),expectedStatus);return {signed,cookie,body};
+ const challenge=await j(await f.partner('/prescriptions/'+RECORD+'/signing-challenge',cookie,{version:agreedVersion,keyId:registered.keyId}));
+ const body={version:agreedVersion,challengeId:challenge.id,document:challenge.document,proof:await key.sign(challenge.challenge)};if(f.beforeSign)await f.beforeSign();const signed=await j(await f.partner('/prescriptions/'+RECORD+'/sign',cookie,body),expectedStatus);return {signed,cookie,body};
 }
 test('RX-SG2 a signed cancellation holds supply until an assigned pharmacy acknowledges; immutable signature and finance review remain',async()=>{
  const f=await setup();try{
@@ -99,5 +102,105 @@ test('RX-LC6 replacement archives supplier routing, supersedes the old job and r
   assert.equal(f.sql.prepare('SELECT prescription_id FROM rx_order_route_history').get().prescription_id,f.original.prescriptionId);assert.equal(f.sql.prepare('SELECT state FROM rx_integration_jobs WHERE id=?').get(oldJob.id).state,'superseded');await assert.rejects(submitJob(f.env,oldJob.id),/job_not_submittable/);
   const current=f.sql.prepare('SELECT * FROM rx_order_routes').get();assert.equal(current.prescription_id,f.state().prescriptionId);const newJob=await queueSubmission(f.DB,current);assert.notEqual(newJob.idempotency_key,oldJob.idempotency_key);
   f.env.SSTRX_CANONICAL_RECEIPTS_ENABLED='true';f.env.SSTRX_SYNTHETIC_ADAPTER=isolatedSyntheticAdapter({verifyWebhook:async raw=>({verified:true,contractId:contract,event:JSON.parse(raw)})});await assert.rejects(receiveVerifiedEvent(f.env,contract,JSON.stringify({kind:'accepted',eventReference:'LATE-OLD-RECEIPT',orderReference:f.order,occurredAt:date,schemaVersion:'sst-rx-event-v1',sourceRecordVersion:2,prescriptionReference:f.original.prescriptionId,caseReference:RECORD,idempotencyKey:'OLD-RECEIPT-2'}),'FICTIONAL-VERIFIER'),/supplier_receipt_episode_mismatch/);assert.equal(JSON.parse(f.sql.prepare('SELECT state_json FROM partner_fulfilment').get().state_json).status,'received');
+ }finally{f.close();}
+});
+async function priceSetup(mode='collect_difference',variantId=12,total=150){
+ const f=await setup(),date=new Date().toISOString();
+ for(const [id,price]of [[12,150],[13,70]]){f.sql.prepare("INSERT INTO medicine_variants(id,medicine_id,strength_label,selling_price_pence,status,updated_at,sellable,availability_state) VALUES(?,1,?,?,'available',?,1,'available')").run(id,'FICTIONAL alternative '+id,price,date);f.sql.prepare('INSERT INTO medicine_inventory VALUES(?,20,0,?)').run(id,date);}
+ const terms=economicsTerms({model:'shift_collects',supplierId:'FICTIONAL-SUPPLIER',sellingPence:100,outputTaxPence:0,taxTreatment:'FICTIONAL',approvalReference:'FICTIONAL-ACCEPTED-TERMS',costSourceReference:'FICTIONAL-COSTS'});
+ f.sql.prepare('INSERT INTO rx_economics VALUES(?,1,?,?)').run(f.order,JSON.stringify(terms),date);f.sql.prepare("INSERT INTO rx_finance_entries VALUES('original-payment',?,'original-payment','member_payment',100,'GBP','pi_FICTIONAL_E',?,?)").run(f.order,date,date);
+ const lifecycle=await j(await f.request({...f.command,kind:'amend'}));await j(await f.ack(lifecycle));await freshReview(f);
+ const value={version:2,variantId,packs:1,mode,memberTotalPence:total,termsReference:'FICTIONAL-ACCEPTED-TERMS',approvalReference:'FICTIONAL-PRICE-APPROVAL',costReference:'FICTIONAL-SUPPLIER-PRICE',discountReference:'FICTIONAL-ABSORBED-DIFFERENCE',expiresAt:new Date(Date.now()+3600000).toISOString()};
+ const plan=await j(await f.call('/'+lifecycle.id+'/price-plan',value,1));
+ const payment=(body,token=f.memberToken)=>memberService.fetch(new Request('https://my-timber.app/v1/member/clinical-records/'+RECORD+'/price-adjustments/'+lifecycle.id,{method:body?'POST':'GET',headers:{Cookie:'sst_session='+token,Origin:'https://my-timber.app',...body?{'Content-Type':'application/json'}:{}},body:body?JSON.stringify(body):undefined}),f.env);
+ return {...f,lifecycle,plan,priceCommand:value,payment};
+}
+function paymentTransport(){return {calls:[],async fetch(request){const b=Object.fromEntries(new URLSearchParams(await request.text()));this.calls.push({body:b,key:request.headers.get('Idempotency-Key')});return Response.json({id:'cs_test_FICTIONAL_ADJUSTMENT',livemode:false,client_reference_id:b.client_reference_id,amount_total:Number(b['line_items[0][price_data][unit_amount]']),currency:'gbp',url:'https://checkout.stripe.com/c/pay/FICTIONAL_ONLY'});}};}
+function priceReceipt(f,type='checkout.session.completed',paid='paid',id=crypto.randomUUID()){
+ const p=f.sql.prepare('SELECT * FROM rx_lifecycle_payments ORDER BY rowid DESC LIMIT 1').get();return {id:'evt_'+id,type,created:Math.floor(Date.now()/1000),livemode:false,data:{object:{id:p.session_id||'cs_test_FICTIONAL_ADJUSTMENT',client_reference_id:p.id,metadata:{sst_price_payment_id:p.id,sst_lifecycle_id:p.lifecycle_id,order_reference:p.order_number},amount_total:p.amount_pence,currency:'gbp',payment_intent:'pi_FICTIONAL_PRICE_CHANGE',payment_status:paid}}};
+}
+test('RX-PRICE1 increased-price amendment requires the exact finance plan, member consent and verified top-up; one existing order and linked history survive',async()=>{
+ const f=await priceSetup();try{const t=paymentTransport();f.env.LIFECYCLE_PAYMENT_TEST_TRANSPORT=t;
+  f.afterAgreement=async(_f,p,cookie)=>{let d=await j(await f.payment({agreed:true,version:p.version+1}));assert.equal(d.state,'checkout_open');await j(await f.payment({agreed:true,version:p.version+1}));assert.equal(t.calls.length,1);
+   const key=f.sql.prepare('SELECT * FROM clinical_prescriber_signing_keys LIMIT 1').get();assert.equal((await j(await f.callMemberSnapshot())).orders[0].pricePlans[0].settled,false);
+   // Transport creation and a completed-but-unpaid event are not settlement.
+   await applyPricePaymentEvent(f.env,priceReceipt(f,'checkout.session.completed','unpaid'));
+   assert.equal((await priceSettlement(f.env,f.sql.prepare('SELECT * FROM rx_lifecycle_price_plans').get())).settled,false);
+   assert.equal((await j(await f.partner('/prescriptions/'+RECORD+'/signing-challenge',cookie,{version:p.version+1,keyId:key.id}),409)).error,'payment_reconciliation_required');
+   const event=priceReceipt(f,'checkout.session.async_payment_succeeded');await applyPricePaymentEvent(f.env,event);assert((await applyPricePaymentEvent(f.env,event)).duplicate);
+  };
+  await replacementSignature(f,'FICTIONAL higher price treatment',200,12);assert.equal(f.state().comparison.paymentState,'settled');assert.equal(f.orderRow().total_pence,100);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM medicine_orders').get().n,1);assert.equal(f.sql.prepare("SELECT SUM(amount_pence) n FROM rx_finance_entries WHERE kind='member_payment'").get().n,150);assert.equal((await j(await f.callMemberSnapshot())).orders[0].pricePlans[0].settled,true);assert.equal((await j(await f.hq('/platform/refunds',1))).priceWork.length,0);
+  await retainEvidence(f,'increased-price-amendment');
+ }finally{f.close();}
+});
+test('RX-PRICE2 an owner can absorb a documented higher catalogue price without a second payment; exact approval, discount and scope are retained',async()=>{
+ const f=await priceSetup('absorb_difference',12,100);try{await j(await f.call('/'+f.lifecycle.id+'/price-plan',f.priceCommand,6),403);assert((await j(await f.call('/'+f.lifecycle.id+'/price-plan',f.priceCommand,1))).duplicate);await j(await f.call('/'+f.lifecycle.id+'/price-plan',{...f.priceCommand,memberTotalPence:90},1),422);
+  await replacementSignature(f,'FICTIONAL absorbed price difference',200,12);assert.equal(f.state().comparison.revisedTotalPence,100);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_lifecycle_payments').get().n,0);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_signatures').get().n,2);await retainEvidence(f,'absorbed-price-amendment');
+ }finally{f.close();}
+});
+test('RX-PRICE3 reduced-price amendment remains held until an exact completed refund is linked; duplicate receipts and links cannot issue a second refund',async()=>{
+ const f=await priceSetup('refund_difference',13,70);try{
+  f.afterAgreement=async(_f,p)=>{const plan=f.sql.prepare('SELECT * FROM rx_lifecycle_price_plans').get();assert.equal((await priceSettlement(f.env,plan)).settled,false);
+   let refund=await j(await f.hq('/platform/refunds',1,{orderReference:f.order,amountPence:30,reason:'FICTIONAL lower price amendment',termsReference:f.priceCommand.termsReference,clientReference:crypto.randomUUID()}));refund=await j(await f.hq('/platform/refunds/'+refund.id+'/approve',1,{version:refund.version,approvalReference:'FICTIONAL-LOWER-PRICE',exceptionDueAt:new Date(Date.now()+3600000).toISOString()}));
+   await j(await f.call('/'+f.lifecycle.id+'/price-refund',{version:2,refundId:refund.id},1),409);
+   f.env.REFUND_TEST_TRANSPORT={fetch:async()=>Response.json({id:'re_FICTIONAL_PRICE',amount:30,currency:'gbp',payment_intent:'pi_FICTIONAL_E',status:'succeeded'})};await j(await f.hq('/platform/refunds/'+refund.id+'/submit',1,{version:refund.version}));
+   const link={version:2,refundId:refund.id};await j(await f.call('/'+f.lifecycle.id+'/price-refund',link,1));assert((await j(await f.call('/'+f.lifecycle.id+'/price-refund',link,1))).duplicate);assert((await priceSettlement(f.env,plan)).settled);
+  };
+  await replacementSignature(f,'FICTIONAL lower price treatment',200,13);assert.equal(f.state().comparison.revisedTotalPence,70);assert.equal(f.state().comparison.refundState,'completed');assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_refunds').get().n,1);assert.equal(f.sql.prepare("SELECT SUM(CASE WHEN kind='member_payment' THEN amount_pence WHEN kind='refund' THEN -amount_pence ELSE 0 END) n FROM rx_finance_entries").get().n,70);await retainEvidence(f,'reduced-price-amendment');
+ }finally{f.close();}
+});
+test('RX-PRICE4 unknown checkout outcome is held without a second submission; verified later receipt reconciles the original attempt',async()=>{
+ const f=await priceSetup();try{let calls=0;f.env.LIFECYCLE_PAYMENT_TEST_TRANSPORT={fetch:async()=>{calls++;throw Error('FICTIONAL timeout after acceptance');}};
+  f.afterAgreement=async(_f,p)=>{assert.equal((await j(await f.payment({version:p.version+1,agreed:true}))).state,'unknown');assert((await j(await f.payment({version:p.version+1,agreed:true}))).reconciliationRequired);assert.equal(calls,1);await applyPricePaymentEvent(f.env,priceReceipt(f));};await replacementSignature(f,'FICTIONAL reconciled top-up',200,12);assert.equal(calls,1);
+ }finally{f.close();}
+});
+test('RX-PRICE5 forged, mismatched and live top-up receipts are rejected; changed ledger before signing rolls the new signature back',async()=>{
+ const f=await priceSetup();try{f.env.LIFECYCLE_PAYMENT_TEST_TRANSPORT=paymentTransport();f.afterAgreement=async(_f,p)=>{await j(await f.payment({version:p.version+1,agreed:true}));const e=priceReceipt(f);await assert.rejects(applyPricePaymentEvent(f.env,{...e,livemode:true}),/not_authorised/);await assert.rejects(applyPricePaymentEvent(f.env,{...e,data:{object:{...e.data.object,amount_total:51}}}),/does_not_match/);await applyPricePaymentEvent(f.env,e);};
+  f.beforeSign=async()=>{f.sql.prepare("INSERT INTO rx_finance_entries VALUES('late-refund',?,'late-refund','refund',1,'GBP','FICTIONAL-RACE',?,?)").run(f.order,new Date().toISOString(),new Date().toISOString());};await replacementSignature(f,'FICTIONAL price receipt race',409,12);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_signatures').get().n,1);
+  f.env.STRIPE_PRICE_WEBHOOK_SECRET='FICTIONAL';await j(await stripePriceWebhook(new Request('https://api.shiftsometimber.co.uk/v1/hq/clinical/platform/processor/adjustments',{method:'POST',body:JSON.stringify(priceReceipt(f))}),f.env),401);
+ }finally{f.close();}
+});
+async function sendSignedPriceEvent(f,event){const raw=JSON.stringify(event),ts=Math.floor(Date.now()/1000),secret='FICTIONAL-PRICE-WEBHOOK-KEY';f.env.STRIPE_PRICE_WEBHOOK_SECRET=secret;const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']),sig=Buffer.from(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(ts+'.'+raw))).toString('hex');return stripePriceWebhook(new Request('https://api.shiftsometimber.co.uk/v1/hq/clinical/platform/processor/adjustments',{method:'POST',headers:{'Stripe-Signature':'t='+ts+',v1='+sig},body:raw}),f.env);}
+test('RX-PRICE6 only a verified failed checkout permits an explicit new attempt; stale failures cannot undo paid settlement',async()=>{
+ const f=await priceSetup();try{const t=paymentTransport(),base=t.fetch.bind(t);t.fetch=async request=>{const r=await base(request),s=await r.json();s.id+='_attempt_'+t.calls.length;return Response.json(s)};f.env.LIFECYCLE_PAYMENT_TEST_TRANSPORT=t;
+  f.afterAgreement=async(_f,p)=>{const request={version:p.version+1,agreed:true};await j(await f.payment(request));await j(await sendSignedPriceEvent(f,priceReceipt(f,'checkout.session.async_payment_failed','unpaid')));assert.equal((await j(await f.payment(request))).state,'failed');assert.equal(t.calls.length,1);assert.equal(f.sql.prepare("SELECT owner_user_id FROM rx_finance_exceptions WHERE kind='price_payment_failed'").get().owner_user_id,1);
+   await j(await f.payment({...request,retryFailedPayment:true}));assert.equal(t.calls.length,2);assert.notEqual(t.calls[0].key,t.calls[1].key);await j(await sendSignedPriceEvent(f,priceReceipt(f,'checkout.session.async_payment_succeeded')));await j(await sendSignedPriceEvent(f,priceReceipt(f,'checkout.session.async_payment_failed','unpaid')));assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM rx_lifecycle_payments WHERE state='paid'").get().n,1);assert.equal(f.sql.prepare('SELECT state FROM rx_finance_exceptions WHERE id=?').get('price:'+f.lifecycle.id).state,'resolved');
+  };await replacementSignature(f,'FICTIONAL recovered failed payment',200,12);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_lifecycle_payments').get().n,2);await retainEvidence(f,'failed-payment-explicit-retry');
+ }finally{f.close();}
+});
+test('RX-PRICE7 the original and additional payment refund separately against their own processor references and limits; a later refund stops supply',async()=>{
+ const f=await priceSetup();try{f.env.LIFECYCLE_PAYMENT_TEST_TRANSPORT=paymentTransport();f.afterAgreement=async(_f,p)=>{await j(await f.payment({version:p.version+1,agreed:true}));await applyPricePaymentEvent(f.env,priceReceipt(f));};await replacementSignature(f,'FICTIONAL payment-source refund test',200,12);
+  const terms=JSON.parse(f.sql.prepare('SELECT terms_json FROM rx_economics').get().terms_json),before=reconcileEconomics(terms,f.sql.prepare('SELECT * FROM rx_finance_entries').all());assert.equal(before.approvedAdditionalSalePence,50);assert.equal(before.netSalePence,150);assert.equal(before.memberBalancePence,0);
+  const payment=f.sql.prepare("SELECT * FROM rx_lifecycle_payments WHERE state='paid'").get(),intents=[];f.env.REFUND_TEST_TRANSPORT={fetch:async request=>{const b=Object.fromEntries(new URLSearchParams(await request.text()));intents.push(b.payment_intent);return Response.json({id:'re_FICTIONAL_MULTI_'+intents.length,amount:Number(b.amount),currency:'gbp',payment_intent:b.payment_intent,status:'succeeded'});}};
+  for(const [amount,paymentSourceId]of [[100,undefined],[50,payment.id]]){let r=await j(await f.hq('/platform/refunds',1,{orderReference:f.order,amountPence:amount,paymentSourceId,termsReference:'FICTIONAL-ACCEPTED-TERMS',reason:'FICTIONAL complete cancellation',clientReference:crypto.randomUUID()}));r=await j(await f.hq('/platform/refunds/'+r.id+'/approve',1,{version:r.version,approvalReference:'FICTIONAL-SOURCE-REFUND',exceptionDueAt:new Date(Date.now()+3600000).toISOString()}));await j(await f.hq('/platform/refunds/'+r.id+'/submit',1,{version:r.version}));}
+  assert.deepEqual(intents,['pi_FICTIONAL_E','pi_FICTIONAL_PRICE_CHANGE']);assert.equal(reconcileEconomics(terms,f.sql.prepare('SELECT * FROM rx_finance_entries').all()).netSalePence,0);
+  await j(await f.hq('/platform/refunds',1,{orderReference:f.order,amountPence:1,paymentSourceId:payment.id,termsReference:'FICTIONAL',reason:'FICTIONAL over-refund',clientReference:crypto.randomUUID()}),409);
+  const pharmacy=await f.login('DSPTEST'),current=JSON.parse(f.sql.prepare('SELECT state_json FROM partner_fulfilment').get().state_json);await j(await f.partner('/partners/fulfilment/'+f.order+'/action',pharmacy,{version:current.version,action:'accept'}),422);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM medicine_orders').get().n,1);await retainEvidence(f,'additional-and-original-payment-refunds');
+ }finally{f.close();}
+});
+test('RX-LC8 a dispensed but undispatched prescription can only be withdrawn with the protocol-approved quarantine disposition',async()=>{
+ const f=await setup();try{const pharmacy=await f.login('DSPTEST');for(const action of ['accept','prepare','dispensed']){const s=JSON.parse(f.sql.prepare('SELECT state_json FROM partner_fulfilment').get().state_json);await j(await f.partner('/partners/fulfilment/'+f.order+'/action',pharmacy,{version:s.version,action}));}
+  const l=await j(await f.request());await j(await f.ack(l),409);await j(await f.ack(l,{disposition:'quarantined_before_dispatch'}));assert.equal(f.state().status,'cancelled');assert.equal(JSON.parse(f.sql.prepare('SELECT state_json FROM partner_fulfilment').get().state_json).status,'cancelled');assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_signatures').get().n,1);await retainEvidence(f,'dispensed-quarantine-cancellation');
+ }finally{f.close();}
+});
+test('RX-PRICE8 a second amendment uses the previous agreed price and its same-order ledger, preserving both signed supply episodes',async()=>{
+ const f=await priceSetup();try{f.env.LIFECYCLE_PAYMENT_TEST_TRANSPORT=paymentTransport();f.afterAgreement=async(_f,p)=>{await j(await f.payment({version:p.version+1,agreed:true}));await applyPricePaymentEvent(f.env,priceReceipt(f));};await replacementSignature(f,'FICTIONAL first paid amendment',200,12);
+  f.afterAgreement=null;const l=await j(await f.request({...f.command,kind:'amend',version:f.state().version,clientReference:crypto.randomUUID()}));await j(await f.ack(l));await freshReview(f);await j(await f.call('/'+l.id+'/price-plan',{...f.priceCommand,mode:'no_change',version:2,memberTotalPence:150,approvalReference:'FICTIONAL-SECOND-PRICE-APPROVAL'},1));await replacementSignature(f,'FICTIONAL second reviewed amendment',200,12);
+  assert.equal(f.state().comparison.originalTotalPence,150);assert.equal(f.state().comparison.revisedTotalPence,150);assert.equal(f.state().comparison.deltaPence,0);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_signatures').get().n,3);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_supply_history').get().n,2);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM medicine_orders').get().n,1);await retainEvidence(f,'second-linked-amendment');
+ }finally{f.close();}
+});
+test('RX-PRICE9 a revised finance approval retains immutable history and invalidates the old member agreement before any payment or signature',async()=>{
+ const f=await priceSetup();try{f.env.LIFECYCLE_PAYMENT_TEST_TRANSPORT=paymentTransport();f.afterAgreement=async(_f,p,cookie)=>{
+  const revised=await j(await f.call('/'+f.lifecycle.id+'/price-plan',{...f.priceCommand,planVersion:1,memberTotalPence:160,approvalReference:'FICTIONAL-REVISED-PRICE-APPROVAL'},1));assert.equal(revised.version,2);assert.equal(revised.requiresFreshProposalAndAgreement,true);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM rx_lifecycle_price_plan_history').get().n,2);assert.throws(()=>f.sql.prepare("DELETE FROM rx_lifecycle_price_plan_history WHERE version=1").run(),/immutable/);
+  await j(await f.payment({version:p.version+1,agreed:true}),409);assert.equal(f.env.LIFECYCLE_PAYMENT_TEST_TRANSPORT.calls.length,0);const oldKey=f.sql.prepare('SELECT id FROM clinical_prescriber_signing_keys LIMIT 1').get();assert.equal((await j(await f.partner('/prescriptions/'+RECORD+'/signing-challenge',cookie,{version:p.version+1,keyId:oldKey.id}),409)).error,'prescription_price_changed');
+  const proposal=(await j(await f.partner('/prescriptions/'+RECORD+'/proposal',cookie,{version:f.state().version,partnerId:'pharmacy-org',expiresAt:new Date(Date.now()+3600000).toISOString(),reason:'FICTIONAL revised price and renewed agreement',clinicalRationale:'Fictional current clinician review',treatment:{variantId:12,packs:1,quantity:'One fictional pack',dose:'Fictional dose',route:'Oral test formulation',directions:'FICTIONAL revised proposal'}}))).prescription;await j(await f.member('/prescription/decision',{version:proposal.version,action:'accept',agreed:true}));await j(await f.payment({version:f.state().version,agreed:true}));assert.equal(f.sql.prepare('SELECT amount_pence FROM rx_lifecycle_payments').get().amount_pence,60);await applyPricePaymentEvent(f.env,priceReceipt(f));
+ };
+ await replacementSignature(f,'FICTIONAL first approval, superseded',200,12);assert.equal(f.state().comparison.revisedTotalPence,160);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_signatures').get().n,2);const owner=await j(await f.hq('/platform/exports/'+RECORD,1,{purpose:'FICTIONAL revised approval verification'}));assert.equal(owner.content.priceApprovalHistory.length,2);assert.equal(owner.content.assessments,undefined);await retainEvidence(f,'revised-price-renewed-consent');
+ }finally{f.close();}
+});
+test('RX-PRICE10 expired member authority prevents checkout, and a timed-out attempt stays owned and cannot be repeated',async()=>{
+ const f=await priceSetup();try{let calls=0;f.env.SSTRX_PAYMENT_TIMEOUT_MS=15;f.env.LIFECYCLE_PAYMENT_TEST_TRANSPORT={fetch:async()=>{calls++;return new Promise(()=>{})}};
+  f.afterAgreement=async(_f,p)=>{const body={version:p.version+1,agreed:true};const row=f.sql.prepare('SELECT * FROM user_sessions WHERE user_id=42').get();f.sql.prepare("UPDATE user_sessions SET revoked_at=? WHERE user_id=42").run(new Date().toISOString());await j(await f.payment(body),401);assert.equal(calls,0);f.sql.prepare('UPDATE user_sessions SET revoked_at=NULL WHERE user_id=42').run();const r=await j(await f.payment(body));assert.equal(r.state,'unknown');assert((await j(await f.payment(body))).reconciliationRequired);assert.equal(calls,1);const e=f.sql.prepare('SELECT * FROM rx_finance_exceptions WHERE id=?').get('price:'+f.lifecycle.id);assert.equal(e.kind,'price_payment_unknown');assert.equal(e.owner_user_id,1);assert.equal(e.due_at,f.command.dueAt);await applyPricePaymentEvent(f.env,priceReceipt(f));};
+  await replacementSignature(f,'FICTIONAL timed-out payment recovery',200,12);assert.equal(calls,1);
  }finally{f.close();}
 });

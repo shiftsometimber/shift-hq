@@ -8,7 +8,11 @@ export async function buildMemberKernel(){
  source=source.replace(origins,'new Set(["https://shiftsometimber.co.uk", "https://www.shiftsometimber.co.uk", "https://my-timber.app"])');
  // The member acceptance guard must read the same catalogue states as the prescriber.
  source=source.replaceAll('!["active", "published"].includes(variant.status)','!["available", "active", "published"].includes(variant.status)').replaceAll("v.status IN ('active','published')","v.status IN ('available','active','published')");
- source="import {lifecycleProposalContext,lifecycleSourceGuard} from '../platform/prescription-lifecycle.mjs';\nimport {informationStatements,assessmentCommandProof} from '../platform/functional-casework.mjs';\nimport {paidClinicalOrder} from '../platform/signing.mjs';\n"+source;
+ source="import {lifecycleQuote} from '../platform/price-adjustments.mjs';\nimport {lifecycleProposalContext,lifecycleSourceGuard} from '../platform/prescription-lifecycle.mjs';\nimport {informationStatements,assessmentCommandProof} from '../platform/functional-casework.mjs';\nimport {paidClinicalOrder} from '../platform/signing.mjs';\n"+source;
+ const once=(before,after)=>{if(source.split(before).length!==2)throw Error('Member price anchor changed');source=source.replace(before,after);};
+ once('if (!unchanged && (order.discount_pence !== 0 || order.discount_code))','if (!unchanged && !context.lifecycle && (order.discount_pence !== 0 || order.discount_code))');
+ once('return { variant, quote: {','return lifecycleQuote(env,context,variant,packs,{');
+ once('  } };\n}\n__name(quoteFor','  });\n}\n__name(quoteFor');
  const information='  statements.push(...notificationEventStatements(env, record, { id, kind, source: "case", sourceId: id, at: date }));';
  if(source.split(information).length!==2)throw Error('Member information transaction anchor changed');
  source=source.replace(information,'  statements.push(...await informationStatements(env,record,actor,reviewer,b,id,kind,assessment,date));\n'+information);

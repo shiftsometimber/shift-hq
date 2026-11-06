@@ -13,6 +13,7 @@ import {memberInformationRoute} from '../platform/member-information.mjs';
 import {ensureRefundSchema} from '../platform/refunds.mjs';
 import {ensureLifecycleSchema} from '../platform/prescription-lifecycle.mjs';
 import {exportRecord} from '../platform/audit-export.mjs';
+import {memberAdjustment} from '../platform/price-adjustments.mjs';
 export default {async fetch(request,env,ctx){
  if(env.SHARED_ORDER_WORKFLOW_ENABLED!=='true')return original.fetch(request,env,ctx);
  if(env.SSTRX_FUNCTIONAL_V3_ENABLED==='true')await ensureFunctionalSchema(env.DB);
@@ -31,6 +32,8 @@ export default {async fetch(request,env,ctx){
   const expected=request.headers.get('X-My-Timber-Expected-Account');if(actor&&expected&&expected!==String(actor.id))return Response.json({error:'account_changed'},{status:409,headers:{'Cache-Control':'no-store, private'}});
   const admitted=actor&&Number(actor.email_verified)===1&&(env.CLINICAL_REVIEW_READY==='true'||env.CLINICAL_TEST_MEMBER_EMAIL&&actor.email.toLowerCase()===env.CLINICAL_TEST_MEMBER_EMAIL.toLowerCase())&&env.CLINICAL_MEMBER_RECORDS_ENABLED==='true'&&env.CLINICAL_PRIVATE_FILES;
   if(admitted){
+   const adjustmentPath=path.match(/^\/v1\/member\/clinical-records\/([a-f0-9-]{36})\/price-adjustments\/([a-f0-9-]{36})$/i);
+   if(adjustmentPath){const respond=(b,s=200)=>Response.json(b,{status:s,headers:{'Cache-Control':'no-store, private','Access-Control-Allow-Origin':origin||'https://my-timber.app','Access-Control-Allow-Credentials':'true','Vary':'Origin'}});try{if(env.SSTRX_FUNCTIONAL_V3_ENABLED!=='true')return respond({error:'price_adjustments_not_open'},404);const record=await env.DB.prepare('SELECT * FROM clinical_member_records WHERE id=? AND user_id=?').bind(adjustmentPath[1],actor.id).first();if(!record)return respond({error:'record_not_found'},404);const a={id:actor.id,sessionHash:await sessionHash(request,env,actor.id)};return respond(await memberAdjustment(request,env,a,record,adjustmentPath[2]));}catch(e){return respond({error:e.status?e.message:'price_adjustment_unavailable'},e.status||503);}}
    const information=await memberInformationRoute(request,withSharedOutbox(env),actor,original);if(information)return completeSharedResponse(information,request,env);
    await ensurePlatformSchema(env.DB);
    const exportPath=path.match(/^\/v1\/member\/clinical-records\/([a-f0-9-]{36})\/verified-export$/i);

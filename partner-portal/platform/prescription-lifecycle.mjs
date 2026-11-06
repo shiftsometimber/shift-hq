@@ -3,6 +3,7 @@
 import {fail,text,digest,readObject} from './domain.mjs';
 import {currentClinicalGuard} from './functional-casework.mjs';
 import {financeGuard} from './refunds.mjs';
+import {ensurePriceSchema,pricePlanRoute,priceSourceGuard} from './price-adjustments.mjs';
 import {permission,authCondition,partnerRoute,existingHqIdentity,internalDispensingAdapters} from '../service/clinical-kernel.mjs';
 import {withSharedOutbox,completeSharedResponse} from '../service/shared-workflow.mjs';
 const now=()=>new Date().toISOString(),rows=async q=>(await q.all()).results||[];
@@ -17,7 +18,7 @@ export const LIFECYCLE_SCHEMA=[
  ,`CREATE TABLE IF NOT EXISTS rx_lifecycle_finance_reviews(lifecycle_id TEXT PRIMARY KEY REFERENCES rx_prescription_lifecycle(id),version INTEGER NOT NULL,outcome TEXT NOT NULL,terms_reference TEXT NOT NULL,approval_reference TEXT NOT NULL,reason TEXT NOT NULL,refund_id TEXT,reviewed_by INTEGER NOT NULL,created_at TEXT NOT NULL)`
 ];
 const prepared=new WeakMap();
-export async function ensureLifecycleSchema(DB){DB=DB.__sstrxBaseDB||DB;if(prepared.has(DB))return prepared.get(DB);const task=(async()=>{for(const sql of LIFECYCLE_SCHEMA)await DB.prepare(sql).run()})();prepared.set(DB,task);try{await task}catch(e){prepared.delete(DB);throw e}}
+export async function ensureLifecycleSchema(DB){DB=DB.__sstrxBaseDB||DB;if(prepared.has(DB))return prepared.get(DB);const task=(async()=>{for(const sql of LIFECYCLE_SCHEMA)await DB.prepare(sql).run();await ensurePriceSchema(DB)})();prepared.set(DB,task);try{await task}catch(e){prepared.delete(DB);throw e}}
 function writesOpen(env){if(env.SSTRX_FUNCTIONAL_V3_ENABLED!=='true'||env.SSTRX_ENVIRONMENT!=='synthetic'&&!(env.SSTRX_LIFECYCLE_WRITES_ENABLED==='true'&&env.SSTRX_LIFECYCLE_RELEASE_APPROVAL_REFERENCE))fail(503,'lifecycle_release_authorisation_required');}
 async function policies(env,clinicalId,pharmacyId){
  const configs=await rows(env.DB.prepare("SELECT * FROM rx_service_config WHERE org_id IN (?,?) AND service='weight_management'").bind(clinicalId,pharmacyId));
@@ -36,6 +37,7 @@ export async function lifecycleRoute(request,env,a,p){
  if(!assigned&&!pharmacy&&!a.internal)fail(404,'record_not_found');
  if(request.method==='GET'&&p.length===2){const requests=(await lifecycleList(env,record.id)).filter(l=>!pharmacy||l.pharmacy_org_id===a.orgId);return {requests:a.internal?requests.map(memberLifecycle):requests.map(l=>({...memberLifecycle(l),reason:l.reason,ackReference:l.ack_reference,financeOwnerId:l.finance_owner_id,events:undefined})),history:(await rows(env.DB.prepare('SELECT prescription_id,pharmacy_org_id,lifecycle_id,archived_at FROM rx_supply_history WHERE record_id=?').bind(record.id))).filter(h=>!pharmacy||h.pharmacy_org_id===a.orgId),recordId:record.id,orderReference:record.order_number};}
  writesOpen(env);const b=await readObject(request);
+ if(request.method==='POST'&&p.length===4&&['price-plan','price-refund'].includes(p[3])){const l=await env.DB.prepare('SELECT * FROM rx_prescription_lifecycle WHERE id=? AND record_id=?').bind(p[2],record.id).first();if(!l)fail(404,'lifecycle_request_not_found');return pricePlanRoute(request,env,a,p,record,l,b);}
  if(request.method==='POST'&&p.length===4&&p[3]==='financial-resolution'){
   if(!a.commercial)fail(403,'owner_finance_authorisation_required');const l=await env.DB.prepare("SELECT * FROM rx_prescription_lifecycle WHERE id=? AND record_id=? AND state IN ('closed','acknowledged','issued')").bind(p[2],record.id).first();if(!l||l.version!==b.version)fail(409,'withdrawal_finance_work_changed');
   if(!['no_refund_due','processor_refund_completed'].includes(b.outcome))fail(422,'explicit_financial_outcome_required');text(b.termsReference,400);text(b.approvalReference,400);text(b.reason,2000);
@@ -105,11 +107,11 @@ export async function lifecycleProposalContext(env,record,state){
  if(!s||!['cancelled','returned'].includes(s.status)||s.prescriptionId!==l.prescription_id||state.version<=l.case_version+1||state.status!=='ready_for_prescription')fail(409,'fresh_review_after_pharmacy_withdrawal_required');
  const reviewed=await env.DB.prepare("SELECT id FROM clinical_case_events WHERE record_id=? AND version>? AND kind='clinical_decision' AND json_extract(public_json,'$.outcome')='proceed'").bind(record.id,l.case_version+1).first();if(!reviewed)fail(409,'fresh_clinical_decision_required');
  const funding=await env.DB.prepare('SELECT * FROM rx_lifecycle_funding WHERE lifecycle_id=?').bind(l.id).first();if(!funding)fail(409,'replacement_finance_authorisation_required');
- const refunded=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN kind='refund' THEN amount_pence WHEN kind='refund_reversal' THEN -amount_pence ELSE 0 END),0) amount FROM rx_finance_entries WHERE order_number=?").bind(l.order_number).first();if(refunded.amount>0)fail(409,'refunded_order_requires_fresh_finance_and_payment_review');return {request:l,supply:old,policy:policyGuard(JSON.parse(l.policy_json)),funding};
+ const pricePlan=await env.DB.prepare('SELECT * FROM rx_lifecycle_price_plans WHERE lifecycle_id=?').bind(l.id).first();const refunded=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN kind='refund' THEN amount_pence WHEN kind='refund_reversal' THEN -amount_pence ELSE 0 END),0) amount FROM rx_finance_entries WHERE order_number=?").bind(l.order_number).first();if(refunded.amount>0&&!pricePlan)fail(409,'refunded_order_requires_fresh_finance_and_payment_review');return {request:l,supply:old,policy:policyGuard(JSON.parse(l.policy_json)),funding,pricePlan};
 }
 export function lifecycleSourceGuard(context){
  const l=context.lifecycle,g=l?{sql:`EXISTS(SELECT 1 FROM rx_prescription_lifecycle WHERE id=? AND version=? AND state IN ('acknowledged','proposal_open')) AND EXISTS(SELECT 1 FROM partner_fulfilment WHERE order_number=? AND version=? AND state_json=?) AND ${l.policy.sql}`,args:[l.request.id,l.request.version,l.request.order_number,l.supply.version,l.supply.state_json,...l.policy.args]}:{sql:'NOT EXISTS(SELECT 1 FROM partner_fulfilment WHERE order_number=?)',args:[context.record.order_number]};
- if(l){g.sql+=' AND EXISTS(SELECT 1 FROM rx_lifecycle_funding WHERE lifecycle_id=? AND version=? AND approval_reference=? AND cost_pence=? AND source_reference=?)';g.args.push(l.request.id,l.funding.version,l.funding.approval_reference,l.funding.cost_pence,l.funding.source_reference);g.sql+=" AND NOT EXISTS(SELECT 1 FROM rx_finance_entries WHERE order_number=? GROUP BY order_number HAVING SUM(CASE WHEN kind='refund' THEN amount_pence WHEN kind='refund_reversal' THEN -amount_pence ELSE 0 END)>0)";g.args.push(l.request.order_number);}
+ if(l){g.sql+=' AND EXISTS(SELECT 1 FROM rx_lifecycle_funding WHERE lifecycle_id=? AND version=? AND approval_reference=? AND cost_pence=? AND source_reference=?)';g.args.push(l.request.id,l.funding.version,l.funding.approval_reference,l.funding.cost_pence,l.funding.source_reference);if(!l.pricePlan){g.sql+=" AND NOT EXISTS(SELECT 1 FROM rx_finance_entries WHERE order_number=? GROUP BY order_number HAVING SUM(CASE WHEN kind='refund' THEN amount_pence WHEN kind='refund_reversal' THEN -amount_pence ELSE 0 END)>0)";g.args.push(l.request.order_number);}const price=priceSourceGuard(l);g.sql+=' AND '+price.sql;g.args.push(...price.args);}
  if(context.platformEnabled){g.sql+=" AND NOT EXISTS(SELECT 1 FROM rx_supply_holds WHERE order_number=? AND state='open')";g.args.push(context.record.order_number);}return g;
 }
 export async function replacementSupply(env,context,previous,next,date,eventId){

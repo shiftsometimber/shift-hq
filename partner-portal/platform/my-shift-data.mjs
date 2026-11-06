@@ -6,6 +6,7 @@ import {supportList} from './my-shift-support.mjs';
 import {ensureRefundSchema,memberRefunds} from './refunds.mjs';
 import {informationList} from './functional-casework.mjs';
 import {ensureLifecycleSchema,lifecycleList,memberLifecycle} from './prescription-lifecycle.mjs';
+import {memberPricePlans} from './price-adjustments.mjs';
 const rows=async q=>(await q.all()).results||[];
 const date=v=>typeof v==='string'&&Number.isFinite(Date.parse(v))?v:null;
 const terminal=new Set(['delivered','fulfilled','declined','cancelled','rejected','returned']);
@@ -57,7 +58,7 @@ export async function myShiftSnapshot(env,actor){
  });
  if(env.SSTRX_FUNCTIONAL_V3_ENABLED==='true'){
   await ensureRefundSchema(env.DB);await ensureLifecycleSchema(env.DB);const refunds=await memberRefunds(env,actor.id);
-  for(const order of orders){order.refunds=refunds.filter(r=>r.orderReference===order.reference);order.informationRequests=order.recordId?await informationList(env,{id:order.recordId,order_number:order.reference}):[];order.lifecycleRequests=order.recordId?(await lifecycleList(env,order.recordId)).map(memberLifecycle):[];order.supplyHistory=order.recordId?await rows(env.DB.prepare("SELECT prescription_id prescriptionId,pharmacy_org_id pharmacyOrganisationId,archived_at archivedAt,json_extract(fulfilment_json,'$.status') status FROM rx_supply_history WHERE record_id=? AND member_id=? ORDER BY archived_at DESC").bind(order.recordId,actor.id)):[];}
+  for(const order of orders){order.refunds=refunds.filter(r=>r.orderReference===order.reference);order.pricePlans=await memberPricePlans(env,actor.id,order.reference);order.informationRequests=order.recordId?await informationList(env,{id:order.recordId,order_number:order.reference}):[];order.lifecycleRequests=order.recordId?(await lifecycleList(env,order.recordId)).map(memberLifecycle):[];order.supplyHistory=order.recordId?await rows(env.DB.prepare("SELECT prescription_id prescriptionId,pharmacy_org_id pharmacyOrganisationId,archived_at archivedAt,json_extract(fulfilment_json,'$.status') status FROM rx_supply_history WHERE record_id=? AND member_id=? ORDER BY archived_at DESC").bind(order.recordId,actor.id)):[];}
  }
  const lifecycleUnion=env.SSTRX_FUNCTIONAL_V3_ENABLED==='true'?` UNION ALL SELECT 'lifecycle:'||e.id id,e.kind,l.order_number,l.record_id,e.created_at,'rx_prescription_lifecycle_events' source FROM rx_prescription_lifecycle_events e JOIN rx_prescription_lifecycle l ON l.id=e.lifecycle_id WHERE l.member_id=? UNION ALL SELECT 'refund:'||e.id id,'refund_'||e.state kind,f.order_number,r.id record_id,e.created_at,'rx_refund_events' source FROM rx_refund_events e JOIN rx_refunds f ON f.id=e.refund_id JOIN clinical_member_records r ON r.order_number=f.order_number AND r.user_id=f.member_id WHERE f.member_id=?`:'';
  const events=await rows(env.DB.prepare(`SELECT 'prescription:'||e.id id,e.kind,r.order_number,r.id record_id,e.created_at,'clinical_prescription_events' source FROM clinical_prescription_events e JOIN clinical_member_records r ON r.id=e.record_id WHERE r.user_id=?
