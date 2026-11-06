@@ -1,7 +1,8 @@
 // Diagnostic only: complete native handlers + SQLite, not browser/WAN speed.
 import fs from 'node:fs/promises';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
 import {fullLoop} from './full-loop-scenario.mjs';
 const sourceCommit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 if(execFileSync('git',['diff','--name-only'],{encoding:'utf8'}).trim())throw Error('Commit source before measuring; no previous-head qualification');
@@ -43,18 +44,40 @@ async function sample(fn,index){
  catch(cause){error=String(cause.message).slice(0,160);}
  return {index,elapsedMs:Number((performance.now()-started).toFixed(3)),status,ok:error===null,error};
 }
-const warm=await context();
-try{
- for(const [name,fn] of Object.entries(warm.actions)){
-  const samples=[];for(let i=0;i<100;i++)samples.push(await sample(fn,i));
-  report.metrics[name]={warm:summarise(samples),freshFixture:{samples:[]}};
- }
-}finally{warm.f.s.close();}
-for(let i=0;i<20;i++){
- const fresh=await context();
- try{for(const [name,fn] of Object.entries(fresh.actions))report.metrics[name].freshFixture.samples.push(await sample(fn,i));}
+// Core caches schema readiness per isolate. A fresh database must therefore use
+// a fresh process; a second in-memory database in this isolate is not a cold run.
+if(process.env.SSTRX_HANDLER_CHILD_INDEX!==undefined){
+ const index=Number(process.env.SSTRX_HANDLER_CHILD_INDEX),fresh=await context();
+ const samples={};
+ try{for(const [name,fn] of Object.entries(fresh.actions))samples[name]=await sample(fn,index);}
  finally{fresh.f.s.close();}
-}
+ await fs.writeFile(output+'/fresh-'+index+'.json',JSON.stringify({sourceCommit,index,samples})+'\n');
+}else{
+ const checkpoint=()=>fs.writeFile(output+'/results.json',JSON.stringify(report,null,2)+'\n');
+ try{
+  const warm=await context();
+  try{
+   for(const [name,fn] of Object.entries(warm.actions)){
+    const samples=[];for(let i=0;i<100;i++)samples.push(await sample(fn,i));
+    report.metrics[name]={warm:summarise(samples),freshFixture:{samples:[]}};
+    await checkpoint();
+   }
+  }finally{warm.f.s.close();}
+  for(let i=0;i<20;i++){
+   const child=spawnSync(process.execPath,[fileURLToPath(import.meta.url)],{
+    env:{...process.env,SSTRX_HANDLER_CHILD_INDEX:String(i)},encoding:'utf8',timeout:45000,maxBuffer:4*1024*1024
+   });
+   await fs.writeFile(output+'/fresh-'+i+'.log',(child.stdout||'')+(child.stderr||''));
+   if(child.error||child.status!==0)throw Error('Fresh fixture '+i+' failed: '+(child.error?.message||'exit '+child.status)+'; see retained child log');
+   const result=JSON.parse(await fs.readFile(output+'/fresh-'+i+'.json','utf8'));
+   if(result.sourceCommit!==sourceCommit||result.index!==i)throw Error('Fresh fixture source/index mismatch');
+   for(const name of Object.keys(report.metrics)){
+    if(!result.samples[name])throw Error('Fresh fixture omitted '+name);
+    report.metrics[name].freshFixture.samples.push(result.samples[name]);
+   }
+   await checkpoint();
+  }
+ }catch(cause){report.failures.push({stage:'sampler',error:cause.message});}
 for(const [name,value] of Object.entries(report.metrics)){
  value.freshFixture=summarise(value.freshFixture.samples);
  for(const state of ['warm','freshFixture'])for(const failed of value[state].samples.filter(s=>!s.ok))report.failures.push({name,state,...failed});
@@ -63,3 +86,4 @@ report.completedAt=new Date().toISOString();report.result=report.failures.length
 await fs.writeFile(output+'/results.json',JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify({...report,bundles:report.bundles,metrics:Object.fromEntries(Object.entries(report.metrics).map(([name,m])=>[name,Object.fromEntries(Object.entries(m).map(([state,{samples,...summary}])=>[state,summary]))]))}));
 if(report.failures.length)process.exitCode=1;
+}
