@@ -1,4 +1,5 @@
 import {passwordSignInAllowed} from '../password-signin.mjs';
+import {catalogueSignoff} from './catalogue.mjs';
 import {listConversations,readConversation,sendSecureMessage,markConversationRead,messageAlertDrafts} from './messages.mjs';
 import {createDiagnosticOrder} from './diagnostics.mjs';
 import {existingHqIdentity,credentialsCurrent,currentPartner,permission,authCondition,newStaff} from '../service/clinical-kernel.mjs';
@@ -59,6 +60,7 @@ export async function platformRoute(request,env){
   if(!['GET','POST'].includes(request.method))fail(405,'method_not_allowed');
   const a=await platformActor(request,env);if(a.response)return a.response;await ensurePlatformSchema(env.DB);
   const p=url.pathname.slice(BASE.length).split('/').filter(Boolean);
+  if(p[0]==='catalogue'&&p.length===2&&/^[1-9]\d*$/.test(p[1]))return json(await catalogueSignoff(request,env,a,Number(p[1])));
   if(p[0]==='identity'&&p.length===1&&request.method==='GET')return json({staff:a.staff||null,organisationId:a.orgId||null,role:a.staff?.kind||a.role});
   if(p[0]==='messages'){
    if(env.SSTRX_SECURE_MESSAGES_ENABLED!=='true')fail(503,'secure_messages_not_open');

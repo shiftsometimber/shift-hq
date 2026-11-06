@@ -1,4 +1,5 @@
 import {RX_MESSAGE_CLIENT} from './platform/messages-ui.mjs';
+import {cataloguePage,CATALOGUE_CLIENT} from './platform/catalogue-ui.mjs';
 // Branded gateway over the original partner gateway. Same identity and services.
 import {createPortal} from './worker.mjs';
 import {partnerHqPage,BRAND} from './ui.mjs';
@@ -8,7 +9,7 @@ import {accessRequestPage,ACCESS_REQUEST_CSS,ACCESS_REQUEST_CLIENT} from './plat
 import {signAccessRequest} from './platform/access-requests.mjs';
 import {readObject} from './platform/domain.mjs';
 const ORIGIN='https://sstrx.shiftsometimber.co.uk',native=createPortal(ORIGIN);
-const paths=new Set(['overview','clinical','prescriptions','dispensing','delivery','patients','messages','reports','settings','diagnostics']);
+const paths=new Set(['overview','clinical','prescriptions','dispensing','delivery','patients','messages','reports','settings','diagnostics','catalogue']);
 function memberEntrance(){return `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Welcome · SST Rx</title><link rel="stylesheet" href="/assets/sstrx.css"></head><body class="rx-app rx-login"><header class="rx-top"><img class="rx-logo" src="/assets/sstrx-logo.png" alt="SST Rx"><span>PART OF THE SHIFT FAMILY</span></header><main class="rx-entry"><section class="rx-intro"><p>YOUR ACCOUNT. YOUR CARE.</p><h1>Welcome to SST Rx</h1><p>One joined-up SHIFT journey, with the right access for you.</p></section><section class="rx-signin"><h2>I'm a member</h2><p>Orders, care and secure messages. Continue with your existing My Timber account.</p><a class="rx-access-cta" href="/member-sign-in">Member sign-in</a><p>You will sign in securely through My Timber.</p><hr><h2>I'm a professional</h2><p>Authorised clinician and pharmacy access.</p><a class="rx-access-cta" href="/professionals">Professional sign-in</a><p><a href="/request-access">Request professional access</a></p></section></main></body></html>`;}
 async function handle(request,env){
  const url=new URL(request.url);if(url.origin!==ORIGIN)return new Response('Not found',{status:404});
@@ -18,6 +19,7 @@ async function handle(request,env){
  if(url.pathname==='/assets/sstrx.css'&&['GET','HEAD'].includes(request.method))return secure(SST_RX_CSS+ACCESS_REQUEST_CSS,'text/css; charset=utf-8');
  if(url.pathname==='/assets/access-request.js'&&['GET','HEAD'].includes(request.method))return secure(ACCESS_REQUEST_CLIENT,'text/javascript; charset=utf-8');
  if(url.pathname==='/assets/sstrx.js'&&['GET','HEAD'].includes(request.method))return secure(SST_RX_CLIENT+RX_MESSAGE_CLIENT,'text/javascript; charset=utf-8');
+ if(url.pathname==='/assets/catalogue.js'&&['GET','HEAD'].includes(request.method))return secure(CATALOGUE_CLIENT,'text/javascript; charset=utf-8');
  const open=env.SSTRX_PORTAL_ENABLED==='true';
  if(env.MY_SHIFT_REDESIGN_ENABLED==='true'&&['GET','HEAD'].includes(request.method)){
   if(url.pathname==='/')return secure(memberEntrance());
@@ -38,6 +40,7 @@ async function handle(request,env){
   const identity=await native.fetch(new Request(ORIGIN+'/api/identity',{headers:request.headers}),env);
   if(!identity.ok)return new Response(null,{status:303,headers:{...Object.fromEntries(identity.headers),Location:'/'}});
   const profile=await identity.json(),kind=profile.partner.kind;
+  if(url.pathname==='/workspace/catalogue')return kind==='clinician'?secure(cataloguePage()):secure('Current prescriber access is required.','text/plain',403);
   const admin=['clinical_admin','pharmacy_admin','oversight'].includes(kind);
   if(admin){if(!['overview','patients','reports','settings'].includes(url.pathname.split('/')[2]))return secure('Your role does not include clinical or dispensing actions.','text/plain',403);return secure(workspacePage({kind,nativeHtml:'',messagesHtml:''}));}
   if(kind==='dispensing'&&['/workspace/clinical','/workspace/diagnostics'].includes(url.pathname))return secure('Your role does not include clinical casework.','text/plain',403);

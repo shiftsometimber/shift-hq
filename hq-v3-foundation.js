@@ -3,13 +3,13 @@
   'use strict';
   const JOBS = [
     ['Overview', ['dashboard']],
-    ['Operations', ['rxoperations', 'tasks', 'support', 'partners', 'partnerdesk', 'partnerhandovers', 'partnerworkflows', 'automation', 'liveevents', 'activity', 'launch']],
-    ['Money', ['managementreports', 'orders', 'products', 'medicines']],
-    ['Members', ['people', 'pipeline', 'conversations', 'consentmemory', 'gpdirectory']],
+    ['Operations', ['rxoperations', 'tasks', 'support', 'supportpromise', 'partners', 'partnerdesk', 'partnerhandovers', 'partnerworkflows', 'automation', 'liveevents', 'activity', 'launch']],
+    ['Money', ['moneytruth','purchaseintel','forecast','managementreports', 'orders', 'products', 'medicines']],
+    ['Members', ['people','demographics', 'pipeline', 'conversations', 'consentmemory', 'gpdirectory']],
     ['Comms', ['communications', 'outbox', 'campaigns', 'segments', 'forms', 'workflows']],
     ['Growth', ['intelligence', 'indexing', 'semantic', 'sourceversions']],
     ['Publishing', ['website', 'knowledgehub', 'radar', 'evidencedesk', 'knowledgeapproval']],
-    ['Control', ['users', 'audit', 'copilot', 'academy', 'shoulder', 'knowledge', 'synthetic', 'memory', 'models', 'intelloop', 'dictionary', 'aiactions', 'selfhost', 'setupwizard', 'hqv3readiness']]
+    ['Control', ['users','accesscockpit','sourcehealth','learningops','metricdefinitions', 'audit', 'copilot', 'academy', 'shoulder', 'knowledge', 'synthetic', 'memory', 'models', 'intelloop', 'dictionary', 'aiactions', 'selfhost', 'setupwizard', 'hqv3readiness']]
   ];
   const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function validateMessages(data) {
@@ -21,7 +21,7 @@
     const value = stats?.[key];
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? String(value) : 'Unavailable';
   }
-  async function boundedRead(read, path, { timeoutMs = 12000, signal } = {}) {
+  async function boundedRead(read, path, { timeoutMs = 12000, signal, ...requestOptions } = {}) {
     const controller = new AbortController();
     const abort = () => controller.abort();
     if (signal?.aborted) controller.abort();
@@ -31,7 +31,7 @@
     const timeout = new Promise((_, reject) => {
       timer = setTimeout(() => { controller.abort(); const error = Error('This source did not respond within 12 seconds.'); error.name = 'AbortError'; reject(error); }, timeoutMs);
     });
-    try { return await Promise.race([Promise.resolve().then(() => read(path, { signal: controller.signal })), timeout]); }
+    try { return await Promise.race([Promise.resolve().then(() => read(path, { ...requestOptions, signal: controller.signal })), timeout]); }
     finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
   }
   function organiseNavigation(nav) {
@@ -55,7 +55,7 @@
   }
   function install({ getPrincipal, read, navigate }) {
     const get = id => document.getElementById(id), nav = document.querySelector('aside nav');
-    let revision = 0, activeController, clearRx = () => {};
+    let revision = 0, activeController, clearRx = () => {},catalogue,business;
     const target = get('queueOutboxRows');
     if (!target) return;
     const status = document.createElement('p'); status.id = 'outbox-load-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
@@ -69,6 +69,8 @@
       revision++; activeController?.abort(); target.removeAttribute('aria-busy');
       retry.disabled = false;
       clearRx();
+      catalogue?.clear();
+      business?.clear();
       target.innerHTML = '<tr><td colspan="5">' + esc(message) + '</td></tr>'; status.textContent = message;
       for (const id of ['outPending', 'outSent', 'outFailed', 'outSuppressed']) get(id).textContent = 'Unavailable';
     }
@@ -95,7 +97,7 @@
     }
     retry.onclick = loadOutbox;
     const readiness = document.createElement('section'); readiness.id = 'hqv3readiness'; readiness.className = 'view';
-    readiness.innerHTML = '<div class="toolbar"><div><p class="eyebrow">SHIFT HQ v3</p><h2>Pre-switch-on readiness</h2><p>124 named acceptance checks. Evidence against the exact build is required for every applicable check.</p></div></div><div class="hq-v3-gates"><article><h3>Build and integration evidence</h3><p>NOT RUN — source fixes and local checks do not establish three-view, supplier, device or restore acceptance.</p></article><article><h3>Supplier and Partner MFA</h3><p>BLOCKED — authorised partner access and genuine supplier receipts remain required.</p></article><article><h3>Connected business sources</h3><p>Unavailable until accounting, bank, costs and analytics have authoritative connections.</p></article><article><h3>Matt + clinical authorisation</h3><p>Required after checks pass. This screen cannot switch on the service or waive a failed check.</p></article></div><p>TEST work only. Care decisions, charges, refunds, publication and sending retain their separate authority.</p>';
+    readiness.innerHTML = '<div class="toolbar"><div><p class="eyebrow">SHIFT HQ v3.1</p><h2>Pre-switch-on readiness</h2><p>132 named acceptance checks. Evidence against the exact build is required for every applicable check.</p></div></div><div class="hq-v3-gates"><article><h3>Build and integration evidence</h3><p>NOT RUN — source fixes and local checks do not establish three-view, supplier, device or restore acceptance.</p></article><article><h3>Supplier and Partner MFA</h3><p>BLOCKED — authorised partner access and genuine supplier receipts remain required.</p></article><article><h3>Connected business sources</h3><p>Unavailable until accounting, bank, costs and analytics have authoritative connections.</p></article><article><h3>Matt + clinical authorisation</h3><p>Required after checks pass. This screen cannot switch on the service or waive a failed check.</p></article></div><p>TEST work only. Care decisions, charges, refunds, publication and sending retain their separate authority.</p>';
     document.querySelector('main').append(readiness);
     const button = document.createElement('button'); button.dataset.view = readiness.id; button.textContent = 'Readiness'; button.onclick = () => { document.querySelectorAll('.view').forEach(x => x.classList.toggle('active', x === readiness)); document.querySelectorAll('nav button[data-view]').forEach(x => x.classList.toggle('active', x === button)); get('title').textContent = 'Pre-switch-on readiness'; };
     nav.append(button);
@@ -121,6 +123,8 @@
     rxButton.onclick=()=>{document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x===rx));nav.querySelectorAll('button[data-view]').forEach(x=>x.classList.toggle('active',x===rxButton));get('title').textContent='Rx operations';loadRx();};
     get('hq-rx-refresh').onclick=loadRx;
     setInterval(()=>{if(lastRead&&Date.now()-lastRead>60000&&rx.classList.contains('active'))get('hq-rx-status').textContent='Snapshot may be stale — refresh to check the latest confirmed state.';},1000);
+    catalogue=host.HQCatalogueV31?.install({getPrincipal,read,navigate});
+    business=host.HQV31Business?.install({getPrincipal,read,navigate});
     const navigation = organiseNavigation(nav);
     nav.addEventListener('click',event=>{
       if(!event.target.closest('button[data-view]')||!host.matchMedia('(max-width:760px)').matches)return;
