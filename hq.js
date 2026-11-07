@@ -402,6 +402,7 @@
     installRadarView();
     installEvidenceDeskView();
     window.installManagementHQ?.();
+    window.installSeoContentHQ?.();
     window.installGpDirectoryHQ?.();
     window.installGpMemberEditorHQ?.();
     if(requestedView==='radar'){
