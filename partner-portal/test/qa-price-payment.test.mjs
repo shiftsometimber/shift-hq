@@ -62,7 +62,7 @@ test('Owned native additional-payment checkout records one signed TEST receipt a
   const fromAt=new Date(Date.now()-30000).toISOString(),toAt=new Date().toISOString(),command={sourceReference:qaStatementReference(fromAt,toAt),fromAt,toAt,orderReference:'ALL',ownerUserId:1,dueAt:new Date(Date.now()+3600000).toISOString()};
   const reconciliation=await qaStack.fetch(new Request('https://api.shiftsometimber.co.uk/v1/hq/clinical/platform/reconciliation',{method:'POST',headers:{Cookie:'sst_hq_session='+f.tokens[1],Origin:'https://hq.shiftsometimber.co.uk','Content-Type':'application/json'},body:JSON.stringify(command)}),f.env,{});
   const matched=await j(reconciliation);assert.equal(matched.state,'matched');assert.equal(matched.variancePence,0);
-  const statement=JSON.parse(f.sql.prepare('SELECT statement_json FROM qa_simulated_statements').get().statement_json);assert.equal(statement.netReceivedPence,5000);assert.equal(statement.additionalCaptureCount,1);assert.equal(statement.additionalPaymentRefundsSupported,false);
+  const statement=JSON.parse(f.sql.prepare('SELECT statement_json FROM qa_simulated_statements').get().statement_json);assert.equal(statement.netReceivedPence,5000);assert.equal(statement.additionalCaptureCount,1);assert.equal(statement.additionalPaymentRefundsSupported,true);
  }finally{f.close();}
 });
 

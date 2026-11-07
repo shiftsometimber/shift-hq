@@ -101,3 +101,81 @@ test('Home includes only partner questions awaiting HQ and keeps message content
  const items=attentionItems(source('partnerquestions',[{id:'one',order_number:'TEST-ORDER',status:'awaiting_hq',priority:'urgent',owner_name:'SHIFT HQ',subject:'Private subject',body:'Private message'},{id:'two',status:'awaiting_partner'},{id:'three',status:'closed'}]),now);
  assert.equal(items.length,1);assert.equal(items[0].view,'partnerdesk');assert.equal(items[0].priority,0);assert.equal(items[0].owner,'SHIFT HQ');assert.ok(!JSON.stringify(items).includes('Private'));
 });
+
+
+test('Attention home dates are TODAY in London and do not depend on report form dates',()=>{
+ const {homeReportOptions}=require('./hq-operations.js');
+ assert.deepEqual(homeReportOptions(new Date('2026-07-01T23:30:00Z')),{kind:'management',start:'2026-07-02',end:'2026-07-02'});
+ assert.deepEqual(homeReportOptions(new Date('2026-11-06T23:30:00Z')),{kind:'management',start:'2026-11-06',end:'2026-11-06'});
+});
+test('Home Rx projection keeps only safe metadata, excludes ordinary delivered work, and preserves explicit exception ownership',()=>{
+ const definition=SOURCE_DEFINITIONS.find(x=>x.key==='rxexceptions');
+ const record=(id,action,extra={})=>({case_ref:id,order_ref:'TEST-'+id,partition:'TEST',pharmacy_stage:'delivered',source_updated_at:'2026-11-04T10:00:00Z',action,clinical_body:'DO-NOT-PROJECT-CLINICAL',assessment_answers:{private:'DO-NOT-PROJECT-ANSWERS'},...extra});
+ const data={ok:true,partition:'TEST',coverage:{has_more:false},records:[
+  record('complete',{kind:'current',code:'delivery_recorded',responsibility:null,unowned:false,overdue:false}),
+  record('exception',{kind:'exception',code:'pharmacy_query',label:'Review the reported pharmacy question',responsibility:'pharmacy',owner:{name:'TEST pharmacy owner'},dueAt:'2026-11-04T11:00:00Z',unowned:false,overdue:true},{pharmacy_stage:'query'})
+ ]};
+ const projected=sourceResult(definition,data),items=attentionItems(projected,now);
+ assert.equal(items.length,1);assert.equal(items[0].reference,'TEST-exception');assert.equal(items[0].owner,'TEST pharmacy owner');assert.equal(items[0].due,'2026-11-04T11:00:00Z');
+ assert.equal(items[0].createdAt,undefined,'Source update time is not an invented opening time');
+ assert.ok(!JSON.stringify(projected.rows).includes('DO-NOT-PROJECT'));
+ assert.equal(sourceResult(definition,{...data,coverage:{has_more:true}}).partial,true);
+ for(const patch of [{partition:'LIVE'},{records:[{...data.records[0],partition:'LIVE'}]},{records:[{...data.records[0],action:{kind:'exception',code:'x',dueAt:'invalid'}}]}])assert.throws(()=>sourceResult(definition,{...data,...patch}));
+});
+test('Supplier unknown outcomes open the retained reconciliation workflow, never a retry or acceptance claim',()=>{
+ const definition=SOURCE_DEFINITIONS.find(x=>x.key==='supplieroutcomes');
+ const projected=sourceResult(definition,{jobs:[
+  {id:'unknown',order_number:'TEST-UNKNOWN',state:'uncertain',payload:'DO-NOT-PROJECT-PAYLOAD',updated_at:'2026-11-04T10:00:00Z'},
+  {id:'accepted',order_number:'TEST-ACK',state:'transport_received'},
+  {id:'future',order_number:'TEST-FUTURE',state:'unrecognised_source_state'}
+ ],contracts:[{private:'DO-NOT-PROJECT-CONTRACT'}]});
+ const items=attentionItems(projected,now);
+ assert.deepEqual(items.map(x=>x.id),['unknown','future']);
+ assert.equal(items[0].label,'Supplier outcome unknown');assert.match(items[0].next,/Reconcile the existing submission/);assert.match(items[0].next,/No retry is performed here/);
+ assert.equal(definition.url,'https://sstrx.shiftsometimber.co.uk/workspace/finance');assert.equal(definition.actionLabel,'Reconcile state');
+ assert.equal(items[0].owner,'Unassigned');assert.equal(items[0].due,undefined);
+ assert.ok(!JSON.stringify(projected.rows).includes('DO-NOT-PROJECT'));
+});
+test('Finance home preserves the native named cover owner and deadline while omitting source details',()=>{
+ const definition=SOURCE_DEFINITIONS.find(x=>x.key==='financeexceptions');
+ const projected=sourceResult(definition,{owners:[{id:1,name:'TEST original finance owner'},{id:2,name:'TEST cover owner'}],exceptions:[
+  {id:'refund:one',orderReference:'TEST-REFUND',state:'watching',kind:'refund_watch',ownerUserId:1,coverOwnerUserId:2,dueAt:'2026-11-04T10:00:00Z',createdAt:'2026-11-03T12:00:00Z',source:{body:'DO-NOT-PROJECT-FINANCE-DETAIL'}},
+  {id:'closed',state:'closed',kind:'refund_watch',ownerUserId:1}
+ ]});
+ const items=attentionItems(projected,now);assert.equal(items.length,1);assert.equal(items[0].owner,'TEST cover owner');assert.equal(items[0].due,'2026-11-04T10:00:00Z');assert.equal(items[0].late,true);
+ assert.ok(!JSON.stringify(projected.rows).includes('DO-NOT-PROJECT'));
+ assert.throws(()=>sourceResult(definition,{exceptions:[],owners:null}));
+ assert.throws(()=>sourceResult(definition,{exceptions:[{id:'bad',state:'open',kind:'variance',dueAt:'invalid'}],owners:[]}));
+});
+test('Missing finance owner names remain explicit and an unavailable source is never treated as an empty confirmed queue',()=>{
+ const definition=SOURCE_DEFINITIONS.find(x=>x.key==='financeexceptions');
+ const projection=sourceResult(definition,{exceptions:[{id:'f',state:'open',kind:'reconciliation_variance',ownerUserId:17}],owners:[]});
+ const [item]=attentionItems(projection,now);assert.equal(item.owner,'Finance user #17 (name unavailable)');assert.equal(item.due,undefined);
+ assert.deepEqual(attentionItems({...projection,status:'error'},now),[]);
+ assert.throws(()=>sourceResult(definition,{ok:false,exceptions:[],owners:[]}));
+ assert.deepEqual(sourceResult(definition,{exceptions:[],owners:[]}).rows,[]);
+});
+test('Staff MFA work is active directory metadata only; unknown enrolment is not a confirmed negative or zero',()=>{
+ const definition=SOURCE_DEFINITIONS.find(x=>x.key==='staffmfa');
+ const projected=sourceResult(definition,{users:[
+  {id:1,name:'TEST missing MFA',status:'active',mfa_enabled:0,email:'DO-NOT-PROJECT-EMAIL',password_hash:'DO-NOT-PROJECT-PASSWORD'},
+  {id:2,name:'TEST enrolled',status:'active',mfa_enabled:1},
+  {id:3,name:'TEST disabled',status:'suspended',mfa_enabled:0},
+  {id:4,name:'TEST unknown',status:'active'}
+ ]});
+ const items=attentionItems(projected,now);assert.deepEqual(items.map(x=>x.id),['1','4']);assert.equal(items[0].label,'Staff MFA enrolment missing');assert.equal(items[1].label,'Staff MFA enrolment unconfirmed');
+ assert.ok(items.every(x=>x.view==='users'&&x.owner==='Unassigned'&&x.due===undefined));assert.ok(!JSON.stringify(projected.rows).includes('DO-NOT-PROJECT'));
+});
+test('New home sources retain role fences before requesting their entitled APIs',()=>{
+ for(const key of ['rxexceptions','supplieroutcomes','financeexceptions','staffmfa']){
+  const definition=SOURCE_DEFINITIONS.find(x=>x.key===key);assert.equal(canRead(definition,{role:'owner'},['*']),true);assert.equal(canRead(definition,{role:'clinical'},['*']),false);assert.equal(canRead(definition,{role:'support'},['*']),false);
+ }
+ assert.equal(canRead(SOURCE_DEFINITIONS.find(x=>x.key==='rxexceptions'),{role:'operations'},[]),true);
+ assert.equal(canRead(SOURCE_DEFINITIONS.find(x=>x.key==='staffmfa'),{role:'operations'},['*']),false);
+});
+
+test('An in-flight supplier submission is pending confirmation, not a fabricated timeout or successful acceptance',()=>{
+ const definition=SOURCE_DEFINITIONS.find(x=>x.key==='supplieroutcomes');
+ const [item]=attentionItems(sourceResult(definition,{jobs:[{id:'inflight',order_number:'TEST-INFLIGHT',state:'submitting'}]}),now);
+ assert.equal(item.label,'Supplier submission awaiting confirmation');assert.doesNotMatch(item.label,/unknown|accepted|success/i);assert.match(item.next,/no new submission or retry/);
+});

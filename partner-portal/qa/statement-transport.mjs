@@ -69,7 +69,7 @@ export function qaStatementTransport(env){return {async fetch(request){
  }
  receipts.sort((a,b)=>a.id.localeCompare(b.id));
  const totalPence=receipts.reduce((n,r)=>n+r.amountPence,0);if(!Number.isSafeInteger(totalPence))return deny('qa_statement_total_invalid');
- const statement={reference,fromAt,toAt,currency:'GBP',netReceivedPence:totalPence,simulation:true,source:'durable_qa_processor_receipts',coverage:'medicine_original_and_additional_payments_and_refunds',captureCount:captures,additionalCaptureCount:additionalCaptures,additionalPaymentRefundsSupported:false,refundCount:refunds,receiptDigest:await digest(receipts),generatedAt:new Date().toISOString(),bankBalanceRepresented:false};
+ const statement={reference,fromAt,toAt,currency:'GBP',netReceivedPence:totalPence,simulation:true,source:'durable_qa_processor_receipts',coverage:'medicine_original_and_additional_payments_and_refunds',captureCount:captures,additionalCaptureCount:additionalCaptures,additionalPaymentRefundsSupported:true,refundCount:refunds,receiptDigest:await digest(receipts),generatedAt:new Date().toISOString(),bankBalanceRepresented:false};
  await env.DB.prepare('INSERT OR IGNORE INTO qa_simulated_statements VALUES(?,?,?,?,?,?)').bind(reference,fromAt,toAt,JSON.stringify(statement),await digest(statement),statement.generatedAt).run();
  const retained=await env.DB.prepare('SELECT statement_json,payload_digest FROM qa_simulated_statements WHERE reference=?').bind(reference).first(),value=JSON.parse(retained.statement_json);
  if(await digest(value)!==retained.payload_digest)return deny('qa_statement_receipt_corrupt');

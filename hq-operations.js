@@ -6,7 +6,11 @@
     { key: 'tasks', label: 'Tasks', view: 'tasks', path: '/v1/crm/tasks', field: 'tasks', permission: 'crm_read' },
     { key: 'handovers', label: 'Handovers', view: 'partnerhandovers', path: '/v1/hq/management/partner-handovers', field: 'items', roles: ['owner', 'admin', 'operations', 'support'], limit: 500 },
     { key: 'partnerquestions', label: 'Partner questions', view: 'partnerdesk', path: '/v1/hq/clinical/partner-desk/questions', field: 'threads', roles: ['owner', 'admin', 'operations'], limit: 100 },
-    { key: 'messages', label: 'Messages', view: 'outbox', path: '/v1/hq/outbox', field: 'messages', permission: 'communications_read', coverage: 'Outbox only. Approval drafts and other delivery channels are not included.' }
+    { key: 'messages', label: 'Messages', view: 'outbox', path: '/v1/hq/outbox', field: 'messages', permission: 'communications_read', coverage: 'Outbox only. Approval drafts and other delivery channels are not included.' },
+    { key: 'rxexceptions', label: 'Rx exceptions', view: 'rxoperations', path: '/v1/hq/clinical/partner-desk/operations?partition=TEST', field: 'records', roles: ['owner', 'admin', 'operations'], limit: 150, coverage: 'TEST operational metadata only. Clinical decisions and documents stay in SST Rx.' },
+    { key: 'supplieroutcomes', label: 'Supplier outcomes', view: 'rxoperations', path: '/v1/hq/clinical/platform/integrations', field: 'jobs', roles: ['owner', 'admin'], limit: 200, url: 'https://sstrx.shiftsometimber.co.uk/workspace/finance', actionLabel: 'Reconcile state', coverage: 'Saved submission jobs only. Transport acknowledgement is not pharmacy acceptance. Open the existing Finance workflow; do not retry an unknown outcome.' },
+    { key: 'financeexceptions', label: 'Finance exceptions', view: 'moneytruth', path: '/v1/hq/clinical/platform/finance-exceptions', field: 'exceptions', roles: ['owner', 'admin'], limit: 200, url: 'https://sstrx.shiftsometimber.co.uk/workspace/finance', actionLabel: 'Open Finance queue', coverage: 'Open and watched native exceptions. No payment, refund or reconciliation command is performed here.' },
+    { key: 'staffmfa', label: 'Staff MFA', view: 'users', path: '/v1/hq/users', field: 'users', roles: ['owner', 'admin'], coverage: 'Existing HQ Users directory. Active staff with missing or unconfirmed enrolment require review; this is not a fresh-device check.' }
   ];
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const londonDay = value => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(value);
@@ -23,6 +27,10 @@
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value < londonDay(now);
     const time = timestamp(value);
     return time !== null && time < now.getTime();
+  }
+  function homeReportOptions(now = new Date()) {
+    const today = londonDay(now);
+    return { kind: 'management', start: today, end: today };
   }
   function metricValue(metric) {
     if (metric?.status !== 'available' || typeof metric.value !== 'number' || !Number.isFinite(metric.value)) return 'Unavailable';
@@ -41,10 +49,46 @@
     if (!principal) return false;
     return source.roles ? source.roles.includes(principal.role) : permissions.includes('*') || permissions.includes(source.permission);
   }
+  // These adapters consume existing entitled read models and retain only the
+  // fields required to display a decision. Never spread a clinical record,
+  // integration contract, finance source detail or staff profile into the home.
+  function projectedHomeRows(source, data) {
+    const rows = data?.[source.field];
+    if (data?.ok === false || !Array.isArray(rows)) throw Error('Invalid queue response');
+    const validId = value => typeof value === 'string' && value.length > 0 || Number.isSafeInteger(value);
+    const optionalDate = value => value == null || typeof value === 'string' && timestamp(value) !== null;
+    if (source.key === 'rxexceptions') {
+      if (data.ok !== true || data.partition !== 'TEST') throw Error('Invalid Rx metadata partition');
+      return rows.map(row => {
+        const action = row?.action;
+        if (!row || row.partition !== 'TEST' || !validId(row.case_ref) || typeof row.order_ref !== 'string' || !action || typeof action.kind !== 'string' || typeof action.code !== 'string' || !optionalDate(action.dueAt) || !optionalDate(row.source_updated_at)) throw Error('Incomplete Rx metadata');
+        return { id: row.case_ref, reference: row.order_ref, status: typeof row.pharmacy_stage === 'string' ? row.pharmacy_stage : 'unconfirmed', action_kind: action.kind, action_code: action.code, next_action: typeof action.label === 'string' ? action.label : null, responsibility: typeof action.responsibility === 'string' ? action.responsibility : null, owner_name: typeof action.owner?.name === 'string' ? action.owner.name : null, due_at: action.dueAt || null, unowned: action.unowned === true, overdue: action.overdue === true, updated_at: row.source_updated_at || null };
+      });
+    }
+    if (source.key === 'supplieroutcomes') return rows.map(row => {
+      if (!row || !validId(row.id) || typeof row.order_number !== 'string' || typeof row.state !== 'string' || !optionalDate(row.updated_at)) throw Error('Incomplete supplier job metadata');
+      return { id: row.id, reference: row.order_number, status: row.state, updated_at: row.updated_at || null };
+    });
+    if (source.key === 'financeexceptions') {
+      if (!Array.isArray(data.owners)) throw Error('Finance ownership source unavailable');
+      return rows.map(row => {
+        if (!row || !validId(row.id) || typeof row.state !== 'string' || typeof row.kind !== 'string' || row.orderReference != null && typeof row.orderReference !== 'string' || !optionalDate(row.dueAt) || !optionalDate(row.createdAt)) throw Error('Incomplete finance exception metadata');
+        const ownerId = row.coverOwnerUserId ?? row.ownerUserId;
+        const owner = data.owners.find(person => person.id === ownerId && typeof person.name === 'string');
+        return { id: row.id, reference: row.orderReference || row.id, status: row.state, finance_kind: row.kind, owner_name: owner?.name || (Number.isSafeInteger(ownerId) ? 'Finance user #' + ownerId + ' (name unavailable)' : null), due_at: row.dueAt || null, created_at: row.createdAt || null };
+      });
+    }
+    if (source.key === 'staffmfa') return rows.map(row => {
+      if (!row || !validId(row.id) || typeof row.status !== 'string') throw Error('Incomplete staff directory metadata');
+      const enrolment = row.mfa_enabled === true || row.mfa_enabled === 1 ? 'mfa_current' : row.mfa_enabled === false || row.mfa_enabled === 0 ? 'mfa_gap' : 'mfa_unconfirmed';
+      return { id: row.id, reference: typeof row.name === 'string' && row.name ? row.name : 'Staff #' + row.id, status: row.status === 'active' ? enrolment : 'inactive' };
+    });
+    return rows;
+  }
   function sourceResult(source, data) {
-    if (data?.ok === false || !Array.isArray(data?.[source.field])) throw new Error('Invalid queue response');
-    if (data[source.field].some(row => !row || typeof row !== 'object' || Array.isArray(row) || row.id == null || typeof row.status !== 'string')) throw new Error('Incomplete queue records');
-    return { ...source, status: 'available', rows: data[source.field], partial: Boolean(data.hasMore || data.has_more || data.nextCursor || data.next_cursor || (source.limit && data[source.field].length >= source.limit)), fetchedAt: new Date().toISOString() };
+    const rows = projectedHomeRows(source, data);
+    if (rows.some(row => !row || typeof row !== 'object' || Array.isArray(row) || row.id == null || typeof row.status !== 'string')) throw Error('Incomplete queue records');
+    return { ...source, status: 'available', rows, partial: Boolean(data.hasMore || data.has_more || data.nextCursor || data.next_cursor || data.coverage?.has_more || (source.limit && rows.length >= source.limit)), fetchedAt: new Date().toISOString() };
   }
   function attentionItems(source, now = new Date()) {
     if (source.status !== 'available') return [];
@@ -80,6 +124,39 @@
         label = state === 'failed' ? 'Failed message' : 'Uncertain message outcome';
         next = 'Review the delivery record before considering another attempt.';
         priority = state === 'failed' ? 1 : 0;
+      } else if (source.key === 'rxexceptions') {
+        if (!['exception', 'reconciliation', 'overdue', 'assignment', 'finance'].includes(row.action_kind) && !row.unowned && !row.overdue) return [];
+        label = row.action_kind === 'reconciliation' ? 'Rx update needs reconciliation' : row.action_kind === 'assignment' ? 'Rx owner required' : 'Rx exception needs review';
+        next = (row.next_action || 'Review the current operational blocker in the entitled workspace.') + ' Clinical decisions remain in SST Rx.';
+        priority = row.action_kind === 'reconciliation' || row.action_kind === 'exception' ? 0 : row.overdue || row.unowned ? 1 : 2;
+      } else if (source.key === 'supplieroutcomes') {
+        if (state === 'uncertain') {
+          label = 'Supplier outcome unknown';
+          next = 'Reconcile the existing submission in Finance before any further attempt. No retry is performed here.';
+          priority = 0;
+        } else if (state === 'submitting') {
+          label = 'Supplier submission awaiting confirmation';
+          next = 'Check the existing submission in Finance. Its outcome is not confirmed; no new submission or retry is performed here.';
+          priority = 2;
+        } else if (['retryable', 'retry', 'failed'].includes(state)) {
+          label = 'Supplier submission needs review';
+          next = 'Review the saved submission and its evidence in the existing Finance workflow. Do not infer pharmacy acceptance.';
+          priority = 1;
+        } else if (!['pending', 'transport_received', 'accepted', 'superseded'].includes(state)) {
+          label = 'Supplier job state needs review';
+          next = 'The saved submission state is not recognised by this view. Review its source; no success or retry has been inferred.';
+          priority = 0;
+        } else return [];
+      } else if (source.key === 'financeexceptions') {
+        if (!['open', 'watching'].includes(state)) return [];
+        label = row.finance_kind === 'reconciliation_variance' ? 'Statement variance needs review' : 'Finance exception needs review';
+        next = 'Open the existing Finance queue to review ownership and verified source receipts. Money and supply remain independent.';
+        priority = late ? 0 : 1;
+      } else if (source.key === 'staffmfa') {
+        if (!['mfa_gap', 'mfa_unconfirmed'].includes(state)) return [];
+        label = state === 'mfa_gap' ? 'Staff MFA enrolment missing' : 'Staff MFA enrolment unconfirmed';
+        next = 'Review this active account in the existing HQ Users directory. Access controls remain enforced.';
+        priority = 0;
       } else return [];
       const assigned = row.owner_name || row.assigned_name || row.assigned_to;
       return [{ source: source.key, view: source.view, id: String(row.id ?? ''), reference: row.reference || row.order_number || (row.id != null ? '#' + row.id : 'Reference unavailable'), label, next, owner: assigned ? String(assigned) : 'Unassigned', due, createdAt: row.created_at, updatedAt: row.updated_at, priority, late, status: state }];
@@ -159,10 +236,10 @@
     let pending = null, controller = null, activePrincipal = null, sources = [], report = null, lastRefresh = null, reportFailure = null;
     const queue = get('management-attention'), nav = document.querySelector('aside nav');
     const heading = document.querySelector('.hq-management-heading');
-    heading.querySelector('h2').textContent = 'Your daily business brief.';
+    heading.querySelector('h2').textContent = 'Decisions and exceptions';
     const actions = document.createElement('div');
     actions.className = 'hq-home-actions';
-    actions.innerHTML = '<button id="hq-home-refresh" class="secondary" type="button">Refresh overview</button>';
+    actions.innerHTML = '<button id="hq-home-refresh" class="secondary" type="button">Refresh Attention</button>';
     const reports = get('home-reports');
     reports.before(actions); actions.append(reports);
     queue.setAttribute('aria-live', 'polite'); queue.setAttribute('aria-atomic', 'false');
@@ -185,7 +262,7 @@
     ownerContext.querySelector('[data-owner-report]').onclick = () => get('home-reports').click();
     ownerContext.querySelector('[data-owner-partners]').onclick = () => navigate('partnerdesk');
     const footnote = document.querySelector('#dashboard > .hq-muted');
-    if (footnote) footnote.textContent = 'Work queues are current snapshots. Financial figures use the selected report dates; Today cohort rates carry their own window.';
+    if (footnote) footnote.textContent = 'Work queues are current snapshots. The Attention summary uses TODAY in Europe/London. Order value, processor receipts and bank cash retain their separate sources and definitions.';
 
     function removeCounts() { nav.querySelectorAll('[data-hq-queue-count]').forEach(node => node.remove()); }
     function clear(message = 'Sign in to load your overview.') {
@@ -206,6 +283,10 @@
       get('hq-attention-count').textContent = ''; removeCounts();
       get('management-asof').textContent = 'Refreshing overview · Europe/London';
     }
+    function sourceControl(source, label, className = '') {
+      if (source.url && source.status !== 'restricted') return '<a class="' + esc(className) + '" href="' + esc(source.url) + '" target="_blank" rel="noopener">' + esc(label) + '</a>';
+      return '<button class="' + esc(className) + '" type="button" data-hq-source-open="' + esc(source.key) + '"' + (source.status === 'restricted' ? ' disabled' : '') + '>' + esc(label) + '</button>';
+    }
     function render() {
       ownerContext.hidden = !['owner', 'admin'].includes(getPrincipal()?.role);
       const metrics = new Map((report?.metrics || []).map(m => [m.key, m]));
@@ -217,7 +298,7 @@
       queue.removeAttribute('aria-busy');
       get('hq-attention-count').textContent = visible.length ? visible.length + ' item' + (visible.length === 1 ? '' : 's') + ' in loaded records' : '';
       if (visible.length) {
-        queue.innerHTML = visible.slice(0, 12).map(item => '<article class="hq-action-item" data-source="' + item.source + '"><div class="hq-action-top"><span class="hq-action-kind' + (item.priority === 0 ? ' hq-action-priority' : '') + '">' + esc(item.label) + '</span><span>' + esc(ageLabel(item)) + '</span></div><strong>' + esc(item.reference) + '</strong><p>' + esc(item.next) + '</p><div class="hq-action-bottom"><span>Owner: ' + esc(item.owner) + (item.due ? ' · Due ' + esc(formatDue(item.due)) : '') + '</span><button type="button" data-hq-source-open="' + item.source + '">Open ' + esc(SOURCE_DEFINITIONS.find(s => s.key === item.source).label.toLowerCase()) + ' queue</button></div></article>').join('') + (visible.length > 12 ? '<p class="hq-muted">Showing 12 of ' + visible.length + ' loaded items. Open a source queue for the full list.</p>' : '');
+        queue.innerHTML = visible.slice(0, 12).map(item => '<article class="hq-action-item" data-source="' + item.source + '"><div class="hq-action-top"><span class="hq-action-kind' + (item.priority === 0 ? ' hq-action-priority' : '') + '">' + esc(item.label) + '</span><span>' + esc(ageLabel(item)) + '</span></div><strong>' + esc(item.reference) + '</strong><p>' + esc(item.next) + '</p><div class="hq-action-bottom"><span>Owner: ' + esc(item.owner) + (item.due ? ' · Due ' + esc(formatDue(item.due)) : ' · Deadline not configured') + '</span>' + sourceControl(sources.find(s => s.key === item.source), SOURCE_DEFINITIONS.find(s => s.key === item.source).actionLabel || 'Open ' + SOURCE_DEFINITIONS.find(s => s.key === item.source).label.toLowerCase() + ' queue') + '</div></article>').join('') + (visible.length > 12 ? '<p class="hq-muted">Showing 12 of ' + visible.length + ' loaded items. Open a source queue for the full list.</p>' : '');
       } else if (selectedSource && selectedSource.status !== 'available') {
         queue.innerHTML = '<div class="hq-state"><strong>' + esc(selectedSource.label) + ': ' + esc(selectedSource.stateLabel) + '</strong><p>' + esc(selectedSource.detail) + '</p>' + (selectedSource.status === 'error' ? '<button type="button" data-hq-retry>Try again</button>' : '') + '</div>';
       } else {
@@ -228,7 +309,8 @@
       const maxCount = Math.max(1, ...loaded.map(s => attentionItems(s).length));
       get('management-operations').innerHTML = sources.map(s => {
         const count = s.status === 'available' ? attentionItems(s).length : null;
-        return '<button class="hq-workload-row" type="button" data-hq-source-open="' + s.key + '"' + (s.status === 'restricted' ? ' disabled' : '') + '><span>' + s.label + '<small>' + (count === null ? esc(s.stateLabel) : 'Items needing review · loaded records') + '</small></span><strong>' + (count === null ? '—' : count) + '</strong>' + (count === null ? '' : '<span class="hq-workload-bar" aria-hidden="true"><i style="width:' + (100 * count / maxCount) + '%"></i></span>') + '</button>';
+        const external = s.url && s.status !== 'restricted', tag = external ? 'a' : 'button';
+        return '<' + tag + ' class="hq-workload-row"' + (external ? ' href="' + esc(s.url) + '" target="_blank" rel="noopener"' : ' type="button" data-hq-source-open="' + s.key + '"' + (s.status === 'restricted' ? ' disabled' : '')) + '><span>' + s.label + '<small>' + (count === null ? esc(s.stateLabel) : 'Items needing review · loaded records') + '</small></span><strong>' + (count === null ? '—' : count) + '</strong>' + (count === null ? '' : '<span class="hq-workload-bar" aria-hidden="true"><i style="width:' + (100 * count / maxCount) + '%"></i></span>') + '</' + tag + '>';
       }).join('');
       get('hq-home-sources').innerHTML = sources.map(s => '<div class="hq-source-row"><span><strong>' + s.label + '</strong><small>' + (s.status === 'available' ? esc(s.partial ? 'Latest loaded records · more may exist. Open the queue.' : s.rows.length + ' loaded record' + (s.rows.length === 1 ? '' : 's') + '. Counts cover these records.') : esc(s.detail)) + '</small>' + (s.coverage ? '<small>' + esc(s.coverage) + '</small>' : '') + (s.fetchedAt ? '<small>Loaded ' + esc(formatTime(s.fetchedAt)) + '</small>' : '') + '</span><b class="hq-data-state hq-data-' + s.status + '">' + (s.status === 'available' ? 'Loaded' : esc(s.stateLabel)) + '</b></div>').join('') + '<p class="hq-muted">Last refresh attempt completed: ' + esc(formatTime(lastRefresh)) + ' · Europe/London. Each source retains its own state.</p>';
       const labels = { paid_value: 'Paid order value', registrations: 'New registrations', week4: 'Week-4 return rate', helped: 'Steps rated helpful' };
@@ -237,7 +319,7 @@
         const stale = report && (timestamp(report.generatedAt) === null || Date.now() - timestamp(report.generatedAt) > 15 * 60000);
         return '<article><span>' + esc(m?.label || labels[key]) + '</span><strong>' + esc(value) + '</strong><small>' + esc(m?.reason || m?.scope || reportFailure?.detail || 'Source unavailable.') + '</small>' + (m?.denominator != null ? '<small>Sample: ' + esc(m.numerator) + ' / ' + esc(m.denominator) + '</small>' : '') + (m?.source ? '<small>Source: ' + esc(m.source) + '</small>' : '') + (stale ? '<b class="hq-data-state hq-data-error">' + (timestamp(report.generatedAt) === null ? 'Freshness unknown' : 'Older snapshot') + '</b>' : '') + '</article>';
       }).join('');
-      get('management-asof').textContent = report ? (report.period.start + ' to ' + report.period.end + ' · report generated ' + formatTime(report.generatedAt) + ' · Europe/London') : 'Report ' + (reportFailure?.stateLabel || 'unavailable') + ' · queues checked separately';
+      get('management-asof').textContent = report ? ('TODAY · ' + report.period.start + ' · report generated ' + formatTime(report.generatedAt) + ' · Europe/London') : 'Report ' + (reportFailure?.stateLabel || 'unavailable') + ' · queues checked separately';
       removeCounts();
       for (const s of loaded) {
         if (s.key === 'partnerquestions') continue; // Partner desk owns its single live navigation badge.
@@ -306,7 +388,7 @@
     clear();
     return { refresh, clear };
   }
-  const api = { SOURCE_DEFINITIONS, timestamp, overdue, metricValue, errorState, canRead, sourceResult, attentionItems, createRequestGate, install, installQueueScreens };
+  const api = { SOURCE_DEFINITIONS, timestamp, overdue, metricValue, errorState, canRead, sourceResult, attentionItems, createRequestGate, homeReportOptions, install, installQueueScreens };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else host.HQOperations = api;
 })(typeof window !== 'undefined' ? window : globalThis);
