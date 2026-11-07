@@ -2,6 +2,8 @@
 import core from '__CORE_ROOT__/worker.js';
 export {SiteContentState} from '__CORE_ROOT__/site-content-state-v1.js';
 import hq from '__CORE_ROOT__/hq-ai-v2.js';
+import {partnerRoute} from '__CORE_ROOT__/hq-partner-api.mjs';
+import {evidenceDeskHqReadRoutes} from '__CORE_ROOT__/evidence-desk-hq-read-v1.js';
 import {hqCatalogueRoutes} from '__CORE_ROOT__/hq-catalogue-v1.js';
 import {hqCommerceContentRoutes} from '__CORE_ROOT__/hq-commerce-content-v1.js';
 import {radarRoutes} from '__CORE_ROOT__/radar-integration-v1.js';
@@ -40,6 +42,18 @@ export default {async fetch(request,env,ctx){
  const catalogue=await hqCatalogueRoutes(request,env,ctx);if(catalogue)return catalogue;
  const commerceContent=await hqCommerceContentRoutes(request,env,ctx);if(commerceContent)return commerceContent;
  const medicine=await medicineCommerceRoutes(request,env,ctx);if(medicine)return medicine;
+ // The checked QA native-origin adapter has already mapped this request's
+ // public HQ origin to the retained native HQ origin. Keep the original
+ // handlers' cookie, role, CSRF, feature-flag and database checks unchanged.
+ if(/^\/v1\/hq\/management\/(?:partners|partner-handovers)(?:\/|$)/.test(path)){
+  if(request.method==='OPTIONS')return hq.fetch(request,env,ctx);
+  return await partnerRoute(request,env,ctx,(r,e,c)=>hq.fetch(r,e,c))||new Response('Not found',{status:404});
+ }
+ if(path==='/v1/hq/evidence-desk'||path.startsWith('/v1/hq/evidence-desk/')){
+  // No staging binding is fabricated: the retained read-only handler reports
+  // its explicit unconnected 503 and refuses mutations when not commissioned.
+  const evidence=await evidenceDeskHqReadRoutes(request,env);if(evidence)return evidence;
+ }
  if(path.startsWith('/v1/hq/'))return hq.fetch(request,env,ctx);
  return await handleEmailVerification(request,env,ctx,(r,e,c)=>core.fetch(r,e,c))||core.fetch(request,env,ctx);
 }};

@@ -94,10 +94,25 @@ export async function acknowledgeInformation(env,a,record,id,b){
 }
 export async function appendReadAudit(env,a,record,purpose){
  text(purpose,100);const date=now(),id=crypto.randomUUID();
- const previous=await env.DB.prepare('SELECT entry_hash FROM rx_functional_audit ORDER BY rowid DESC LIMIT 1').first();const prior=previous?.entry_hash||'genesis';
- const detail={actor:a.id,org:a.orgId,record:record.id,action:'clinical_record_viewed',purpose,assessmentVersion:record.revision,at:date};const hash=await digest(prior+'|'+JSON.stringify(detail));
- const g=currentClinicalGuard(a,record),r=await env.DB.prepare(`INSERT INTO rx_functional_audit SELECT ?,?,?,?,?,?,'clinical_record_viewed',?,? WHERE ${g.sql} AND COALESCE((SELECT entry_hash FROM rx_functional_audit ORDER BY rowid DESC LIMIT 1),'genesis')=?`).bind(id,prior,hash,String(a.id),a.orgId,record.id,JSON.stringify(detail),date,...g.args,prior).run();if(r.meta.changes!==1)fail(409,'audit_or_access_changed');return {id,hash};
+ const detail={actor:a.id,org:a.orgId,record:record.id,action:'clinical_record_viewed',purpose,assessmentVersion:record.revision,at:date},detailJSON=JSON.stringify(detail);
+ const recordProof="EXISTS(SELECT 1 FROM clinical_member_records WHERE id=? AND revision=? AND user_id IS ? AND order_number IS ? AND review_sharing=1)",recordArgs=[record.id,record.revision,record.user_id,record.order_number];
+ // Audited reads can overlap across different cases. A changed global tail is
+ // contention, not permission to drop the audit or return an unaudited record.
+ // Reuse this read's identity/detail and recheck access and record state at
+ // every attempted append. Thrown storage errors are never retried here.
+ for(let attempt=0;attempt<8;attempt++){
+  const previous=await env.DB.prepare('SELECT entry_hash FROM rx_functional_audit ORDER BY rowid DESC LIMIT 1').first(),prior=previous?.entry_hash||'genesis';
+  const hash=await digest(prior+'|'+detailJSON),g=currentClinicalGuard(a,record);
+  const r=await env.DB.prepare(`INSERT INTO rx_functional_audit SELECT ?,?,?,?,?,?,'clinical_record_viewed',?,? WHERE ${g.sql} AND ${recordProof} AND COALESCE((SELECT entry_hash FROM rx_functional_audit ORDER BY rowid DESC LIMIT 1),'genesis')=?`).bind(id,prior,hash,String(a.id),a.orgId,record.id,detailJSON,date,...g.args,...recordArgs,prior).run();
+  if(r.meta.changes===1)return {id,hash};
+  const fresh=currentClinicalGuard(a,record),current=await env.DB.prepare(`SELECT 1 ok WHERE ${fresh.sql} AND ${recordProof}`).bind(...fresh.args,...recordArgs).first();
+  if(!current?.ok)fail(409,'audit_or_access_changed');
+  const latest=await env.DB.prepare('SELECT entry_hash FROM rx_functional_audit ORDER BY rowid DESC LIMIT 1').first();
+  if((latest?.entry_hash||'genesis')===prior)fail(409,'audit_or_access_changed');
+ }
+ fail(409,'audit_or_access_changed');
 }
+
 export async function informationExceptions(env,a,records){
  if(env.SSTRX_FUNCTIONAL_V3_ENABLED!=='true'||!records.length)return records;
  const lifeIds=JSON.stringify(records.map(r=>r.recordId)),withdrawals=await rows(env.DB.prepare("SELECT * FROM rx_prescription_lifecycle WHERE record_id IN (SELECT value FROM json_each(?)) AND state='requested'").bind(lifeIds));for(const record of records){const work=withdrawals.find(w=>w.record_id===record.recordId);if(work){record.action.dueAt=work.due_at;record.action.clockSource='explicit_withdrawal_request';record.action.overdue=work.due_at<now();record.action.deadlineState=record.action.overdue?'overdue':'within_recorded_deadline';record.action.label='Confirm the prescription withdrawal';}}
