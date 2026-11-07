@@ -244,16 +244,26 @@ test('RX-HQ1 a delivered old episode cannot complete a replacement timeline in H
  }finally{f.close();}
 });
 
-for(const canonical of [false,true])test('RX-SUP-WITHDRAW an already received supplier job is withdrawn with its signed episode ('+(canonical?'transport_received':'accepted')+')',async()=>{
+for(const kind of ['cancel','amend'])for(const canonical of [false,true])test('RX-SUP-WITHDRAW an already received supplier job stops at pharmacy acknowledgement ('+kind+', '+(canonical?'transport_received':'accepted')+')',async()=>{
  const f=await setup();try{
   const contract='FICTIONAL-RECEIVED-WITHDRAWAL',date=new Date().toISOString(),config={pharmacyOrgId:'pharmacy-org',services:['weight_management'],contractReference:'FICTIONAL',receiptContract:{schemaVersion:'sst-rx-event-v1',approvalReference:'FICTIONAL-EVENT-MAP'}};
   f.sql.prepare("INSERT INTO rx_supplier_contracts VALUES(?,'clinical-org','synthetic',1,'approved',?,?)").run(contract,JSON.stringify(config),date);f.sql.prepare('INSERT INTO rx_product_mappings VALUES(?,11,?,?,?,?,1)').run(contract,'FICTIONAL-PRODUCT','tablet','Synthetic strength','one synthetic pack');
-  f.env.SSTRX_CANONICAL_RECEIPTS_ENABLED=canonical?'true':'false';f.env.SSTRX_SYNTHETIC_ADAPTER=isolatedSyntheticAdapter({submit:async()=>({accepted:true,reference:'FICTIONAL-ORIGINAL-TRANSPORT-RECEIPT'})});
+  f.env.SSTRX_CANONICAL_RECEIPTS_ENABLED=canonical?'true':'false';f.env.SSTRX_SYNTHETIC_ADAPTER=isolatedSyntheticAdapter({submit:async()=>({accepted:true,reference:'FICTIONAL-ORIGINAL-TRANSPORT-RECEIPT'}),verifyWebhook:async raw=>({verified:true,contractId:contract,event:JSON.parse(raw)})});
   const route=await captureOrderRoute(f.DB,{orderNumber:f.order,memberId:42,clinicalOrgId:'clinical-org',pharmacyOrgId:'pharmacy-org',contractId:contract,prescriptionId:f.original.prescriptionId,variantId:11,service:'weight_management',authorisationReference:'FICTIONAL-ROUTING'}),job=await queueSubmission(f.DB,route);
   assert.equal((await submitJob(f.env,job.id)).state,canonical?'transport_received':'accepted');
-  const work=await j(await f.request({...f.command,kind:'amend'}));await j(await f.ack(work));await freshReview(f);await replacementSignature(f);
+  const pendingReference='FICTIONAL-PENDING-'+kind;let pending;
+  if(canonical){await receiveVerifiedEvent(f.env,contract,JSON.stringify({kind:'accepted',eventReference:pendingReference,orderReference:f.order,occurredAt:date,schemaVersion:'sst-rx-event-v1',sourceRecordVersion:2,prescriptionReference:f.original.prescriptionId,caseReference:RECORD,idempotencyKey:pendingReference}),'FICTIONAL-VERIFIER');pending=f.sql.prepare('SELECT * FROM rx_integration_events WHERE event_reference=?').get(pendingReference);assert.equal(pending.state,'awaiting_projection');}
+  const work=await j(await f.request({...f.command,kind}));await j(await f.ack(work,{disposition:'physically_returned'}),409);assert.equal(f.sql.prepare('SELECT state FROM rx_integration_jobs WHERE id=?').get(job.id).state,canonical?'transport_received':'accepted');
+  if(canonical&&kind==='cancel'){
+   f.sql.exec("CREATE TRIGGER fictional_job_write_failure BEFORE UPDATE ON rx_integration_jobs BEGIN SELECT RAISE(ABORT,'FICTIONAL_JOB_WRITE_FAILURE'); END");
+   const failed=await f.ack(work);assert(failed.status>=500);assert.equal(f.state().status,'issued');assert.equal(f.sql.prepare('SELECT state FROM rx_prescription_lifecycle WHERE id=?').get(work.id).state,'requested');assert.equal(JSON.parse(f.sql.prepare('SELECT state_json FROM partner_fulfilment').get().state_json).status,'received');assert.equal(f.sql.prepare('SELECT state FROM rx_integration_jobs WHERE id=?').get(job.id).state,'transport_received');
+   f.sql.exec('DROP TRIGGER fictional_job_write_failure');
+  }
+  await j(await f.ack(work));
   const archived=f.sql.prepare('SELECT * FROM rx_integration_jobs WHERE id=?').get(job.id);assert.equal(archived.state,'superseded');assert.equal(archived.remote_reference,'FICTIONAL-ORIGINAL-TRANSPORT-RECEIPT');assert.equal(archived.attempts,1);
   await assert.rejects(submitJob(f.env,job.id),/job_not_submittable/);
-  const next=await queueSubmission(f.DB,f.sql.prepare('SELECT * FROM rx_order_routes').get());assert.notEqual(next.id,job.id);assert.equal(next.state,'pending');
+  if(pending){const retained=f.sql.prepare('SELECT * FROM rx_integration_events WHERE event_reference=?').get(pendingReference);assert.equal(retained.state,'superseded');assert.equal(retained.payload_digest,pending.payload_digest);assert.equal(retained.event_json,pending.event_json);}
+  assert.equal((await queueSubmission(f.DB,route)).state,'superseded');
+  if(kind==='amend'){await freshReview(f);await replacementSignature(f);const next=await queueSubmission(f.DB,f.sql.prepare('SELECT * FROM rx_order_routes').get());assert.notEqual(next.id,job.id);assert.equal(next.state,'pending');}
  }finally{f.close()}
 });
