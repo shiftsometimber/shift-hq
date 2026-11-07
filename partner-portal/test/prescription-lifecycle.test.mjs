@@ -243,3 +243,17 @@ test('RX-HQ1 a delivered old episode cannot complete a replacement timeline in H
   const hq=await j(await f.hq('/partner-desk/operations',1)),after=await j(await f.callMemberSnapshot()),receipt=f.sql.prepare("SELECT id,created_at FROM partner_audit WHERE action='fulfilment_delivered' ORDER BY rowid DESC LIMIT 1").get();assert.equal(hq.records[0].milestones.find(x=>x.key==='delivered').at,receipt.created_at);assert.equal(hq.records[0].milestones.find(x=>x.key==='delivered').evidence_ref,receipt.id);assert.equal(after.orders[0].timeline.find(x=>x.key==='delivered').at,receipt.created_at);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM medicine_orders').get().n,1);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM clinical_prescription_signatures').get().n,2);await retainEvidence(f,'joined-hq-replacement-delivery');
  }finally{f.close();}
 });
+
+for(const canonical of [false,true])test('RX-SUP-WITHDRAW an already received supplier job is withdrawn with its signed episode ('+(canonical?'transport_received':'accepted')+')',async()=>{
+ const f=await setup();try{
+  const contract='FICTIONAL-RECEIVED-WITHDRAWAL',date=new Date().toISOString(),config={pharmacyOrgId:'pharmacy-org',services:['weight_management'],contractReference:'FICTIONAL',receiptContract:{schemaVersion:'sst-rx-event-v1',approvalReference:'FICTIONAL-EVENT-MAP'}};
+  f.sql.prepare("INSERT INTO rx_supplier_contracts VALUES(?,'clinical-org','synthetic',1,'approved',?,?)").run(contract,JSON.stringify(config),date);f.sql.prepare('INSERT INTO rx_product_mappings VALUES(?,11,?,?,?,?,1)').run(contract,'FICTIONAL-PRODUCT','tablet','Synthetic strength','one synthetic pack');
+  f.env.SSTRX_CANONICAL_RECEIPTS_ENABLED=canonical?'true':'false';f.env.SSTRX_SYNTHETIC_ADAPTER=isolatedSyntheticAdapter({submit:async()=>({accepted:true,reference:'FICTIONAL-ORIGINAL-TRANSPORT-RECEIPT'})});
+  const route=await captureOrderRoute(f.DB,{orderNumber:f.order,memberId:42,clinicalOrgId:'clinical-org',pharmacyOrgId:'pharmacy-org',contractId:contract,prescriptionId:f.original.prescriptionId,variantId:11,service:'weight_management',authorisationReference:'FICTIONAL-ROUTING'}),job=await queueSubmission(f.DB,route);
+  assert.equal((await submitJob(f.env,job.id)).state,canonical?'transport_received':'accepted');
+  const work=await j(await f.request({...f.command,kind:'amend'}));await j(await f.ack(work));await freshReview(f);await replacementSignature(f);
+  const archived=f.sql.prepare('SELECT * FROM rx_integration_jobs WHERE id=?').get(job.id);assert.equal(archived.state,'superseded');assert.equal(archived.remote_reference,'FICTIONAL-ORIGINAL-TRANSPORT-RECEIPT');assert.equal(archived.attempts,1);
+  await assert.rejects(submitJob(f.env,job.id),/job_not_submittable/);
+  const next=await queueSubmission(f.DB,f.sql.prepare('SELECT * FROM rx_order_routes').get());assert.notEqual(next.id,job.id);assert.equal(next.state,'pending');
+ }finally{f.close()}
+});
